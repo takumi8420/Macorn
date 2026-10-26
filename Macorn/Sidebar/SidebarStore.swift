@@ -102,6 +102,9 @@ final class SidebarStore {
     private static let sectionsKey = "sidebarSections"
     private static let hiddenSectionsKey = "sidebarHiddenSections"
     private static let customSectionsKey = "sidebarCustomSections"
+    private static let defaultSectionCreatedKey = "sidebarDefaultSectionCreated"
+    /// 最初から用意しておくセクションの名前（名前の変更・削除は自由）
+    static let defaultSectionName = "マイセクション"
 
     /// セクションの順番（タグのセクション・自分で作ったセクションも含む）と、隠しているセクション
     private(set) var sections: [SidebarSection] = SidebarSection.defaultOrder
@@ -117,12 +120,14 @@ final class SidebarStore {
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let tags: TagStore
 
-    init(defaults: UserDefaults = .standard, tags: TagStore = .shared) {
+    /// createsDefaultSection: 初めてのときに「マイセクション」を1つ作るか（テストで構成を決めて確かめるときは false）
+    init(defaults: UserDefaults = .standard, tags: TagStore = .shared, createsDefaultSection: Bool = true) {
         self.defaults = defaults
         self.tags = tags
         favorites = loadItems(Self.loadFavoriteRecords(from: defaults))
         customSections = loadCustomSections()
         loadSections()
+        if createsDefaultSection { createDefaultSectionOnce() }
         migrateFavoritesToTag()
         syncFavoritesWithTag()
         refreshVolumes()
@@ -316,6 +321,16 @@ final class SidebarStore {
             guard let index = items.firstIndex(where: { $0.id == id }) else { return }
             rename(&items[index], to: name)
         }
+    }
+
+    /// 初めてのときだけ、お気に入りのすぐ下にセクションを1つ作っておく（削除したら作り直さない）
+    private func createDefaultSectionOnce() {
+        guard !defaults.bool(forKey: Self.defaultSectionCreatedKey) else { return }
+        defaults.set(true, forKey: Self.defaultSectionCreatedKey)
+        guard customSections.isEmpty else { return }
+        let next = sections.firstIndex(of: .favorites).map { $0 + 1 }
+        let before = next.flatMap { sections.indices.contains($0) ? sections[$0] : nil }
+        createSection(named: Self.defaultSectionName, before: before)
     }
 
     /// 新しいセクションを作る。before を指定するとそのセクションの前、指定しなければ最後に置く

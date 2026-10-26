@@ -30,7 +30,7 @@ final class SidebarStoreTests {
     }
 
     @Test func reordersAndHidesSections() {
-        let store = SidebarStore(defaults: defaults, tags: tags)
+        let store = SidebarStore(defaults: defaults, tags: tags, createsDefaultSection: false)
         #expect(store.visibleSections == [.favorites, .tags, .locations])
         store.moveSection(.locations, by: -1)
         #expect(store.visibleSections == [.favorites, .locations, .tags])
@@ -43,7 +43,7 @@ final class SidebarStoreTests {
         #expect(store.visibleSections == [.locations, .tags])
 
         // 保存され、次に開いたときも同じ
-        let reloaded = SidebarStore(defaults: defaults, tags: tags)
+        let reloaded = SidebarStore(defaults: defaults, tags: tags, createsDefaultSection: false)
         #expect(reloaded.visibleSections == [.locations, .tags])
         reloaded.resetSections()
         #expect(reloaded.visibleSections == SidebarSection.defaultOrder)
@@ -51,7 +51,7 @@ final class SidebarStoreTests {
 
     @Test func tagSectionsAndFavoriteTags() throws {
         let tag = try #require(tags.createTag(named: "サイドバーのテスト"))
-        let store = SidebarStore(defaults: defaults, tags: tags)
+        let store = SidebarStore(defaults: defaults, tags: tags, createsDefaultSection: false)
 
         store.addTagSection(tag.id)
         #expect(store.visibleSections == [.favorites, .tag(tag.id), .tags, .locations])
@@ -59,7 +59,7 @@ final class SidebarStoreTests {
         #expect(store.containsFavoriteTag(tag.id))
         #expect(store.favorites.last?.id == "tag:" + tag.id.uuidString)
 
-        let reloaded = SidebarStore(defaults: defaults, tags: tags)
+        let reloaded = SidebarStore(defaults: defaults, tags: tags, createsDefaultSection: false)
         #expect(reloaded.containsTagSection(tag.id))
         #expect(reloaded.containsFavoriteTag(tag.id))
 
@@ -96,7 +96,7 @@ final class SidebarDragTests {
     }
 
     @Test func movesSectionBeforeTarget() {
-        let store = SidebarStore(defaults: defaults, tags: tags)
+        let store = SidebarStore(defaults: defaults, tags: tags, createsDefaultSection: false)
         store.moveSection(.locations, before: .favorites)
         #expect(store.visibleSections == [.locations, .favorites, .tags])
         store.moveSection(.locations, before: .tags)
@@ -105,7 +105,7 @@ final class SidebarDragTests {
 
     @Test func dropsTagIntoSectionsAndFavorites() throws {
         let tag = try #require(tags.createTag(named: "ドラッグのテスト"))
-        let store = SidebarStore(defaults: defaults, tags: tags)
+        let store = SidebarStore(defaults: defaults, tags: tags, createsDefaultSection: false)
 
         // 「場所」の見出しに置くと、その前にタグのセクションができる。もう一度置くと位置だけ変わる
         store.addTagSection(tag.id, before: .locations)
@@ -147,7 +147,7 @@ final class SidebarPlacementTests {
     private func url(_ name: String) -> URL { folder.appendingPathComponent(name) }
 
     @Test func favoritesFollowTheFavoritesTag() {
-        let store = SidebarStore(defaults: defaults, tags: tags)
+        let store = SidebarStore(defaults: defaults, tags: tags, createsDefaultSection: false)
         // お気に入りに入れると「お気に入り」のタグが付く（ファイルも入れられる）
         store.addFavorite(url("a"))
         store.addFavorite(url("note.txt"), at: 0)
@@ -171,18 +171,31 @@ final class SidebarPlacementTests {
         #expect(store.favorites.first?.name == "ビー")
     }
 
+    @Test func createsDefaultSectionOnce() throws {
+        let store = SidebarStore(defaults: defaults, tags: tags)
+        let section = try #require(store.customSections.first)
+        #expect(store.customSections.count == 1)
+        #expect(section.name == SidebarStore.defaultSectionName)
+        // お気に入りのすぐ下に置く
+        #expect(store.visibleSections == [.favorites, .custom(section.id), .tags, .locations])
+        // 次に開いても増えず、削除したら作り直さない
+        #expect(SidebarStore(defaults: defaults, tags: tags).customSections.count == 1)
+        store.deleteSection(section.id)
+        #expect(SidebarStore(defaults: defaults, tags: tags).customSections.isEmpty)
+    }
+
     @Test func migratesOldFavoritesOnce() {
         defaults.set([["path": url("a").path]], forKey: "sidebarFavorites")
-        _ = SidebarStore(defaults: defaults, tags: tags)
+        _ = SidebarStore(defaults: defaults, tags: tags, createsDefaultSection: false)
         #expect(tags.hasTag(TagStore.favoritesID, on: url("a")))
         // 2回目以降は、タグを外したものを付け直さない
         tags.unassign(TagStore.favoritesID, from: [url("a")])
-        let reloaded = SidebarStore(defaults: defaults, tags: tags)
+        let reloaded = SidebarStore(defaults: defaults, tags: tags, createsDefaultSection: false)
         #expect(reloaded.favorites.isEmpty)
     }
 
     @Test func customSectionsHoldTagsAndItemsWithoutTagging() throws {
-        let store = SidebarStore(defaults: defaults, tags: tags)
+        let store = SidebarStore(defaults: defaults, tags: tags, createsDefaultSection: false)
         let work = try #require(tags.createTag(named: "仕事"))
         let section = try #require(store.createSection(named: "プロジェクト", before: .tags))
         #expect(store.visibleSections == [.favorites, section, .tags, .locations])
@@ -202,7 +215,7 @@ final class SidebarPlacementTests {
         // 保存され、次に開いたときも同じ
         guard case .custom(let id) = section else { return }
         store.renameSection(id, to: "案件")
-        let reloaded = SidebarStore(defaults: defaults, tags: tags)
+        let reloaded = SidebarStore(defaults: defaults, tags: tags, createsDefaultSection: false)
         #expect(reloaded.customSection(id)?.name == "案件")
         #expect(reloaded.items(in: section).map(\.name) == ["仕事", "a"])
 
@@ -213,7 +226,7 @@ final class SidebarPlacementTests {
     }
 
     @Test func movesBetweenFavoritesAndSections() throws {
-        let store = SidebarStore(defaults: defaults, tags: tags)
+        let store = SidebarStore(defaults: defaults, tags: tags, createsDefaultSection: false)
         let section = try #require(store.createSection(named: "置き場"))
         store.addFavorite(url("a"))
         // お気に入り → セクション（移動）: お気に入りのタグは外れる
