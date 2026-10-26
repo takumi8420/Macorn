@@ -133,6 +133,27 @@ final class TagStore {
         return true
     }
 
+    /// 親のタグを変えられるか（自分や自分の子孫の下には入れない。同じ名前のタグが先にあるときも不可）
+    func canMoveTag(_ id: UUID, under parentID: UUID?) -> Bool {
+        guard let tag = tag(id: id) else { return false }
+        var parentName: String?
+        if let parentID {
+            guard let parent = self.tag(id: parentID), !parent.isSelfOrDescendant(of: tag.name) else { return false }
+            parentName = parent.name
+        }
+        guard tag.parentName != parentName else { return false }
+        let newName = parentName.map { $0 + "/" + tag.leafName } ?? tag.leafName
+        return self.tag(named: newName) == nil
+    }
+
+    /// 親のタグを変える（nil ならいちばん上へ）。子のタグもいっしょに移る。付けた項目はそのまま
+    @discardableResult
+    func moveTag(_ id: UUID, under parentID: UUID?) -> Bool {
+        guard canMoveTag(id, under: parentID), let tag = tag(id: id) else { return false }
+        let parentName = parentID.flatMap { self.tag(id: $0)?.name }
+        return renameTag(id, to: parentName.map { $0 + "/" + tag.leafName } ?? tag.leafName)
+    }
+
     func setColor(_ id: UUID, to color: String) {
         guard let index = tags.firstIndex(where: { $0.id == id }) else { return }
         tags[index].color = color

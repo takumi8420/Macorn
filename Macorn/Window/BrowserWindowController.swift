@@ -53,19 +53,14 @@ final class BrowserWindowController: NSWindowController {
         }
         window.delegate = self
 
-        let sidebar = NSHostingController(rootView: SidebarView(
-            store: .shared,
-            window: panes.model,
-            onSelect: { [weak self] url in
-                // ファイル（タグのセクションの項目など）なら、その場所へ移動して選ぶ
-                if url.isFileURL, FileManager.default.fileExists(atPath: url.path), !FileTransfer.isDirectory(url) {
-                    self?.browser.navigate(to: url.deletingLastPathComponent(), selecting: url)
-                } else {
-                    self?.browser.navigate(to: url)
-                }
+        let sidebar = SidebarViewController(window: panes.model) { [weak self] url in
+            // ファイル（タグのセクションの項目など）なら、その場所へ移動して選ぶ
+            if url.isFileURL, FileManager.default.fileExists(atPath: url.path), !FileTransfer.isDirectory(url) {
+                self?.browser.navigate(to: url.deletingLastPathComponent(), selecting: url)
+            } else {
+                self?.browser.navigate(to: url)
             }
-        ))
-        sidebar.sizingOptions = []
+        }
 
         let splitViewController = NSSplitViewController()
         let sidebarItem = NSSplitViewItem(sidebarWithViewController: sidebar)

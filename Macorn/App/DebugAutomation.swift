@@ -74,6 +74,18 @@ enum DebugAutomation {
                 }
                 snapshotView(sidebarView, to: outDir.appendingPathComponent("sidebar.png"))
             }
+        case "sbdrop":
+            // sbdrop:<ドラッグするもの>|<置き先の行 ID か root>|<何番目か（-1 は行の上）>
+            let parts = argument.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+            if parts.count == 3, let split = controller.contentViewController as? NSSplitViewController,
+               let sidebar = split.splitViewItems.first?.viewController as? SidebarViewController {
+                print("[debug] sbdrop \(argument) → \(sidebar.debugDrop(drag: parts[0], onto: parts[1], index: Int(parts[2]) ?? -1))")
+            }
+        case "sbrows":
+            if let split = controller.contentViewController as? NSSplitViewController,
+               let sidebar = split.splitViewItems.first?.viewController as? SidebarViewController {
+                print("[debug] sbrows \(sidebar.debugRows())")
+            }
         case "state":
             let s = browser.state
             print("[debug] state path=\(s.currentURL.path) items=\(s.itemCount) selected=\(s.selectedCount) back=\(s.history.canGoBack) forward=\(s.history.canGoForward) editing=\(s.isEditingPath) error=\(s.error?.message ?? "-") key=\(controller.window?.isKeyWindow == true) active=\(NSApp.isActive) windows=\(controllers().count) title=\(controller.window?.title ?? "")")

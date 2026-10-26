@@ -37,6 +37,34 @@ final class TagStoreTests {
         #expect(store.createTag(named: " / ") == nil)
     }
 
+    @Test func movesTagUnderAnotherParent() throws {
+        let store = TagStore(fileURL: fileURL)
+        let work = try #require(store.createTag(named: "仕事"))
+        let a = try #require(store.createTag(named: "案件A"))
+        let sub = try #require(store.createTag(named: "案件A/資料"))
+        store.assign(sub.id, to: [url("doc")])
+
+        // 子のタグもいっしょに移り、付けた項目はそのまま
+        #expect(store.moveTag(a.id, under: work.id))
+        #expect(store.tag(id: a.id)?.name == "仕事/案件A")
+        #expect(store.tag(id: sub.id)?.name == "仕事/案件A/資料")
+        #expect(store.urls(taggedWith: work.id) == [url("doc")])
+
+        // 自分や子孫の下には入れない
+        #expect(!store.canMoveTag(work.id, under: sub.id))
+        #expect(!store.canMoveTag(a.id, under: a.id))
+        // 今の親と同じなら何もしない
+        #expect(!store.canMoveTag(a.id, under: work.id))
+
+        // いちばん上へ戻す
+        #expect(store.moveTag(a.id, under: nil))
+        #expect(store.tag(id: sub.id)?.name == "案件A/資料")
+
+        // 移した先に同じ名前があれば不可
+        _ = try #require(store.createTag(named: "仕事/案件A"))
+        #expect(!store.canMoveTag(a.id, under: work.id))
+    }
+
     @Test func assignsAndToggles() throws {
         let store = TagStore(fileURL: fileURL)
         let tag = try #require(store.createTag(named: "重要"))

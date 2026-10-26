@@ -101,7 +101,15 @@ final class SidebarStore {
 
     /// タグをお気に入りに入れる（フォルダと同じ並びに置き、順番も自由に変えられる）
     func addFavoriteTag(_ id: UUID, at index: Int? = nil) {
-        guard !containsFavoriteTag(id), let tag = TagStore.shared.tag(id: id) else { return }
+        // すでにあれば、指定の位置へ動かすだけ（ドラッグ＆ドロップ）
+        if let existing = favorites.firstIndex(where: { $0.tagID == id }) {
+            guard let index else { return }
+            let item = favorites.remove(at: existing)
+            favorites.insert(item, at: min(index > existing ? index - 1 : index, favorites.count))
+            saveFavorites()
+            return
+        }
+        guard let tag = TagStore.shared.tag(id: id) else { return }
         let item = SidebarItem(url: TagLocation.url(for: id), name: tag.name, symbol: "tag.fill", tagID: id)
         favorites.insert(item, at: min(index ?? favorites.count, favorites.count))
         saveFavorites()
@@ -245,12 +253,60 @@ final class SidebarStore {
 
     func containsTagSection(_ id: UUID) -> Bool { sections.contains(.tag(id)) }
 
-    /// タグを1つのセクションとしてサイドバーに置く（お気に入りの下に入れる）
-    func addTagSection(_ id: UUID) {
+    /// ドラッグ＆ドロップ: section を target の位置へ移す（target の前に入れる）
+    func moveSection(_ section: SidebarSection, before target: SidebarSection) {
+        guard section != target, sections.contains(section), sections.contains(target) else { return }
+        sections.removeAll { $0 == section }
+        let position = sections.firstIndex(of: target) ?? sections.count
+        sections.insert(section, at: position)
+        saveSections()
+    }
+
+    /// ドラッグ＆ドロップ: section を最後へ移す
+    func moveSectionToEnd(_ section: SidebarSection) {
+        guard sections.contains(section) else { return }
+        sections.removeAll { $0 == section }
+        sections.append(section)
+        saveSections()
+    }
+
+    /// ドラッグ＆ドロップ: タグのセクションを target の前（nil なら最後）に置く。すでにあれば動かす
+    func placeTagSection(_ id: UUID, before target: SidebarSection?) {
+        let section = SidebarSection.tag(id)
+        if !containsTagSection(id) {
+            sections.append(section)
+            hiddenSections.remove(section.id)
+        }
+        if let target {
+            moveSection(section, before: target)
+        } else {
+            moveSectionToEnd(section)
+        }
+    }
+
+    /// ドラッグ＆ドロップ: お気に入りの項目を index の位置へ動かす
+    func moveFavorite(id: String, to index: Int) {
+        guard let from = favorites.firstIndex(where: { $0.id == id }) else { return }
+        moveFavorites(from: IndexSet(integer: from), to: index)
+    }
+
+    /// タグを1つのセクションとしてサイドバーに置く。before を指定するとそのセクションの前、
+    /// 指定しなければお気に入りの下に入れる。すでにあれば、その位置へ移すだけ
+    func addTagSection(_ id: UUID, before target: SidebarSection? = nil) {
+        let section = SidebarSection.tag(id)
+        if let target, containsTagSection(id) {
+            moveSection(section, before: target)
+            return
+        }
         guard !containsTagSection(id) else { return }
-        let position = (sections.firstIndex(of: .favorites) ?? -1) + 1
-        sections.insert(.tag(id), at: position)
-        hiddenSections.remove(SidebarSection.tag(id).id)
+        let position: Int
+        if let target, let index = sections.firstIndex(of: target) {
+            position = index
+        } else {
+            position = (sections.firstIndex(of: .favorites) ?? -1) + 1
+        }
+        sections.insert(section, at: position)
+        hiddenSections.remove(section.id)
         saveSections()
     }
 
@@ -342,6 +398,33 @@ final class SidebarStore {
             try NSWorkspace.shared.unmountAndEjectDevice(at: item.url)
         } catch {
             NSAlert(error: error).runModal()
+        }
+    }
+}
+
+
+/// サイドバーの中でドラッグするもの（セクション・タグ）を、文字列で受け渡す
+enum SidebarDragPayload: Equatable {
+    case section(SidebarSection)
+    case tag(UUID)
+
+    static let sectionPrefix = "macorn-section:"
+    static let tagPrefix = "macorn-tag:"
+
+    var string: String {
+        switch self {
+        case .section(let section): Self.sectionPrefix + section.id
+        case .tag(let id): Self.tagPrefix + id.uuidString
+        }
+    }
+
+    init?(_ string: String) {
+        if string.hasPrefix(Self.sectionPrefix), let section = SidebarSection(id: String(string.dropFirst(Self.sectionPrefix.count))) {
+            self = .section(section)
+        } else if string.hasPrefix(Self.tagPrefix), let id = UUID(uuidString: String(string.dropFirst(Self.tagPrefix.count))) {
+            self = .tag(id)
+        } else {
+            return nil
         }
     }
 }
