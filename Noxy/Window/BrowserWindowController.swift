@@ -1,0 +1,281 @@
+import AppKit
+import SwiftUI
+
+protocol BrowserWindowControllerDelegate: AnyObject {
+    func windowControllerRequestsNewTab(_ controller: BrowserWindowController, url: URL)
+    func windowControllerDidClose(_ controller: BrowserWindowController)
+}
+
+extension NSToolbarItem.Identifier {
+    static let back = NSToolbarItem.Identifier("noxy.back")
+    static let forward = NSToolbarItem.Identifier("noxy.forward")
+    static let parent = NSToolbarItem.Identifier("noxy.parent")
+    static let split = NSToolbarItem.Identifier("noxy.split")
+}
+
+/// 1つのウィンドウ（= 1つのタブ）。サイドバーと、1つまたは2つの画面を並べる。
+final class BrowserWindowController: NSWindowController {
+    static let tabbingIdentifier = "noxy.browser"
+
+    let panes: PaneContainerViewController
+    weak var appDelegate: BrowserWindowControllerDelegate?
+    private let textUndoManager = UndoManager()
+
+    /// 操作対象の画面（2画面のときは、最後にクリック・フォーカスした側）
+    var browser: FileBrowserViewController { panes.activePane }
+
+    convenience init(url: URL) {
+        self.init(layout: PaneLayout(paths: [url.path]))
+    }
+
+    init(layout: PaneLayout) {
+        panes = PaneContainerViewController(layout: layout)
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 1000, height: 640),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        window.minSize = NSSize(width: 560, height: 320)
+        window.tabbingIdentifier = Self.tabbingIdentifier
+        window.tabbingMode = .automatic
+        window.isRestorable = false
+        window.toolbarStyle = .unified
+
+        super.init(window: window)
+
+        panes.setPaneDelegate(self)
+        panes.onActivePaneChanged = { [weak self] in
+            guard let self else { return }
+            updateTitle(for: browser.state.currentURL)
+        }
+        window.delegate = self
+
+        let sidebar = NSHostingController(rootView: SidebarView(
+            store: .shared,
+            window: panes.model,
+            onSelect: { [weak self] url in self?.browser.navigate(to: url) }
+        ))
+        sidebar.sizingOptions = []
+
+        let splitViewController = NSSplitViewController()
+        let sidebarItem = NSSplitViewItem(sidebarWithViewController: sidebar)
+        sidebarItem.minimumThickness = 160
+        sidebarItem.maximumThickness = 320
+        sidebarItem.canCollapse = true
+        let contentItem = NSSplitViewItem(viewController: panes)
+        contentItem.minimumThickness = 360
+        splitViewController.addSplitViewItem(sidebarItem)
+        splitViewController.addSplitViewItem(contentItem)
+
+        window.contentViewController = splitViewController
+        // contentViewController を設定するとウィンドウが中身の大きさに縮むので、元に戻す
+        window.setContentSize(NSSize(width: 1000, height: 640))
+
+        let toolbar = NSToolbar(identifier: "noxy.browserToolbar")
+        toolbar.delegate = self
+        toolbar.displayMode = .iconOnly
+        toolbar.allowsUserCustomization = false
+        window.toolbar = toolbar
+
+        updateTitle(for: browser.state.currentURL)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    private func updateTitle(for url: URL) {
+        guard let window else { return }
+        window.title = FileManager.default.displayName(atPath: url.path)
+        window.representedURL = url
+        window.toolbar?.validateVisibleItems()
+    }
+
+    // MARK: - メニュー・ツールバーの操作
+
+    @objc func goBack(_ sender: Any?) { browser.goBack() }
+    @objc func goForward(_ sender: Any?) { browser.goForward() }
+    @objc func goToParent(_ sender: Any?) { browser.goToParent() }
+    @objc func openSelection(_ sender: Any?) { browser.openSelection() }
+    @objc func editPath(_ sender: Any?) { browser.beginEditingPath() }
+
+    @objc func goToHome(_ sender: Any?) { go(to: FileManager.default.homeDirectoryForCurrentUser) }
+    @objc func goToDesktop(_ sender: Any?) { go(toDirectory: .desktopDirectory) }
+    @objc func goToDocuments(_ sender: Any?) { go(toDirectory: .documentDirectory) }
+    @objc func goToDownloads(_ sender: Any?) { go(toDirectory: .downloadsDirectory) }
+    @objc func goToApplications(_ sender: Any?) { go(to: URL(fileURLWithPath: "/Applications")) }
+
+    @objc func addToSidebar(_ sender: Any?) {
+        browser.selectedFolderURLsOrCurrent.forEach(SidebarStore.shared.addFavorite)
+    }
+
+    // MARK: コマンドパレット（要件 5章）
+
+    @objc func togglePalette(_ sender: Any?) {
+        PaletteController.shared.toggle(for: self)
+    }
+
+    /// Finder の ⌘K「サーバへ接続」は、パレットに ⌘K を使うためメニューとパレットから開く。
+    @objc func connectToServer(_ sender: Any?) {
+        let alert = NSAlert()
+        alert.messageText = "サーバへ接続"
+        alert.informativeText = "サーバのアドレスを入力してください（例: smb://server/share、afp://、nfs://）"
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 320, height: 24))
+        field.placeholderString = "smb://"
+        field.stringValue = UserDefaults.standard.string(forKey: "lastServerAddress") ?? ""
+        alert.accessoryView = field
+        alert.addButton(withTitle: "接続")
+        alert.addButton(withTitle: "キャンセル")
+        alert.window.initialFirstResponder = field
+        guard let window else { return }
+        alert.beginSheetModal(for: window) { response in
+            MainActor.assumeIsolated {
+                guard response == .alertFirstButtonReturn,
+                      let url = URL(string: field.stringValue.trimmingCharacters(in: .whitespaces)),
+                      url.scheme != nil else { return }
+                UserDefaults.standard.set(url.absoluteString, forKey: "lastServerAddress")
+                NSWorkspace.shared.open(url)
+            }
+        }
+    }
+
+    // MARK: 2画面（要件 4章）
+
+    @objc func toggleSplit(_ sender: Any?) { panes.toggleSplit() }
+    @objc func switchPane(_ sender: Any?) { panes.switchActivePane() }
+    @objc func copyToOtherPane(_ sender: Any?) { panes.transferSelectionToOtherPane(mode: .copy) }
+    @objc func moveToOtherPane(_ sender: Any?) { panes.transferSelectionToOtherPane(mode: .move) }
+    @objc func syncOtherPane(_ sender: Any?) { panes.syncOtherPane() }
+    @objc func swapPanes(_ sender: Any?) { panes.swapPanes() }
+    @objc func openInLeftPane(_ sender: Any?) { panes.openSelectionInPane(index: 0) }
+    @objc func openInRightPane(_ sender: Any?) { panes.openSelectionInPane(index: 1) }
+
+    /// サイドバーなどにフォーカスがあっても、ファイル操作のメニューが操作対象の画面に届くようにする。
+    override func supplementalTarget(forAction action: Selector, sender: Any?) -> Any? {
+        if browser.responds(to: action) { return browser }
+        return super.supplementalTarget(forAction: action, sender: sender)
+    }
+
+    override func newWindowForTab(_ sender: Any?) {
+        appDelegate?.windowControllerRequestsNewTab(self, url: browser.state.currentURL)
+    }
+
+    private func go(toDirectory directory: FileManager.SearchPathDirectory) {
+        guard let url = FileManager.default.urls(for: directory, in: .userDomainMask).first else { return }
+        go(to: url)
+    }
+
+    private func go(to url: URL) {
+        browser.navigate(to: url)
+    }
+
+    private func isEnabled(_ action: Selector?) -> Bool {
+        switch action {
+        case #selector(goBack(_:)): browser.state.history.canGoBack
+        case #selector(goForward(_:)): browser.state.history.canGoForward
+        case #selector(goToParent(_:)): browser.canGoToParent
+        case #selector(openSelection(_:)): browser.state.selectedCount > 0
+        case #selector(addToSidebar(_:)):
+            browser.selectedFolderURLsOrCurrent.contains { !SidebarStore.shared.containsFavorite($0) }
+        case #selector(copyToOtherPane(_:)), #selector(moveToOtherPane(_:)):
+            panes.isSplit && !browser.selectedNodes.isEmpty && !(window?.firstResponder is NSText)
+        case #selector(switchPane(_:)), #selector(syncOtherPane(_:)), #selector(swapPanes(_:)):
+            panes.isSplit
+        default: true
+        }
+    }
+}
+
+// MARK: - 有効・無効の切り替え
+
+extension BrowserWindowController: NSMenuItemValidation, NSToolbarItemValidation {
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(toggleSplit(_:)) {
+            menuItem.state = panes.isSplit ? .on : .off
+        }
+        return isEnabled(menuItem.action)
+    }
+
+    func validateToolbarItem(_ item: NSToolbarItem) -> Bool {
+        isEnabled(item.action)
+    }
+}
+
+// MARK: - FileBrowserDelegate
+
+extension BrowserWindowController: FileBrowserDelegate {
+    func browser(_ browser: FileBrowserViewController, didNavigateTo url: URL) {
+        // タイトルは操作対象の画面のフォルダにする
+        if browser === self.browser { updateTitle(for: url) }
+    }
+
+    func browser(_ browser: FileBrowserViewController, openInNewTab url: URL) {
+        appDelegate?.windowControllerRequestsNewTab(self, url: url)
+    }
+}
+
+// MARK: - NSWindowDelegate
+
+extension BrowserWindowController: NSWindowDelegate {
+    /// ウィンドウに戻ってきたら、ターミナルでの git 操作などを反映する
+    func windowDidBecomeKey(_ notification: Notification) {
+        panes.panes.forEach { $0.refreshGitStatus() }
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        panes.panes.forEach { $0.tearDown() }
+        appDelegate?.windowControllerDidClose(self)
+    }
+
+    /// ファイル操作の取り消しはアプリ全体で1つ。文字の入力中だけは入力欄の取り消しを使う。
+    func windowWillReturnUndoManager(_ window: NSWindow) -> UndoManager? {
+        if window.firstResponder is NSText { return textUndoManager }
+        return FileOperationManager.shared.undoManager
+    }
+}
+
+// MARK: - NSToolbarDelegate
+
+extension BrowserWindowController: NSToolbarDelegate {
+    func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        [.toggleSidebar, .sidebarTrackingSeparator, .back, .forward, .parent, .flexibleSpace, .split]
+    }
+
+    func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        toolbarDefaultItemIdentifiers(toolbar)
+    }
+
+    func toolbar(
+        _ toolbar: NSToolbar,
+        itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier,
+        willBeInsertedIntoToolbar flag: Bool
+    ) -> NSToolbarItem? {
+        switch itemIdentifier {
+        case .back:
+            makeItem(itemIdentifier, label: "戻る", symbol: "chevron.left", action: #selector(goBack(_:)))
+        case .forward:
+            makeItem(itemIdentifier, label: "進む", symbol: "chevron.right", action: #selector(goForward(_:)))
+        case .parent:
+            makeItem(itemIdentifier, label: "親フォルダ", symbol: "arrow.up", action: #selector(goToParent(_:)))
+        case .split:
+            makeItem(itemIdentifier, label: "2画面表示（⌘\\）", symbol: "rectangle.split.2x1", action: #selector(toggleSplit(_:)))
+        default:
+            nil
+        }
+    }
+
+    private func makeItem(_ identifier: NSToolbarItem.Identifier, label: String, symbol: String, action: Selector) -> NSToolbarItem {
+        let item = NSToolbarItem(itemIdentifier: identifier)
+        item.label = label
+        item.toolTip = label
+        item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: label)
+        item.action = action
+        item.target = self
+        item.isBordered = true
+        item.autovalidates = true
+        return item
+    }
+}
