@@ -207,13 +207,32 @@ final class TagStore {
 
     // MARK: - 項目へのタグ付け
 
+    /// 項目に付いているタグ（名前の順）。子のタグが付いていれば、その親のタグも付いているとみなして含める。
+    /// （「仕事/案件A」が付いていれば「仕事」も付いている。保存しているのは実際に付けたタグだけ）
     func tags(for url: URL) -> [Tag] {
+        let explicit = explicitTags(for: url)
+        guard !explicit.isEmpty else { return [] }
+        return sortedTags.filter { tag in explicit.contains { $0.isSelfOrDescendant(of: tag.name) } }
+    }
+
+    /// 実際に付けたタグだけ（親のタグは含めない。名前の順）
+    func explicitTags(for url: URL) -> [Tag] {
         guard let item = itemsByPath[Self.key(url)] else { return [] }
         return sortedTags.filter { item.tagIDs.contains($0.id) }
     }
 
+    /// タグが付いているか。子のタグが付いていれば、親のタグも付いているとみなす
     func hasTag(_ id: UUID, on url: URL) -> Bool {
-        itemsByPath[Self.key(url)]?.tagIDs.contains(id) ?? false
+        guard let item = itemsByPath[Self.key(url)] else { return false }
+        if item.tagIDs.contains(id) { return true }
+        guard let target = tag(id: id) else { return false }
+        return tags.contains { item.tagIDs.contains($0.id) && $0.isSelfOrDescendant(of: target.name) }
+    }
+
+    /// タグ自身と、その子孫のタグの ID
+    private func selfAndDescendantIDs(of id: UUID) -> Set<UUID> {
+        guard let target = tag(id: id) else { return [id] }
+        return Set(tags.filter { $0.isSelfOrDescendant(of: target.name) }.map(\.id))
     }
 
     func assign(_ id: UUID, to urls: [URL]) {
@@ -227,10 +246,12 @@ final class TagStore {
         save()
     }
 
+    /// タグを外す。子のタグも外す（子が付いていると親も付いているとみなすため、親だけ外しても外れたことにならない）
     func unassign(_ id: UUID, from urls: [URL]) {
+        let removed = selfAndDescendantIDs(of: id)
         for url in urls {
             let path = Self.key(url)
-            itemsByPath[path]?.tagIDs.remove(id)
+            itemsByPath[path]?.tagIDs.subtract(removed)
             if itemsByPath[path]?.tagIDs.isEmpty == true { itemsByPath[path] = nil }
         }
         save()
@@ -259,7 +280,7 @@ final class TagStore {
 
     /// タグ別に並べるときの基準（付いているタグのうち、名前の順で最初のタグの名前）
     func sortKey(for url: URL) -> String? {
-        tags(for: url).first?.name
+        explicitTags(for: url).first?.name
     }
 
     /// フォルダのアイコンを塗る色（付いているタグのうち、名前の順で最初のもの）。
@@ -267,7 +288,8 @@ final class TagStore {
     func folderColor(for url: URL) -> String? {
         guard Preferences.colorFoldersByTag else { return nil }
         // 「お気に入り」はよく使うフォルダの多くに付くので、色分けには使わない
-        return tags(for: url).first { $0.id != Self.favoritesID }?.color
+        // 実際に付けたタグ（いちばん細かい分類）の色を使う。親の色にそろうと、子のタグの見分けが付かなくなるため
+        return explicitTags(for: url).first { $0.id != Self.favoritesID }?.color
     }
 
     // MARK: - 移動・名前の変更への追従

@@ -102,6 +102,29 @@ final class TagStoreTests {
         #expect(!store.renameTag(parent.id, to: "業務/案件A/中"))
     }
 
+    @Test func childTagImpliesParentTag() throws {
+        let store = TagStore(fileURL: fileURL)
+        let child = try #require(store.createTag(named: "仕事/案件A"))
+        let parent = try #require(store.tag(named: "仕事"))
+        store.assign(child.id, to: [url("project")])
+
+        // 子のタグが付いていれば、親のタグも付いているとみなす（保存は子だけ）
+        #expect(store.tags(for: url("project")).map(\.name) == ["仕事", "仕事/案件A"])
+        #expect(store.explicitTags(for: url("project")).map(\.name) == ["仕事/案件A"])
+        #expect(store.hasTag(parent.id, on: url("project")))
+        #expect(store.urls(taggedWith: parent.id) == [url("project")])
+
+        // タグを移すと、親も合わせて変わる
+        let other = try #require(store.createTag(named: "個人"))
+        store.moveTag(child.id, under: other.id)
+        #expect(store.tags(for: url("project")).map(\.name) == ["個人", "個人/案件A"])
+        #expect(!store.hasTag(parent.id, on: url("project")))
+
+        // 親のタグを外すと、子のタグも外れる
+        store.unassign(other.id, from: [url("project")])
+        #expect(store.tags(for: url("project")).isEmpty)
+    }
+
     @Test func favoritesTagIsBuiltIn() throws {
         let store = TagStore(fileURL: fileURL)
         let favorites = try #require(store.tag(id: TagStore.favoritesID))
