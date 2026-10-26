@@ -127,7 +127,7 @@ enum MainMenu {
         menu.addItem(.separator())
         menu.addItem(item("隠しファイルを表示", #selector(AppDelegate.toggleHiddenFiles(_:)), ".", [.command, .shift]))
         menu.addItem(item("サイドバーを表示", #selector(NSSplitViewController.toggleSidebar(_:)), "s", [.command, .option]))
-        menu.addItem(item("プレビュー（Markdown・HTML）", #selector(FileBrowserViewController.toggleFilePreview(_:)), "p", [.command, .option]))
+        menu.addItem(item("プレビュー", #selector(FileBrowserViewController.toggleFilePreview(_:)), "p", [.command, .option]))
         menu.addItem(.separator())
         menu.addItem(item("2画面表示", #selector(BrowserWindowController.toggleSplit(_:)), "\\"))
         // Tab キーは一覧の中だけで効く（入力欄の Tab と区別するため、メニューには割り当てない）

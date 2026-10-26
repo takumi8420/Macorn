@@ -6,6 +6,19 @@
 
 ## 2026-10-26
 
+### Macorn：画像・PDF・動画などのプレビューと、タグを続けて付けられるメニュー
+
+- **きっかけ**：konta の依頼「PDF や動画など視覚的に確認できるものはプレビュー表示できるようにしてほしい」。作業中に「タグをフォルダに割り振る際は複数選択全体なので、選択するごとにダイアログが閉じてしまうと不便」と依頼
+- **意図・方針**
+  - プレビューを画像・PDF・動画・音声・書類（Keynote・Pages・Office）にも広げた。最初はすべてクイックルックで表示したが、別のプロセスで描かれるため表示を確かめられなかったので、主な種類は macOS の部品にした（画像は NSImageView、PDF は PDFKit、動画・音声は AVKit）。それ以外の書類はクイックルック
+  - 保存し直されたら読み直す（PDF は見ていたページを保つ）。別のファイルを選ぶと再生を止める。HTML の「ブラウザで開く」ボタンは、画像などでは「既定のアプリで開く」にした
+  - タグ：⌥⌘G の画面は付け外ししても閉じないことを確かめたうえで、閉じてしまうのは右クリックの「タグ」メニューだと判断した。メニューの行をチェックボックスにして、続けて付け外ししてもメニューが閉じないようにした
+- 変更 `Macorn/Preview/FilePreviewController.swift` — 画像・PDF・動画・書類の表示、表示する部品の切り替え
+- 変更 `Macorn/Browser/FileBrowserViewController+Tags.swift` — 右クリックの「タグ」をチェックボックスの行に（`TagCheckboxMenuView`）
+- 変更 `Macorn/Browser/FileBrowserViewController+Preview.swift`、`Macorn/App/MainMenu.swift`、`Macorn/Settings/SettingsView.swift`、`Macorn/App/DebugAutomation.swift` — 文言と確認用の手順
+- 変更 `MacornTests/MarkdownRendererTests.swift` — プレビューの種類と表示する部品の判定のテスト（合計 106 件）
+- 変更 `README.md`、`docs/REQUIREMENTS.md`、`AGENTS.md` — 操作一覧、S-05 の内容、確定している前提
+
 ### Macorn：HTML のプレビュー
 
 - **きっかけ**：konta の依頼「html をプレビュー表示できるようにして」

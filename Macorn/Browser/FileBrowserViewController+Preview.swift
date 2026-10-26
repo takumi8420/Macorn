@@ -1,6 +1,6 @@
 import AppKit
 
-/// ファイルのプレビュー（.md・.html を選ぶと一覧の右に表示する）とテーマの反映。
+/// ファイルのプレビュー（.md・.html・画像・PDF・動画などを選ぶと一覧の右に表示する）とテーマの反映。
 extension FileBrowserViewController: NSSplitViewDelegate {
     func configureFilePreview() {
         filePreview.onClose = { [weak self] in
@@ -16,7 +16,7 @@ extension FileBrowserViewController: NSSplitViewDelegate {
 
     var isFilePreviewVisible: Bool { !filePreview.view.isHidden }
 
-    /// 選択が1つのプレビューできるファイル（Markdown・HTML）ならプレビューを出し、それ以外なら閉じる
+    /// 選択が1つのプレビューできるファイル（Markdown・HTML・画像・PDF・動画など）ならプレビューを出し、それ以外なら閉じる
     func updateFilePreview() {
         let nodes = selectedNodes
         guard Preferences.filePreview, nodes.count == 1, let node = nodes.first,

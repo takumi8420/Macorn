@@ -89,3 +89,24 @@ struct FilePreviewKindTests {
         #expect(FilePreviewController.kind(for: URL(fileURLWithPath: "/a/app.swift")) == nil)
     }
 }
+
+struct VisualPreviewKindTests {
+    @Test func detectsVisualFiles() {
+        for name in ["photo.png", "photo.JPG", "scan.heic", "icon.svg", "paper.pdf", "clip.mov", "clip.mp4", "song.mp3", "deck.key", "deck.pptx", "sheet.xlsx", "doc.docx"] {
+            #expect(FilePreviewController.kind(for: URL(fileURLWithPath: "/a/" + name)) == .visual, "\(name)")
+        }
+        for name in ["app.swift", "data.json", "archive.zip"] {
+            #expect(FilePreviewController.kind(for: URL(fileURLWithPath: "/a/" + name)) == nil, "\(name)")
+        }
+    }
+}
+
+struct PreviewViewerTests {
+    @Test func picksNativeViewers() {
+        #expect(FilePreviewController.viewer(for: URL(fileURLWithPath: "/a/p.png")) == .image)
+        #expect(FilePreviewController.viewer(for: URL(fileURLWithPath: "/a/p.pdf")) == .pdf)
+        #expect(FilePreviewController.viewer(for: URL(fileURLWithPath: "/a/c.mov")) == .media)
+        #expect(FilePreviewController.viewer(for: URL(fileURLWithPath: "/a/s.mp3")) == .media)
+        #expect(FilePreviewController.viewer(for: URL(fileURLWithPath: "/a/d.key")) == .quickLook)
+    }
+}

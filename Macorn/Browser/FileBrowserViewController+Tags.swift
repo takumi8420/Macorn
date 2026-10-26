@@ -112,13 +112,10 @@ extension FileBrowserViewController {
         let item = NSMenuItem(title: "タグ", action: nil, keyEquivalent: "")
         let submenu = NSMenu()
         let store = TagStore.shared
-        for tag in store.sortedTags.prefix(20) {
-            let tagItem = NSMenuItem(title: String(repeating: "    ", count: tag.depth) + tag.leafName, action: #selector(toggleTagFromMenu(_:)), keyEquivalent: "")
-            tagItem.target = self
-            tagItem.representedObject = (tag.id, urls) as (UUID, [URL])
-            let count = urls.filter { store.hasTag(tag.id, on: $0) }.count
-            tagItem.state = count == 0 ? .off : (count == urls.count ? .on : .mixed)
-            tagItem.image = Self.tagDot(tag.color)
+        // チェックボックスにして、続けて付け外ししてもメニューが閉じないようにする（複数の項目に何個もタグを付けるため）
+        for tag in store.sortedTags.prefix(30) {
+            let tagItem = NSMenuItem()
+            tagItem.view = TagCheckboxMenuView(tag: tag, urls: urls, store: store)
             submenu.addItem(tagItem)
         }
         if !store.tags.isEmpty { submenu.addItem(.separator()) }
@@ -129,10 +126,6 @@ extension FileBrowserViewController {
         return item
     }
 
-    @objc private func toggleTagFromMenu(_ sender: NSMenuItem) {
-        guard let (id, urls) = sender.representedObject as? (UUID, [URL]) else { return }
-        TagStore.shared.toggle(id, on: urls)
-    }
 
     static func tagDot(_ hex: String, size: CGFloat = 10) -> NSImage {
         NSImage(size: NSSize(width: size, height: size), flipped: false) { rect in
@@ -141,4 +134,63 @@ extension FileBrowserViewController {
             return true
         }
     }
+}
+
+
+/// 右クリックメニューの「タグ」の1行。チェックボックスなので、押してもメニューは閉じない
+final class TagCheckboxMenuView: NSView {
+    private let item: Tag
+    private let urls: [URL]
+    private let store: TagStore
+    private let checkbox: NSButton
+
+    init(tag: Tag, urls: [URL], store: TagStore) {
+        self.item = tag
+        self.urls = urls
+        self.store = store
+        checkbox = NSButton(checkboxWithTitle: tag.leafName, target: nil, action: nil)
+        super.init(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
+
+        checkbox.allowsMixedState = true
+        checkbox.target = self
+        checkbox.action = #selector(toggle(_:))
+        checkbox.toolTip = tag.name
+        let dot = NSImageView(image: FileBrowserViewController.tagDot(tag.color))
+        for view in [checkbox, dot] as [NSView] {
+            view.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(view)
+        }
+        // 階層の深さだけ字下げする
+        let indent = 20 + CGFloat(tag.depth) * 16
+        NSLayoutConstraint.activate([
+            checkbox.leadingAnchor.constraint(equalTo: leadingAnchor, constant: indent),
+            checkbox.centerYAnchor.constraint(equalTo: centerYAnchor),
+            dot.leadingAnchor.constraint(equalTo: checkbox.trailingAnchor, constant: 6),
+            dot.centerYAnchor.constraint(equalTo: centerYAnchor),
+            dot.widthAnchor.constraint(equalToConstant: 10),
+            dot.heightAnchor.constraint(equalToConstant: 10),
+            dot.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -16),
+        ])
+        updateState()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    private func updateState() {
+        let count = urls.filter { store.hasTag(item.id, on: $0) }.count
+        checkbox.state = count == 0 ? .off : (count == urls.count ? .on : .mixed)
+    }
+
+    @objc private func toggle(_ sender: NSButton) {
+        store.toggle(item.id, on: urls)
+        updateState()
+    }
+
+    #if DEBUG
+    func debugToggle() { toggle(checkbox) }
+    var debugState: NSControl.StateValue { checkbox.state }
+    #endif
 }

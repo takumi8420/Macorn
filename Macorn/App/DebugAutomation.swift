@@ -187,6 +187,8 @@ enum DebugAutomation {
                 }
             }
             print("[debug] saved md \(argument)")
+        case "qlstate":
+            print("[debug] \(browser.filePreview.debugQuickLookState) kind=\(browser.filePreview.kind)")
         case "scripts":
             browser.filePreview.debugToggleScripts()
             print("[debug] scripts=\(browser.filePreview.scriptsEnabled) kind=\(browser.filePreview.kind)")
@@ -201,6 +203,14 @@ enum DebugAutomation {
             Theme.shared.accentHex = argument == "system" ? nil : argument
         case "appearance":
             Theme.shared.appearance = Theme.Appearance(rawValue: argument) ?? .system
+        case "tagmenu":
+            // 右クリックの「タグ」メニューの行を、メニューを閉じずに続けて押したときと同じ動きをさせる
+            let menu = browser.tagMenuItem(for: browser.selectedURLs).submenu
+            let views = menu?.items.compactMap { $0.view as? TagCheckboxMenuView } ?? []
+            views.forEach { $0.debugToggle() }
+            print("[debug] tagmenu rows=\(views.count) states=\(views.map(\.debugState.rawValue))")
+        case "popover":
+            print("[debug] popover shown=\(browser.tagPopover?.isShown ?? false)")
         case "favs":
             print("[debug] favorites=\(SidebarStore.shared.favorites.map { $0.name + ($0.isMissing ? "(missing)" : "") })")
         case "favrename":

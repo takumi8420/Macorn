@@ -1,13 +1,41 @@
 import AppKit
+import AVKit
+import PDFKit
+import Quartz
+import UniformTypeIdentifiers
 import WebKit
 
 /// ファイルのプレビュー（VS Code のプレビューのように、一覧の右に表示する）。
-/// Markdown は整形して、HTML はそのページを表示する。
+/// Markdown は整形して、HTML はそのページを、画像・PDF・動画・書類などはクイックルックで表示する。
 /// ファイルが保存されたら自動で表示し直し、読んでいた位置も保つ。
 final class FilePreviewController: NSViewController {
     enum Kind: Equatable {
         case markdown, html
+        /// 画像・PDF・動画・音声・書類など、目で見て確認するもの
+        case visual
     }
+
+    /// 目で見て確認するもののうち、何で表示するか
+    enum Viewer: Equatable {
+        case image, pdf, media, quickLook
+    }
+
+    static func viewer(for url: URL) -> Viewer {
+        guard let type = UTType(filenameExtension: url.pathExtension.lowercased()) else { return .quickLook }
+        if type.conforms(to: .pdf) { return .pdf }
+        if type.conforms(to: .audiovisualContent) { return .media }
+        if type.conforms(to: .image) { return .image }
+        return .quickLook
+    }
+
+    /// クイックルックで見せる種類（目で見て確認できるもの）
+    static let visualTypes: [UTType] = [
+        .image, .pdf, .audiovisualContent, .presentation, .spreadsheet,
+        UTType("org.openxmlformats.wordprocessingml.document"),
+        UTType("com.microsoft.word.doc"),
+        UTType("com.apple.iwork.pages.sffpages"),
+        .rtf,
+    ].compactMap { $0 }
 
     static let markdownExtensions: Set<String> = ["md", "markdown", "mdown", "mkd", "mkdn"]
     static let htmlExtensions: Set<String> = ["html", "htm", "xhtml"]
@@ -17,6 +45,9 @@ final class FilePreviewController: NSViewController {
         let ext = url.pathExtension.lowercased()
         if markdownExtensions.contains(ext) { return .markdown }
         if htmlExtensions.contains(ext) { return .html }
+        if let type = UTType(filenameExtension: ext), visualTypes.contains(where: { type.conforms(to: $0) }) {
+            return .visual
+        }
         return nil
     }
 
@@ -40,6 +71,29 @@ final class FilePreviewController: NSViewController {
         webView.setValue(false, forKey: "drawsBackground")
         return webView
     }()
+    /// 画像・PDF・動画は macOS の部品で表示し、それ以外の書類はクイックルックで表示する
+    private var quickLookView: QLPreviewView?
+    private let imageView: NSImageView = {
+        let view = NSImageView()
+        view.imageScaling = .scaleProportionallyDown
+        view.animates = true
+        return view
+    }()
+    private let pdfView: PDFView = {
+        let view = PDFView()
+        view.autoScales = true
+        view.displayMode = .singlePageContinuous
+        view.backgroundColor = .clear
+        return view
+    }()
+    private let playerView: AVPlayerView = {
+        let view = AVPlayerView()
+        view.controlsStyle = .inline
+        view.showsFullScreenToggleButton = true
+        return view
+    }()
+    private(set) var viewer: Viewer = .quickLook
+    private var editButton: NSButton?
     private let titleLabel = NSTextField(labelWithString: "")
     private let iconView = NSImageView()
     private var scriptButton: NSButton?
@@ -67,6 +121,7 @@ final class FilePreviewController: NSViewController {
         self.scriptButton = scriptButton
         self.browserButton = browserButton
         let editButton = Self.headerButton(symbol: "square.and.pencil", tip: "エディタで開く（⌥⌘E）", target: self, action: #selector(openInEditor(_:)))
+        self.editButton = editButton
         let closeButton = Self.headerButton(symbol: "xmark", tip: "プレビューを閉じる（⌥⌘P で切り替え）", target: self, action: #selector(closePreview(_:)))
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
@@ -77,7 +132,11 @@ final class FilePreviewController: NSViewController {
         separator.boxType = .separator
 
         webView.navigationDelegate = self
-        for subview in [header, separator, webView] {
+        let quickLook: QLPreviewView = QLPreviewView(frame: .zero, style: .normal)
+        quickLook.autostarts = false
+        quickLook.isHidden = true
+        quickLookView = quickLook
+        for subview in [header, separator, webView, quickLook, imageView, pdfView, playerView] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             container.addSubview(subview)
         }
@@ -93,7 +152,21 @@ final class FilePreviewController: NSViewController {
             webView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             webView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             webView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            quickLook.topAnchor.constraint(equalTo: separator.bottomAnchor),
+            quickLook.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            quickLook.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            quickLook.bottomAnchor.constraint(equalTo: container.bottomAnchor),
         ])
+        // 画像・PDF・動画も、同じ場所に重ねて置き、使うものだけを見せる
+        for content in [imageView, pdfView, playerView] as [NSView] {
+            content.isHidden = true
+            NSLayoutConstraint.activate([
+                content.topAnchor.constraint(equalTo: separator.bottomAnchor, constant: content === imageView ? 12 : 0),
+                content.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: content === imageView ? 12 : 0),
+                content.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: content === imageView ? -12 : 0),
+                content.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: content === imageView ? -12 : 0),
+            ])
+        }
         view = container
     }
 
@@ -111,7 +184,9 @@ final class FilePreviewController: NSViewController {
         if fileURL?.standardizedFileURL.path != url.standardizedFileURL.path {
             fileURL = url
             kind = Self.kind(for: url) ?? .markdown
+            viewer = Self.viewer(for: url)
             scriptsEnabled = false
+            clearVisualContent()
             pendingScrollY = nil
             startWatching(url)
             updateHeader()
@@ -125,12 +200,22 @@ final class FilePreviewController: NSViewController {
         watcher?.cancel()
         watcher = nil
         fileURL = nil
+        // 動画・音声の再生を止める
+        clearVisualContent()
+    }
+
+    private func clearVisualContent() {
+        quickLookView?.previewItem = nil
+        playerView.player?.pause()
+        playerView.player = nil
+        pdfView.document = nil
+        imageView.image = nil
     }
 
     /// 表示し直す。keepingScroll なら、読んでいた位置に戻す
     func reload(keepingScroll: Bool) {
         guard let url = fileURL else { return }
-        if keepingScroll {
+        if keepingScroll, kind != .visual {
             webView.evaluateJavaScript("window.scrollY") { [weak self] value, _ in
                 MainActor.assumeIsolated {
                     self?.pendingScrollY = value as? Double
@@ -142,12 +227,66 @@ final class FilePreviewController: NSViewController {
         }
     }
 
+    /// 画像・PDF・動画・書類を、それぞれに合った部品で表示する（保存し直されたら読み直す）
+    private func renderVisual(_ url: URL) {
+        switch viewer {
+        case .image:
+            if let image = NSImage(contentsOf: url) {
+                imageView.image = image
+            } else {
+                // 読めない画像（一部の SVG など）はクイックルックに任せる
+                viewer = .quickLook
+                updateHeader()
+                renderVisual(url)
+            }
+        case .pdf:
+            let page = pdfView.currentPage.flatMap { pdfView.document?.index(for: $0) }
+            pdfView.document = PDFDocument(url: url)
+            if let page, let target = pdfView.document?.page(at: page) { pdfView.go(to: target) }
+        case .media:
+            if (playerView.player?.currentItem?.asset as? AVURLAsset)?.url.path != url.path {
+                playerView.player?.pause()
+                playerView.player = AVPlayer(url: url)
+            }
+        case .quickLook:
+            guard let quickLookView else { return }
+            if (quickLookView.previewItem as? NSURL)?.path == url.path {
+                quickLookView.refreshPreviewItem()
+            } else {
+                quickLookView.previewItem = url as NSURL
+            }
+        }
+    }
+
+    private static func symbol(for viewer: Viewer) -> String {
+        switch viewer {
+        case .image: "photo"
+        case .pdf: "doc.text.image"
+        case .media: "play.rectangle"
+        case .quickLook: "eye"
+        }
+    }
+
     /// 見出しのアイコンとボタンを、ファイルの種類に合わせる
     private func updateHeader() {
         let isHTML = kind == .html
-        iconView.image = NSImage(systemSymbolName: isHTML ? "globe" : "doc.richtext", accessibilityDescription: isHTML ? "HTML" : "Markdown")
+        let isVisual = kind == .visual
+        let symbol = isVisual ? "eye" : (isHTML ? "globe" : "doc.richtext")
+        iconView.image = NSImage(systemSymbolName: symbol, accessibilityDescription: isVisual ? "プレビュー" : (isHTML ? "HTML" : "Markdown"))
         scriptButton?.isHidden = !isHTML
-        browserButton?.isHidden = !isHTML
+        // HTML は「ブラウザで開く」、画像・PDF・動画などは「既定のアプリで開く」
+        browserButton?.isHidden = !(isHTML || isVisual)
+        browserButton?.image = NSImage(systemSymbolName: isVisual ? "arrow.up.forward.app" : "safari", accessibilityDescription: nil)
+        browserButton?.toolTip = isVisual ? "既定のアプリで開く" : "ブラウザで開く"
+        editButton?.isHidden = isVisual
+        webView.isHidden = isVisual
+        quickLookView?.isHidden = !(isVisual && viewer == .quickLook)
+        imageView.isHidden = !(isVisual && viewer == .image)
+        pdfView.isHidden = !(isVisual && viewer == .pdf)
+        playerView.isHidden = !(isVisual && viewer == .media)
+        if isVisual, let fileURL {
+            iconView.image = NSImage(systemSymbolName: Self.symbol(for: Self.viewer(for: fileURL)), accessibilityDescription: nil)
+        }
         scriptButton?.contentTintColor = scriptsEnabled ? Theme.shared.accentColor : .secondaryLabelColor
         scriptButton?.toolTip = scriptsEnabled
             ? "スクリプトを動かしています（クリックで止める）"
@@ -157,6 +296,11 @@ final class FilePreviewController: NSViewController {
     }
 
     private func render(_ url: URL) {
+        if kind == .visual {
+            lastHTMLLength = Int((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+            renderVisual(url)
+            return
+        }
         if kind == .html {
             lastHTMLLength = (try? Data(contentsOf: url).count) ?? 0
             // 同じフォルダの CSS・画像・スクリプトだけを読めるようにする
@@ -234,6 +378,10 @@ final class FilePreviewController: NSViewController {
 
     #if DEBUG
     func debugToggleScripts() { toggleScripts(nil) }
+
+    var debugQuickLookState: String {
+        "pdfPage=\(pdfView.currentPage.flatMap { pdfView.document?.index(for: $0) } ?? -1) pdfDoc=\(pdfView.documentView.map { "\(Int($0.frame.width))x\(Int($0.frame.height))" } ?? "-") scale=\(String(format: "%.2f", pdfView.scaleFactor)) pdfFrame=\(Int(pdfView.frame.width))x\(Int(pdfView.frame.height)) " + "viewer=\(viewer) image=\(imageView.image.map { "\(Int($0.size.width))x\(Int($0.size.height))" } ?? "-") pdfPages=\(pdfView.document?.pageCount ?? 0) player=\(playerView.player?.currentItem?.status.rawValue ?? -1) " + "ql hidden=\(quickLookView?.isHidden ?? true) item=\((quickLookView?.previewItem as? NSURL)?.lastPathComponent ?? "-") web hidden=\(webView.isHidden) edit hidden=\(editButton?.isHidden ?? true) open=\(browserButton?.toolTip ?? "-")"
+    }
 
     func debugSnapshot(to url: URL, completion: @escaping () -> Void) {
         webView.takeSnapshot(with: nil) { image, _ in
