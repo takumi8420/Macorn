@@ -81,6 +81,13 @@ enum DebugAutomation {
                let sidebar = split.splitViewItems.first?.viewController as? SidebarViewController {
                 print("[debug] sbdrop \(argument) → \(sidebar.debugDrop(drag: parts[0], onto: parts[1], index: Int(parts[2]) ?? -1, copy: parts.count > 3))")
             }
+        case "sbhover":
+            // sbhover:<ドラッグするもの>><カーソルを置く行 ID>><行の中の高さ 0〜1>[>copy]
+            let parts = argument.components(separatedBy: ">")
+            if parts.count >= 3, let split = controller.contentViewController as? NSSplitViewController,
+               let sidebar = split.splitViewItems.first?.viewController as? SidebarViewController {
+                print("[debug] sbhover \(argument) → \(sidebar.debugHoverDrop(drag: parts[0], onto: parts[1], fraction: CGFloat(Double(parts[2]) ?? 0.5), copy: parts.count > 3))")
+            }
         case "mksection":
             SidebarStore.shared.createSection(named: argument)
         case "sbrows":

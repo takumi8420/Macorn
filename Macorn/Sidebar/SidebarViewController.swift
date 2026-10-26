@@ -356,7 +356,30 @@ extension SidebarViewController: NSOutlineViewDataSource {
     }
 
     func outlineView(_ outlineView: NSOutlineView, validateDrop info: any NSDraggingInfo, proposedItem item: Any?, proposedChildIndex index: Int) -> NSDragOperation {
-        validateDrop(info.draggingPasteboard, target: item as? SidebarNode, index: index, copy: Self.isCopy(info))
+        let point = outlineView.convert(info.draggingLocation, from: nil)
+        let (target, childIndex) = proposal(at: point, proposedItem: item as? SidebarNode, index: index)
+        return validateDrop(info.draggingPasteboard, target: target, index: childIndex, copy: Self.isCopy(info))
+    }
+
+    /// 置き先の候補を、カーソルの位置で決め直す。
+    /// 行の間に隙間を空ける表示（.gap）では、AppKit は「行の間」ばかりを候補にして「行の上」をほとんど出さない。
+    /// そこで、タグを受け取れる行（タグ・置いたタグ・タグのセクションの見出し）の真ん中あたりにカーソルがあれば、その行の上に置くものとする
+    private func proposal(at point: NSPoint, proposedItem: SidebarNode?, index: Int) -> (SidebarNode?, Int) {
+        let row = outlineView.row(at: point)
+        guard row >= 0, let node = outlineView.item(atRow: row) as? SidebarNode, acceptsDropOn(node) else { return (proposedItem, index) }
+        let rect = outlineView.rect(ofRow: row)
+        // 上下の端（それぞれ 25%）は「行の間」のまま
+        guard abs(point.y - rect.midY) < rect.height * 0.25 else { return (proposedItem, index) }
+        return (node, NSOutlineViewDropOnItemIndex)
+    }
+
+    /// 行の上に置けるか（タグを付ける・タグの下へ入れる先になる行）
+    private func acceptsDropOn(_ node: SidebarNode) -> Bool {
+        switch node.kind {
+        case .tag, .section(.tag): true
+        case .placed(let item, _): item.tagID != nil
+        default: false
+        }
     }
 
     func outlineView(_ outlineView: NSOutlineView, acceptDrop info: any NSDraggingInfo, item: Any?, childIndex index: Int) -> Bool {
@@ -559,6 +582,42 @@ extension SidebarViewController {
             }
             return indent + title + (outlineView.selectedRow == row ? " *" : "")
         }.joined(separator: " / ")
+    }
+
+    /// デバッグ用: カーソルが行 onto の上から fraction（0 が上端、1 が下端）の位置にあるときのドロップ。
+    /// AppKit が出す候補（その行の前の隙間）から始めて、カーソルの位置での決め直しも含めて確かめる
+    func debugHoverDrop(drag: String, onto: String, fraction: CGFloat, copy: Bool = false) -> String {
+        guard let node = nodeCache[debugResolve(onto)], case let row = outlineView.row(forItem: node), row >= 0 else { return "no-target" }
+        let rect = outlineView.rect(ofRow: row)
+        let point = NSPoint(x: rect.midX, y: rect.minY + rect.height * fraction)
+        // .gap のときの AppKit の候補: 親の中の、この行の位置（行の前）
+        let parent = outlineView.parent(forItem: node) as? SidebarNode
+        let position = outlineView.childIndex(forItem: node)
+        let (target, index) = proposal(at: point, proposedItem: parent, index: position)
+        return debugPerform(drag: drag, target: target, index: index, copy: copy)
+    }
+
+    private func debugResolve(_ text: String) -> String {
+        var text = text
+        for section in store.customSections {
+            text = text.replacingOccurrences(of: "custom:" + section.name, with: "custom:" + section.id.uuidString)
+        }
+        if let range = text.range(of: "tag:"), UUID(uuidString: String(text[range.upperBound...])) == nil,
+           let tag = tags.tag(named: String(text[range.upperBound...])) {
+            text = String(text[..<range.upperBound]) + tag.id.uuidString
+        }
+        return text
+    }
+
+    private func debugPerform(drag: String, target: SidebarNode?, index: Int, copy: Bool) -> String {
+        let pasteboard = NSPasteboard(name: NSPasteboard.Name("dev.macorn.debug-drop"))
+        pasteboard.clearContents()
+        pasteboard.setString(debugResolve(drag), forType: SidebarDrag.type)
+        let operation = validateDrop(pasteboard, target: target, index: index, copy: copy)
+        guard !operation.isEmpty else { return "refused" }
+        let (node, retargetIndex) = lastRetarget
+        let done = acceptDrop(pasteboard, target: node, index: retargetIndex, copy: copy)
+        return done ? "\(operation == .copy ? "copied" : "moved")→\(node?.id ?? "root")@\(retargetIndex)" : "failed"
     }
 
     /// デバッグ用: ドラッグ＆ドロップを、本物と同じ確認・処理の流れで行う。
