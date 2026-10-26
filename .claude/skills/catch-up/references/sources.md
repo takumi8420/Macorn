@@ -27,7 +27,7 @@ CHANGELOG のエントリの形（記載ルールは `AGENTS.md`）：
 
 | 案件 | 指示書 | 要件・進捗（議事録の代わり） | 実装 | 読まないもの |
 | --- | --- | --- | --- | --- |
-| Macorn | `AGENTS.md` | `docs/REQUIREMENTS.md`（0章・12章・13章）、`README.md`「進捗」 | `Noxy/`、`NoxyTests/`（構成と件数だけ） | `build/`、`Branding/` の画像 |
+| Macorn | `AGENTS.md` | `docs/REQUIREMENTS.md`（0章・12章・13章）、`README.md`「進捗」 | `Macorn/`、`MacornTests/`（構成と件数だけ） | `build/`、`Branding/` の画像 |
 
 - このリポジトリには議事録がない。決定はユーザーとの会話で行い、CHANGELOG の「きっかけ」と `AGENTS.md` の「確定している前提」に残している
 - `docs/REQUIREMENTS.md` の 0章「決定事項」の「仮決定」は確定ではない。`AGENTS.md` の「確定している前提」を優先し、食い違いは報告する

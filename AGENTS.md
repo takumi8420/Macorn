@@ -29,14 +29,14 @@
 | 場所 | 内容 |
 | --- | --- |
 | `docs/REQUIREMENTS.md` | 要件定義書（決定事項・機能一覧・マイルストーン・実装状況） |
-| `Noxy/` | アプリ本体（Swift。AppKit ＋ SwiftUI）。役割ごとのフォルダ構成は [README.md](README.md) |
-| `NoxyTests/` | ユニットテスト（Swift Testing） |
-| `Noxy.xcodeproj/` | Xcode プロジェクト（フォルダ同期形式。`Noxy/` に置いたファイルは自動でビルド対象になる） |
-| `Noxy.entitlements` | 署名の権限（iTerm2 連携用の Apple Events） |
+| `Macorn/` | アプリ本体（Swift。AppKit ＋ SwiftUI）。役割ごとのフォルダ構成は [README.md](README.md) |
+| `MacornTests/` | ユニットテスト（Swift Testing） |
+| `Macorn.xcodeproj/` | Xcode プロジェクト（フォルダ同期形式。`Macorn/` に置いたファイルは自動でビルド対象になる） |
+| `Macorn.entitlements` | 署名の権限（iTerm2 連携用の Apple Events） |
 | `Branding/` | Macorn のアイコン・ロゴ・カラー（[Branding/README.md](Branding/README.md)） |
 | `build/` | ビルドの出力（git 管理外。読まない） |
 
-- アプリ名は Macorn に決まっているが、コード・プロジェクト名・バンドル ID はまだ `Noxy` / `dev.noxy.Noxy` のまま（「確定している前提」参照）
+- 2026-10-26 に noxy から Macorn へ改名した。コード・プロジェクト名・バンドル ID（`dev.macorn.Macorn`）も Macorn にそろえてある
 
 ---
 
@@ -44,18 +44,22 @@
 
 - **開発者向けで、軸は「2画面表示・コマンドパレット・ターミナル連携」**（根拠：`docs/REQUIREMENTS.md` 0章 D1・D2）
   - 「ターミナルと同じ感覚で、キーボードだけで速く操作できる Finder」。Finder は置き換えず併用する
-- **アプリ名は Macorn に決定。コードの名前の変更はまだ**（根拠：CHANGELOG 2026-10-26「前提の変更」、ユーザーの回答）
-  - Mac + Acorn（どんぐり）。アイコン・ロゴは `Branding/` にある
-  - 画面の文言・メニュー・プロジェクト名・バンドル ID・ターゲット名は `noxy` / `Noxy` のまま。変えるときはまとめて行う
+- **アプリ名は Macorn（旧名 noxy）**（根拠：CHANGELOG 2026-10-26「前提の変更」「アプリ名を Macorn に変更」）
+  - Mac + Acorn（どんぐり）。アイコン・ロゴの元データは `Branding/`、アプリに組み込んだアイコンは `Macorn/Assets.xcassets/`
+  - 画面の文言・プロジェクト名・バンドル ID・コマンドラインツール（`macorn`）まで Macorn にそろえた。旧名の設定と履歴は初回起動時に引き継ぐ（`Macorn/App/LegacyMigration.swift`）
 - **v1.0（M1〜M6）まで実装済み。v1.x 以降と △ の機能は未着手**（根拠：`docs/REQUIREMENTS.md` 13章）
+- **タグは Macorn 独自のもの（Finder のタグとは別）。フォルダにもファイルにも付けられる**（根拠：ユーザーの選択 2026-10-26、CHANGELOG 同日「タグとお気に入り」）
+  - 名前・色は自由。「仕事/案件A」のように / で階層にする。親のタグの一覧には子のタグの項目も出る
+  - 保存先は `~/Library/Application Support/Macorn/tags.json`（パスとブックマーク）。Macorn の中での移動・改名はその場で、Finder などでの移動はブックマークで追いかける
+- **お気に入りはサイドバーの「お気に入り」（旧「よく使う項目」）を強化したもの。フォルダだけ**（根拠：ユーザーの選択 2026-10-26）
 - **配布は Mac App Store ではなく、Developer ID 署名で直接配布する**（根拠：`docs/REQUIREMENTS.md` 9.4）
   - サンドボックスではフォルダに自由にアクセスできないため。今は自分用で、簡易署名（`-`）で動かしている
-- **macOS 15 以降、Swift 6（MainActor を既定）、外部ライブラリなし**（根拠：`docs/REQUIREMENTS.md` 0章 D4、10章、`Noxy.xcodeproj` の設定）
+- **macOS 15 以降、Swift 6（MainActor を既定）、外部ライブラリなし**（根拠：`docs/REQUIREMENTS.md` 0章 D4、10章、`Macorn.xcodeproj` の設定）
 - **実装は最後まで自走し、確認は要件に関わるときだけ**（根拠：ユーザーの指示 2026-10-26）
   - 実装 → ビルド → テスト → アプリを動かして確認 → 直す、を繰り返してから次へ進む
   - マイルストーンごとの確認は不要
 - **アプリの動作確認は Debug ビルドの自動操作で行う**（根拠：[README.md](README.md)「開発用の自動操作」）
-  - `NOXY_DEBUG_STEPS` で操作し、画像は `NOXY_DEBUG_OUT` に保存する。普段の履歴を汚さないよう `NOXY_HISTORY_PATH` も指定する
+  - `MACORN_DEBUG_STEPS` で操作し、画像は `MACORN_DEBUG_OUT` に保存する。普段の履歴を汚さないよう `MACORN_HISTORY_PATH` も指定する
   - 自動操作中はウィンドウをキーにしない（利用者のキー入力を奪わないため）。テストで作ったファイルや設定は最後に片付ける
 
 ---
@@ -91,11 +95,11 @@
 ### 記載例
 
 ```markdown
-## 2026-10-27
+## 2026-10-28
 
-### Macorn：アプリ名を Macorn に変更
+### Macorn：コマンドパレットの幅を広げる
 
-- **きっかけ**：konta の依頼「コードの名前も Macorn にそろえて」
-- **意図・方針**：表示名・メニュー・バンドル ID をまとめて変える。保存済みの設定は旧 ID から引き継ぐ
-- 変更 `Noxy.xcodeproj/project.pbxproj` — 製品名とバンドル ID を Macorn に
+- **きっかけ**：konta の依頼「パレットが狭くて長いパスが切れる」
+- **意図・方針**：長いパスでも末尾が見えるよう幅を 640 → 760 にした。高さは変えない
+- 変更 `Macorn/Palette/PaletteController.swift` — パレットの幅を広げる
 ```

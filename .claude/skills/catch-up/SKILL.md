@@ -56,7 +56,7 @@ metadata:
 - `docs/REQUIREMENTS.md` の 0章（決定事項）、12章（マイルストーン）、13章（実装状況・未実装）を読む。ほかの章は必要なときだけ
 - `README.md` の「進捗」の表を読む
 - `git log --oneline -10` で最後のコミットを、`git status --short` でコミットしていない変更を確認する
-- ソースコード（`Noxy/`）はフォルダ構成と件数だけ見る。中身は、判断の理由を確かめる必要があるときだけ読む
+- ソースコード（`Macorn/`）はフォルダ構成と件数だけ見る。中身は、判断の理由を確かめる必要があるときだけ読む
 - 読まないもの：`build/`（ビルド出力）、`Branding/` の画像（`.png`・`.icns`・`.svg`）。ブランドは `Branding/README.md` だけ読む
 
 読む場所と順番の詳細は [references/sources.md](references/sources.md)。

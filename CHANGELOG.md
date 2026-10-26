@@ -6,6 +6,44 @@
 
 ## 2026-10-26
 
+### Macorn：タグとお気に入り
+
+- **きっかけ**：konta の依頼「フォルダーに対してタグづけを柔軟にできるようにしてほしい。お気に入り登録も」
+- **意図・方針**
+  - 作る前に3点を確認した。タグの保存先は「Macorn だけのタグ」（macOS 標準のタグを推奨したが、色や階層を自由に作れる方を選ばれた）、対象は「フォルダもファイルも」、お気に入りは「サイドバーを強化」
+  - 「柔軟に」に応えるため、名前・色は自由、「仕事/案件A」のように / で階層にでき、1つの項目に複数のタグを付けられるようにした。親のタグの一覧には子のタグの項目も出す
+  - タグの一覧は「タグを開く場所」（`macorn-tag:///ID`）として画面で開く形にした。フォルダと同じ操作（開く・コピー・名前の変更・2画面・戻る/進む・前回の状態の復元）がそのまま使える。「ここ」に当たるフォルダがないので、新規作成とペーストは使えなくした。タグの一覧へドロップするとタグを付ける
+  - Macorn の中での移動・改名ではタグのパスをその場で直し、Finder などで動かされた項目はブックマークで探し直す
+  - お気に入りはフォルダだけにした。ファイルを選んで ⌃⌘T を押したときに表示中のフォルダが入ってしまう不具合を、確認中に見つけて直した
+  - 確認中に普段の設定（お気に入り）を書き換えないよう、設定を退避してから試し、最後に戻した
+- 追加 `Macorn/Model/TagStore.swift` — タグの保存・階層・付け外し・移動への追従
+- 追加 `Macorn/Browser/FileBrowserViewController+Tags.swift` — タグの一覧の表示、タグの編集（⌥⌘G）、右クリックの「タグ」
+- 追加 `Macorn/Browser/TagEditorView.swift` — タグを探す・作る・付け外す小さな画面と、設定の「タグ」タブ
+- 変更 `Macorn/Sidebar/SidebarView.swift`、`SidebarStore.swift` — 「お気に入り」（ドラッグ＆ドロップで追加、表示名の変更、見つからないフォルダの表示）と「タグ」（階層、色、ドロップでタグを付ける、名前・色の変更、削除）
+- 変更 `Macorn/Browser/FileCellView.swift`、`FileBrowserViewController.swift` — 一覧に「タグ」列、タグの一覧では名前の後ろに場所を表示
+- 変更 `Macorn/Window/BrowserWindowController.swift` — ツールバーに ★、⌃⌘T を「お気に入りに追加・外す」に。タグの一覧のタイトル
+- 変更 `Macorn/Palette/` — `#` とふつうの検索でタグを探して開けるように
+- 変更 `Macorn/Operations/` — 移動・名前の変更・一括変更・取り消しのときにタグのパスを直す
+- 変更 `Macorn/Settings/SettingsView.swift` — 「タグ」タブと、タブを指定して開く仕組み
+- 変更 `Macorn/App/MainMenu.swift`、`DebugAutomation.swift` — メニュー（お気に入り・タグを編集）と、確認用の手順
+- 追加 `MacornTests/TagTests.swift` — タグのテスト 10 件（合計 88 件）
+- 変更 `README.md`、`docs/REQUIREMENTS.md`、`AGENTS.md` — 操作一覧、S-07・N-04・N-05 の内容と実装状況、確定している前提
+
+### Macorn：アプリ名を noxy から Macorn に変更（コード・プロジェクト名・アイコンまで）
+
+- **きっかけ**：konta がアプリを起動して「noxy.app となってしまっているのはどうしてか。修正してほしい」と依頼。アプリ名を Macorn にすることは同日に決定済みだった（下の「前提の変更」）
+- **意図・方針**
+  - `noxy.app` になっていたのは、製品名がターゲット名（`Noxy`）から付けられ、表示名・メニューの文言も `noxy` のままだったため
+  - AGENTS.md の方針どおり、名前の変更はまとめて行った。表示名・メニュー・プロジェクト・ターゲット・フォルダ・モジュール名・バンドル ID・コマンドラインツール名・内部の識別子・開発用の環境変数（`MACORN_*`）まで Macorn にそろえた
+  - バンドル ID を `dev.noxy.Noxy` から `dev.macorn.Macorn` に変えると設定の保存先が変わるため、旧い設定と `~/Library/Application Support/noxy`（フォルダ履歴）を初回起動時に引き継ぐ処理を入れた
+  - アイコンは `Branding/` の AppIcon.appiconset をアセットカタログに入れた（Branding は元データとして残す）
+- 移動 `Noxy/` → `Macorn/`、`NoxyTests/` → `MacornTests/`、`Noxy.xcodeproj/` → `Macorn.xcodeproj/`（スキームも `Macorn`）、`Noxy.entitlements` → `Macorn.entitlements`
+- 変更 `Macorn.xcodeproj/project.pbxproj` — ターゲット名・製品名・表示名・バンドル ID・テストの接続先を Macorn に。アイコンの設定を追加
+- 変更 `Macorn/` と `MacornTests/` の各ファイル — メニュー（「Macorn について」「Macorn を終了」など）・メッセージ・識別子・環境変数・`@testable import Macorn`
+- 追加 `Macorn/Assets.xcassets/` — アプリアイコン（`Branding/AppIcon/AppIcon.appiconset` の複製）
+- 追加 `Macorn/App/LegacyMigration.swift` — 旧名の設定・履歴の引き継ぎ（テスト 1 件を `MacornTests/ExtrasTests.swift` に追加。合計 78 件）
+- 変更 `README.md`、`docs/REQUIREMENTS.md`、`AGENTS.md`、`.claude/skills/catch-up/` — 名前・パス・環境変数を Macorn に。要件定義書の本文中の例（`~/repo/hobby/noxy` など）は旧名のまま残し、冒頭に注記した
+
 ### Macorn：CHANGELOG の運用開始と catch-up スキルの作成
 
 - **きっかけ**：konta の依頼（`/create-catch-up-skill`）。セッションごとに経緯と前提を掴んでから作業できるようにしたい
