@@ -80,6 +80,7 @@ final class SidebarViewController: NSViewController {
     }
     private var lastRetarget: (node: SidebarNode?, index: Int) = (nil, -1)
     private let contextMenu = NSMenu()
+    private let addSectionButton = NSButton()
 
     init(store: SidebarStore = .shared, tags: TagStore = .shared, window: WindowModel, onSelect: @escaping (URL) -> Void) {
         self.store = store
@@ -124,7 +125,44 @@ final class SidebarViewController: NSViewController {
         scrollView.hasVerticalScroller = true
         scrollView.autohidesScrollers = true
         scrollView.drawsBackground = false
-        view = scrollView
+
+        // いちばん下の「＋ セクションを作る」ボタン
+        addSectionButton.title = "セクションを作る"
+        addSectionButton.image = NSImage(systemSymbolName: "plus", accessibilityDescription: nil)
+        addSectionButton.imagePosition = .imageLeading
+        addSectionButton.isBordered = false
+        addSectionButton.contentTintColor = .secondaryLabelColor
+        addSectionButton.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        addSectionButton.toolTip = "サイドバーに新しいセクションを作る"
+        addSectionButton.setAccessibilityLabel("セクションを作る")
+        addSectionButton.target = self
+        addSectionButton.action = #selector(createSection(_:))
+        let separator = NSBox()
+        separator.boxType = .separator
+
+        let container = NSView()
+        for subview in [scrollView, separator, addSectionButton] as [NSView] {
+            subview.translatesAutoresizingMaskIntoConstraints = false
+            container.addSubview(subview)
+        }
+        NSLayoutConstraint.activate([
+            scrollView.topAnchor.constraint(equalTo: container.topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            separator.topAnchor.constraint(equalTo: scrollView.bottomAnchor),
+            separator.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 10),
+            separator.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -10),
+            addSectionButton.topAnchor.constraint(equalTo: separator.bottomAnchor, constant: 6),
+            addSectionButton.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 14),
+            addSectionButton.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -10),
+            addSectionButton.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -8),
+        ])
+        view = container
+    }
+
+    /// 「＋ セクションを作る」: 名前を聞いて、いちばん下に作る
+    @objc func createSection(_ sender: Any?) {
+        SidebarPrompts.createSection(in: store)
     }
 
     override func viewDidLoad() {
