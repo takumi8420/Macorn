@@ -27,77 +27,123 @@ struct SidebarView: View {
 
     var body: some View {
         List(selection: selection) {
-            Section("お気に入り") {
-                ForEach(store.favorites) { item in
-                    FavoriteRow(item: item, store: store)
-                        .tag(item.id)
-                }
-                .onMove { store.moveFavorites(from: $0, to: $1) }
-                // Finder や一覧からフォルダをドラッグすると、その位置にお気に入りとして入る
-                .onInsert(of: [.fileURL]) { index, providers in
-                    insertFavorites(providers, at: index)
-                }
-                if store.favorites.isEmpty {
-                    Text("フォルダをここへドラッグ")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+            // セクションの順番と表示・非表示は、見出しの右クリックか設定で変えられる
+            ForEach(store.visibleSections) { section in
+                sectionView(section)
             }
-
-            Section {
-                OutlineGroup(TagTreeNode.build(from: tags), children: \.children) { node in
-                    TagRow(tag: node.tag, tags: tags)
-                        .tag("tag:" + node.tag.id.uuidString)
-                }
-                if tags.tags.isEmpty {
-                    Text("項目を右クリック ›「タグ」で作れます")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            } header: {
-                HStack {
-                    Text("タグ")
-                    Spacer()
-                    Button {
-                        SidebarPrompts.createTag(parent: nil, in: tags)
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                    .buttonStyle(.borderless)
-                    .help("タグを作る")
-                    // 見出しは行より右端まで広がるので、下の件数の列とそろうよう内側に寄せる
-                    .padding(.trailing, 10)
-                }
-            }
-
-            Section("場所") {
-                ForEach(store.volumes) { item in
-                    HStack {
-                        Label(item.name, systemImage: item.symbol)
-                        Spacer()
-                        if item.isEjectable {
-                            Button {
-                                store.eject(item)
-                            } label: {
-                                Image(systemName: "eject.fill")
-                            }
-                            .buttonStyle(.borderless)
-                            .help("取り出す")
-                        }
-                    }
-                    .tag(item.id)
-                    .contextMenu {
-                        if item.isEjectable {
-                            Button("取り出す") { store.eject(item) }
-                        }
-                    }
-                }
+            if store.visibleSections.isEmpty {
+                Button("サイドバーを元に戻す") { store.resetSections() }
             }
         }
         .listStyle(.sidebar)
         // 選択の色やアイコンを、テーマのアクセントカラーにする
         .tint(Theme.shared.accent)
         .onAppear { store.refreshMissing() }
+    }
+
+    @ViewBuilder
+    private func sectionView(_ section: SidebarSection) -> some View {
+        switch section {
+        case .favorites: favoritesSection
+        case .tags: tagsSection
+        case .locations: locationsSection
+        case .tag(let id): tagSection(id)
+        }
+    }
+
+    private var favoritesSection: some View {
+        Section {
+            ForEach(store.favorites) { item in
+                FavoriteRow(item: item, store: store)
+                    .tag(item.id)
+            }
+            .onMove { store.moveFavorites(from: $0, to: $1) }
+            // Finder や一覧からフォルダをドラッグすると、その位置にお気に入りとして入る
+            .onInsert(of: [.fileURL]) { index, providers in
+                insertFavorites(providers, at: index)
+            }
+            if store.favorites.isEmpty {
+                Text("フォルダやタグをここへ")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        } header: {
+            SectionHeader(section: .favorites, store: store)
+        }
+    }
+
+    private var tagsSection: some View {
+        Section {
+            OutlineGroup(TagTreeNode.build(from: tags), children: \.children) { node in
+                TagRow(tag: node.tag, tags: tags, sidebar: store)
+                    .tag("tag:" + node.tag.id.uuidString)
+            }
+            if tags.tags.isEmpty {
+                Text("項目を右クリック ›「タグ」で作れます")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        } header: {
+            SectionHeader(section: .tags, store: store) {
+                Button {
+                    SidebarPrompts.createTag(parent: nil, in: tags)
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .buttonStyle(.borderless)
+                .help("タグを作る")
+            }
+        }
+    }
+
+    private var locationsSection: some View {
+        Section {
+            ForEach(store.volumes) { item in
+                HStack {
+                    Label(item.name, systemImage: item.symbol)
+                    Spacer()
+                    if item.isEjectable {
+                        Button {
+                            store.eject(item)
+                        } label: {
+                            Image(systemName: "eject.fill")
+                        }
+                        .buttonStyle(.borderless)
+                        .help("取り出す")
+                    }
+                }
+                .tag(item.id)
+                .contextMenu {
+                    if item.isEjectable {
+                        Button("取り出す") { store.eject(item) }
+                    }
+                }
+            }
+        } header: {
+            SectionHeader(section: .locations, store: store)
+        }
+    }
+
+    /// タグを1つのセクションにしたもの。そのタグが付いた項目を並べる（クリックでその場所へ移動）
+    private func tagSection(_ id: UUID) -> some View {
+        Section {
+            let urls = tags.urls(taggedWith: id).filter { FileManager.default.fileExists(atPath: $0.path) }
+            ForEach(urls, id: \.path) { url in
+                TaggedItemRow(url: url, tags: tags)
+                    .tag(url.path)
+            }
+            if urls.isEmpty {
+                Text("このタグが付いた項目はまだありません")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        } header: {
+            SectionHeader(section: .tag(id), store: store) {
+                Circle()
+                    .fill(Color(nsColor: NSColor(hex: tags.tag(id: id)?.color ?? "#8E8E93")))
+                    .frame(width: 8, height: 8)
+            }
+        }
     }
 
     /// 表示中のフォルダ（またはタグ）と同じ項目を選択状態にする。クリックされたらそこへ移動する。
@@ -108,7 +154,12 @@ struct SidebarView: View {
                 if let id = TagLocation.tagID(from: url) { return "tag:" + id.uuidString }
                 let path = url.path
                 let all = store.favorites + store.volumes
-                return all.contains { $0.id == path } ? path : nil
+                if all.contains(where: { $0.id == path }) { return path }
+                // タグのセクションに出ているフォルダ
+                for case .tag(let id) in store.visibleSections where tags.urls(taggedWith: id).contains(where: { $0.path == path }) {
+                    return path
+                }
+                return nil
             },
             set: { newValue in
                 guard let newValue else { return }
@@ -141,6 +192,40 @@ private struct FavoriteRow: View {
     var tags: TagStore = .shared
 
     var body: some View {
+        if let tagID = item.tagID {
+            tagBody(tagID)
+        } else {
+            folderBody
+        }
+    }
+
+    /// お気に入りに入れたタグ（クリックでタグの一覧を開く）
+    private func tagBody(_ id: UUID) -> some View {
+        let tag = tags.tag(id: id)
+        return HStack(spacing: 6) {
+            Image(systemName: "tag.fill")
+                .foregroundStyle(Color(nsColor: NSColor(hex: tag?.color ?? "#8E8E93")))
+            Text(item.customName ?? tag?.name ?? "（削除されたタグ）")
+                .foregroundStyle(tag == nil ? .secondary : .primary)
+                .lineLimit(1)
+            Spacer()
+            if tag != nil {
+                Text("\(tags.count(for: id))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .contextMenu {
+            Button("名前を変更…") { SidebarPrompts.renameFavorite(item, in: store) }
+            if item.customName != nil {
+                Button("タグの名前に戻す") { store.renameFavorite(item.url, to: "") }
+            }
+            Divider()
+            Button("お気に入りから外す") { store.removeFavoriteTag(id) }
+        }
+    }
+
+    private var folderBody: some View {
         Label {
             Text(item.name)
                 .foregroundStyle(item.isMissing ? .secondary : .primary)
@@ -170,6 +255,7 @@ private struct FavoriteRow: View {
 private struct TagRow: View {
     let tag: Tag
     var tags: TagStore
+    var sidebar: SidebarStore = .shared
 
     var body: some View {
         HStack(spacing: 6) {
@@ -205,6 +291,18 @@ private struct TagRow: View {
                 Button("その他の色…") { SettingsWindowController.shared.show(tab: .tags) }
             }
             Button("下の階層にタグを作る…") { SidebarPrompts.createTag(parent: tag, in: tags) }
+            Divider()
+            // お気に入りと並べたり、1つのセクションとして置いたりできる
+            if sidebar.containsFavoriteTag(tag.id) {
+                Button("お気に入りから外す") { sidebar.removeFavoriteTag(tag.id) }
+            } else {
+                Button("お気に入りに追加") { sidebar.addFavoriteTag(tag.id) }
+            }
+            if sidebar.containsTagSection(tag.id) {
+                Button("サイドバーのセクションから外す") { sidebar.removeTagSection(tag.id) }
+            } else {
+                Button("サイドバーのセクションにする") { sidebar.addTagSection(tag.id) }
+            }
             Divider()
             Button("タグを削除…", role: .destructive) { SidebarPrompts.deleteTag(tag, in: tags) }
         }
@@ -272,5 +370,75 @@ enum SidebarPrompts {
         alert.window.initialFirstResponder = field
         guard alert.runModal() == .alertFirstButtonReturn else { return nil }
         return field.stringValue
+    }
+}
+
+
+/// セクションの見出し。右クリックで順番の入れ替え・隠す・（タグのセクションなら）外す
+private struct SectionHeader<Accessory: View>: View {
+    let section: SidebarSection
+    var store: SidebarStore
+    @ViewBuilder var accessory: () -> Accessory
+
+    init(section: SidebarSection, store: SidebarStore, @ViewBuilder accessory: @escaping () -> Accessory) {
+        self.section = section
+        self.store = store
+        self.accessory = accessory
+    }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if case .tag = section { accessory() }
+            Text(section.title)
+            Spacer()
+            if case .tag = section {} else { accessory() }
+        }
+        // 見出しは行より右端まで広がるので、下の件数の列とそろうよう内側に寄せる
+        .padding(.trailing, 10)
+        .contentShape(Rectangle())
+        .contextMenu {
+            Button("上へ移動") { store.moveSection(section, by: -1) }
+                .disabled(store.visibleSections.first == section)
+            Button("下へ移動") { store.moveSection(section, by: 1) }
+                .disabled(store.visibleSections.last == section)
+            Divider()
+            if case .tag(let id) = section {
+                Button("サイドバーから外す") { store.removeTagSection(id) }
+            } else {
+                Button("「\(section.title)」を隠す") { store.setSection(section, hidden: true) }
+            }
+            Divider()
+            Button("サイドバーをカスタマイズ…") { SettingsWindowController.shared.show(tab: .sidebar) }
+        }
+    }
+}
+
+extension SectionHeader where Accessory == EmptyView {
+    init(section: SidebarSection, store: SidebarStore) {
+        self.init(section: section, store: store) { EmptyView() }
+    }
+}
+
+/// タグのセクションに並べる項目（フォルダはタグの色で塗る）
+private struct TaggedItemRow: View {
+    let url: URL
+    var tags: TagStore
+
+    var body: some View {
+        let isFolder = FileTransfer.isDirectory(url)
+        Label {
+            Text(url.lastPathComponent).lineLimit(1)
+        } icon: {
+            if isFolder {
+                Image(systemName: "folder.fill")
+                    .foregroundStyle(Color(nsColor: NSColor(hex: tags.folderColor(for: url) ?? "#8E8E93")))
+            } else {
+                Image(nsImage: NSWorkspace.shared.icon(forFile: url.path)).resizable().frame(width: 16, height: 16)
+            }
+        }
+        .help(url.path)
+        .contextMenu {
+            Button("Finder で表示") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+        }
     }
 }

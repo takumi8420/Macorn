@@ -56,7 +56,14 @@ final class BrowserWindowController: NSWindowController {
         let sidebar = NSHostingController(rootView: SidebarView(
             store: .shared,
             window: panes.model,
-            onSelect: { [weak self] url in self?.browser.navigate(to: url) }
+            onSelect: { [weak self] url in
+                // ファイル（タグのセクションの項目など）なら、その場所へ移動して選ぶ
+                if url.isFileURL, FileManager.default.fileExists(atPath: url.path), !FileTransfer.isDirectory(url) {
+                    self?.browser.navigate(to: url.deletingLastPathComponent(), selecting: url)
+                } else {
+                    self?.browser.navigate(to: url)
+                }
+            }
         ))
         sidebar.sizingOptions = []
 

@@ -69,6 +69,8 @@ final class FilePreviewController: NSViewController {
         configuration.defaultWebpagePreferences.allowsContentJavaScript = false
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.setValue(false, forKey: "drawsBackground")
+        // トラックパッドの2本指で拡大・縮小できるようにする
+        webView.allowsMagnification = true
         return webView
     }()
     /// 画像・PDF・動画は macOS の部品で表示し、それ以外の書類はクイックルックで表示する
@@ -98,6 +100,12 @@ final class FilePreviewController: NSViewController {
     private let iconView = NSImageView()
     private var scriptButton: NSButton?
     private var browserButton: NSButton?
+    private var zoomControls: NSStackView?
+    nonisolated(unsafe) private var magnifyMonitor: Any?
+    private let zoomLabel = NSButton(title: "100%", target: nil, action: nil)
+
+    /// 拡大・縮小の範囲と段階（ブラウザと同じくらい）
+    static let zoomSteps: [Double] = [0.25, 0.33, 0.5, 0.67, 0.75, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0, 5.0]
     private var watcher: DispatchSourceFileSystemObject?
     private var pendingScrollY: Double?
     private let htmlFile = FileManager.default.temporaryDirectory
@@ -125,7 +133,19 @@ final class FilePreviewController: NSViewController {
         let closeButton = Self.headerButton(symbol: "xmark", tip: "プレビューを閉じる（⌥⌘P で切り替え）", target: self, action: #selector(closePreview(_:)))
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        [icon, titleLabel, spacer, scriptButton, browserButton, editButton, closeButton].forEach(header.addArrangedSubview)
+        let zoomOut = Self.headerButton(symbol: "minus.magnifyingglass", tip: "縮小（⌘−）", target: self, action: #selector(zoomOut(_:)))
+        let zoomIn = Self.headerButton(symbol: "plus.magnifyingglass", tip: "拡大（⌘+）", target: self, action: #selector(zoomIn(_:)))
+        zoomLabel.isBordered = false
+        zoomLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        zoomLabel.contentTintColor = .secondaryLabelColor
+        zoomLabel.target = self
+        zoomLabel.action = #selector(resetZoom(_:))
+        zoomLabel.toolTip = "実際のサイズに戻す（PDF はページの幅に合わせる）（⌘0）"
+        zoomLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 42).isActive = true
+        let zoomControls = NSStackView(views: [zoomOut, zoomLabel, zoomIn])
+        zoomControls.spacing = 2
+        self.zoomControls = zoomControls
+        [icon, titleLabel, spacer, zoomControls, scriptButton, browserButton, editButton, closeButton].forEach(header.addArrangedSubview)
         updateHeader()
 
         let separator = NSBox()
@@ -168,6 +188,21 @@ final class FilePreviewController: NSViewController {
             ])
         }
         view = container
+
+        // ピンチで拡大・縮小したときも、倍率の表示を合わせる
+        NotificationCenter.default.addObserver(self, selector: #selector(zoomChangedElsewhere(_:)), name: .PDFViewScaleChanged, object: pdfView)
+        magnifyMonitor = NSEvent.addLocalMonitorForEvents(matching: .endGesture) { [weak self] event in
+            MainActor.assumeIsolated {
+                guard let self, event.window === self.view.window else { return }
+                self.updateZoomLabel()
+                if self.kind != .visual { Preferences.previewZoom = self.zoom }
+            }
+            return event
+        }
+    }
+
+    @objc private func zoomChangedElsewhere(_ notification: Notification) {
+        updateZoomLabel()
     }
 
     private static func headerButton(symbol: String, tip: String, target: AnyObject, action: Selector) -> NSButton {
@@ -187,6 +222,9 @@ final class FilePreviewController: NSViewController {
             viewer = Self.viewer(for: url)
             scriptsEnabled = false
             clearVisualContent()
+            webView.magnification = 1
+            webView.pageZoom = CGFloat(Preferences.previewZoom)
+            pdfView.autoScales = true
             pendingScrollY = nil
             startWatching(url)
             updateHeader()
@@ -268,12 +306,73 @@ final class FilePreviewController: NSViewController {
     }
 
     /// 見出しのアイコンとボタンを、ファイルの種類に合わせる
+    deinit {
+        if let magnifyMonitor { NSEvent.removeMonitor(magnifyMonitor) }
+    }
+
+    // MARK: - 拡大・縮小
+
+    /// 今のファイルで拡大・縮小できるか
+    var canZoom: Bool {
+        kind != .visual || viewer == .pdf
+    }
+
+    /// 今の倍率（Markdown・HTML はページの倍率、PDF は表示の倍率）
+    var zoom: Double {
+        if kind == .visual { return Double(pdfView.scaleFactor) }
+        return Double(webView.pageZoom) * Double(webView.magnification)
+    }
+
+    @objc func zoomIn(_ sender: Any?) { stepZoom(up: true) }
+    @objc func zoomOut(_ sender: Any?) { stepZoom(up: false) }
+
+    @objc func resetZoom(_ sender: Any?) {
+        if kind == .visual {
+            pdfView.autoScales = true
+        } else {
+            webView.magnification = 1
+            setWebZoom(1)
+        }
+        updateZoomLabel()
+    }
+
+    private func stepZoom(up: Bool) {
+        guard canZoom else { return }
+        let current = zoom
+        // 今の倍率から少なくとも 5% は変わる段階へ進む（PDF の「幅に合わせる」の倍率は段階の間にあるため）
+        let next = up
+            ? Self.zoomSteps.first { $0 > current * 1.05 } ?? Self.zoomSteps.last!
+            : Self.zoomSteps.last { $0 < current / 1.05 } ?? Self.zoomSteps.first!
+        if kind == .visual {
+            pdfView.autoScales = false
+            pdfView.scaleFactor = CGFloat(next)
+        } else {
+            // ピンチで拡大していた分は、ページの倍率にまとめる
+            webView.magnification = 1
+            setWebZoom(next)
+        }
+        updateZoomLabel()
+    }
+
+    /// Markdown・HTML の倍率を変えて、次に開いたときのために覚えておく
+    private func setWebZoom(_ value: Double) {
+        webView.pageZoom = CGFloat(value)
+        Preferences.previewZoom = value
+    }
+
+    private func updateZoomLabel() {
+        zoomLabel.title = "\(Int((zoom * 100).rounded()))%"
+    }
+
     private func updateHeader() {
         let isHTML = kind == .html
         let isVisual = kind == .visual
         let symbol = isVisual ? "eye" : (isHTML ? "globe" : "doc.richtext")
         iconView.image = NSImage(systemSymbolName: symbol, accessibilityDescription: isVisual ? "プレビュー" : (isHTML ? "HTML" : "Markdown"))
         scriptButton?.isHidden = !isHTML
+        // 拡大・縮小は、Markdown・HTML・PDF で使える
+        zoomControls?.isHidden = !canZoom
+        updateZoomLabel()
         // HTML は「ブラウザで開く」、画像・PDF・動画などは「既定のアプリで開く」
         browserButton?.isHidden = !(isHTML || isVisual)
         browserButton?.image = NSImage(systemSymbolName: isVisual ? "arrow.up.forward.app" : "safari", accessibilityDescription: nil)
@@ -470,6 +569,7 @@ extension FilePreviewController: WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        updateZoomLabel()
         guard let y = pendingScrollY else { return }
         pendingScrollY = nil
         webView.evaluateJavaScript("window.scrollTo(0, \(y))")

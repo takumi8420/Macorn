@@ -20,6 +20,7 @@ enum Preferences {
         static let colorFolders = "colorFoldersByTag"
         static let filePreview = "markdownPreview"
         static let filePreviewFraction = "markdownPreviewFraction"
+        static let previewZoom = "previewZoom"
     }
 
     private static var defaults: UserDefaults { .standard }
@@ -83,6 +84,12 @@ enum Preferences {
     static var filePreviewFraction: Double {
         get { defaults.object(forKey: Key.filePreviewFraction) as? Double ?? 0.5 }
         set { defaults.set(newValue, forKey: Key.filePreviewFraction) }
+    }
+
+    /// Markdown・HTML のプレビューの倍率（1.0 が実際のサイズ）
+    static var previewZoom: Double {
+        get { defaults.object(forKey: Key.previewZoom) as? Double ?? 1.0 }
+        set { defaults.set(min(max(newValue, 0.25), 5.0), forKey: Key.previewZoom) }
     }
 
     static var sort: FileSort {

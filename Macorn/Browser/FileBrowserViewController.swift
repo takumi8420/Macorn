@@ -936,6 +936,9 @@ extension FileBrowserViewController: NSMenuDelegate {
 
 extension FileBrowserViewController: NSMenuItemValidation {
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if [#selector(zoomInPreview(_:)), #selector(zoomOutPreview(_:)), #selector(resetPreviewZoom(_:))].contains(menuItem.action) {
+            return canZoomPreview
+        }
         if menuItem.action == #selector(toggleFilePreview(_:)) {
             menuItem.state = Preferences.filePreview ? .on : .off
             return true

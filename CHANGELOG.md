@@ -6,6 +6,25 @@
 
 ## 2026-10-26
 
+### Macorn：プレビューの拡大・縮小と、サイドバーの構成の変更
+
+- **きっかけ**：konta の依頼「html のプレビューにおいて拡大縮小などが十分にできないので修正してほしい」。作業中に「サイドバーの構成は柔軟に修正できるようにしてほしい。お気に入りとあるタグを並列に置いたり順番を変えたり」
+- **意図・方針**
+  - 拡大・縮小：プレビュー上部に −・倍率・＋ を置き、⌘+ / ⌘− / ⌘0 とピンチでも変えられるようにした。同じ仕組みの Markdown・PDF も対象。Markdown・HTML の倍率は覚えておく。PDF の ⌘0 はページの幅に合わせる
+  - 1段階で少なくとも 5% 変わるようにした（PDF の「幅に合わせる」の倍率が段階の間にあり、⌘+ がほとんど効かないように見えたため）
+  - US キーボード向けの ⌘=（隠したメニュー項目）が、ショートカットの変更の仕組みで ⌘+ と同じ項目と見なされ上書きされていたので、名前を分けた
+  - サイドバー：「並列に置く」を2通りで実現した。タグをお気に入りに入れてフォルダと並べられる（ドラッグで順番も変えられる）ようにし、タグを1つのセクションとして置ける（そのタグが付いた項目が並ぶ）ようにした。セクションは見出しの右クリック（上へ・下へ・隠す）と、設定の「サイドバー」（ドラッグで並べ替え・表示の切り替え・タグのセクションの追加）で変えられる
+  - テストが普段のタグ（tags.json）を書き換えないよう、スキームのテストの設定で一時ファイルを使うようにした
+- 変更 `Macorn/Preview/FilePreviewController.swift`、`Macorn/Browser/FileBrowserViewController+Preview.swift`、`FileBrowserViewController.swift`、`Macorn/Model/Preferences.swift` — 拡大・縮小
+- 変更 `Macorn/Sidebar/SidebarStore.swift` — お気に入りのタグ、セクションの順番・表示・タグのセクション、設定の保存先を渡せるように
+- 変更 `Macorn/Sidebar/SidebarView.swift` — セクションを順番どおりに表示、見出しの右クリック、タグのセクション、お気に入りのタグの行、タグの右クリックに「お気に入りに追加」「サイドバーのセクションにする」
+- 変更 `Macorn/Settings/SettingsView.swift` — 「サイドバー」タブ
+- 変更 `Macorn/Window/BrowserWindowController.swift` — サイドバーからファイルを選んだら、その場所へ移動して選ぶ
+- 変更 `Macorn/App/MainMenu.swift`、`Macorn/Palette/CommandCatalog.swift`、`Macorn/App/DebugAutomation.swift` — メニュー（プレビューの拡大・縮小）、確認用の手順
+- 変更 `Macorn.xcodeproj/xcshareddata/xcschemes/Macorn.xcscheme` — テスト中のタグ・履歴の保存先を一時ファイルに
+- 追加 `MacornTests/SidebarTests.swift` — サイドバーの構成のテスト（合計 110 件）
+- 変更 `README.md`、`docs/REQUIREMENTS.md`、`AGENTS.md` — 操作一覧、N-04・N-05・S-05 の内容、確定している前提
+
 ### Macorn：タグ別の並べ替え
 
 - **きっかけ**：konta の依頼「フォルダの並び順に関してタグ別でソートできるようにもしてほしい」

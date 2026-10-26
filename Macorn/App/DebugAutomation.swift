@@ -187,6 +187,8 @@ enum DebugAutomation {
                 }
             }
             print("[debug] saved md \(argument)")
+        case "zoom":
+            print("[debug] zoom=\(String(format: "%.2f", browser.filePreview.zoom)) canZoom=\(browser.filePreview.canZoom) saved=\(Preferences.previewZoom)")
         case "qlstate":
             print("[debug] \(browser.filePreview.debugQuickLookState) kind=\(browser.filePreview.kind)")
         case "scripts":
@@ -211,6 +213,21 @@ enum DebugAutomation {
             print("[debug] tagmenu rows=\(views.count) states=\(views.map(\.debugState.rawValue))")
         case "popover":
             print("[debug] popover shown=\(browser.tagPopover?.isShown ?? false)")
+        case "sections":
+            print("[debug] sections=\(SidebarStore.shared.visibleSections.map(\.title)) favorites=\(SidebarStore.shared.favorites.map { $0.tagID != nil ? "#" + $0.name : $0.name })")
+        case "tagsection":
+            if let tag = TagStore.shared.tag(named: argument) { SidebarStore.shared.addTagSection(tag.id) }
+        case "favtag":
+            if let tag = TagStore.shared.tag(named: argument) { SidebarStore.shared.addFavoriteTag(tag.id) }
+        case "movesection":
+            let parts = argument.split(separator: "=").map(String.init)
+            if parts.count == 2, let section = SidebarSection(id: parts[0]), let delta = Int(parts[1]) {
+                SidebarStore.shared.moveSection(section, by: delta)
+            }
+        case "hidesection":
+            if let section = SidebarSection(id: argument) { SidebarStore.shared.setSection(section, hidden: true) }
+        case "resetsections":
+            SidebarStore.shared.resetSections()
         case "favs":
             print("[debug] favorites=\(SidebarStore.shared.favorites.map { $0.name + ($0.isMissing ? "(missing)" : "") })")
         case "favrename":
@@ -293,6 +310,7 @@ enum DebugAutomation {
             "up": (126, String(Character(UnicodeScalar(UInt16(NSUpArrowFunctionKey))!))),
             "left": (123, String(Character(UnicodeScalar(UInt16(NSLeftArrowFunctionKey))!))),
             "right": (124, String(Character(UnicodeScalar(UInt16(NSRightArrowFunctionKey))!))),
+            "plus": (24, "+"), "equal": (24, "="), "minus": (27, "-"),
             "slash": (44, "/"), "j": (38, "j"), "k": (40, "k"), "g": (5, "g"), "G": (5, "G"), "h": (4, "h"), "l": (37, "l"),
             "f5": (96, String(Character(UnicodeScalar(UInt16(NSF5FunctionKey))!))),
             "f6": (97, String(Character(UnicodeScalar(UInt16(NSF6FunctionKey))!))),

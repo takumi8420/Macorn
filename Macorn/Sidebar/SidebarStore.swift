@@ -10,8 +10,48 @@ struct SidebarItem: Identifiable, Hashable {
     var customName: String?
     /// フォルダが見つからない（移動・削除された）
     var isMissing = false
+    /// お気に入りに入れたタグ（フォルダではなくタグの一覧を開く）
+    var tagID: UUID?
 
-    var id: String { url.path }
+    var id: String { tagID.map { "tag:" + $0.uuidString } ?? url.path }
+}
+
+/// サイドバーのセクション。順番と表示・非表示を変えられ、タグもセクションとして置ける
+enum SidebarSection: Hashable, Identifiable {
+    case favorites, tags, locations
+    /// 1つのタグを、そのタグが付いた項目の一覧としてセクションにしたもの
+    case tag(UUID)
+
+    var id: String {
+        switch self {
+        case .favorites: "favorites"
+        case .tags: "tags"
+        case .locations: "locations"
+        case .tag(let id): "tag:" + id.uuidString
+        }
+    }
+
+    init?(id: String) {
+        switch id {
+        case "favorites": self = .favorites
+        case "tags": self = .tags
+        case "locations": self = .locations
+        default:
+            guard id.hasPrefix("tag:"), let uuid = UUID(uuidString: String(id.dropFirst(4))) else { return nil }
+            self = .tag(uuid)
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .favorites: "お気に入り"
+        case .tags: "タグ"
+        case .locations: "場所"
+        case .tag(let id): TagStore.shared.tag(id: id)?.name ?? "（削除されたタグ）"
+        }
+    }
+
+    static let defaultOrder: [SidebarSection] = [.favorites, .tags, .locations]
 }
 
 /// サイドバーの「お気に入り」と「場所」。全ウィンドウで共有する。
@@ -20,14 +60,25 @@ final class SidebarStore {
     static let shared = SidebarStore()
 
     private static let favoritesKey = "sidebarFavorites"
+    private static let sectionsKey = "sidebarSections"
+    private static let hiddenSectionsKey = "sidebarHiddenSections"
+
+    /// セクションの順番（タグのセクションも含む）と、隠しているセクション
+    private(set) var sections: [SidebarSection] = SidebarSection.defaultOrder
+    private(set) var hiddenSections: Set<String> = []
 
     private(set) var favorites: [SidebarItem] = []
     private(set) var volumes: [SidebarItem] = []
 
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
 
-    init() {
-        favorites = Self.loadFavorites()
+    /// 設定の保存先（テストでは別の場所を渡す）
+    @ObservationIgnored private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        favorites = Self.loadFavorites(from: defaults)
+        loadSections()
         refreshVolumes()
 
         let center = NSWorkspace.shared.notificationCenter
@@ -41,7 +92,24 @@ final class SidebarStore {
     // MARK: お気に入り
 
     func containsFavorite(_ url: URL) -> Bool {
-        favorites.contains { $0.url.path == url.standardizedFileURL.path }
+        favorites.contains { $0.tagID == nil && $0.url.path == url.standardizedFileURL.path }
+    }
+
+    func containsFavoriteTag(_ id: UUID) -> Bool {
+        favorites.contains { $0.tagID == id }
+    }
+
+    /// タグをお気に入りに入れる（フォルダと同じ並びに置き、順番も自由に変えられる）
+    func addFavoriteTag(_ id: UUID, at index: Int? = nil) {
+        guard !containsFavoriteTag(id), let tag = TagStore.shared.tag(id: id) else { return }
+        let item = SidebarItem(url: TagLocation.url(for: id), name: tag.name, symbol: "tag.fill", tagID: id)
+        favorites.insert(item, at: min(index ?? favorites.count, favorites.count))
+        saveFavorites()
+    }
+
+    func removeFavoriteTag(_ id: UUID) {
+        favorites.removeAll { $0.tagID == id }
+        saveFavorites()
     }
 
     /// お気に入りに入れる（フォルダだけ）。index を指定すると、その位置に入れる（ドラッグ＆ドロップ用）
@@ -74,14 +142,19 @@ final class SidebarStore {
         guard let index = favorites.firstIndex(where: { $0.url.path == url.path }) else { return }
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         favorites[index].customName = trimmed.isEmpty ? nil : trimmed
-        favorites[index].name = favorites[index].customName ?? FileManager.default.displayName(atPath: url.path)
+        let fallback = favorites[index].tagID.flatMap { TagStore.shared.tag(id: $0)?.name } ?? FileManager.default.displayName(atPath: url.path)
+        favorites[index].name = favorites[index].customName ?? fallback
         saveFavorites()
     }
 
     /// 移動・削除されたフォルダの印を付け直す
     func refreshMissing() {
         for index in favorites.indices {
-            favorites[index].isMissing = !FileManager.default.fileExists(atPath: favorites[index].url.path)
+            if let tagID = favorites[index].tagID {
+                favorites[index].isMissing = TagStore.shared.tag(id: tagID) == nil
+            } else {
+                favorites[index].isMissing = !FileManager.default.fileExists(atPath: favorites[index].url.path)
+            }
         }
     }
 
@@ -95,18 +168,17 @@ final class SidebarStore {
         saveFavorites()
     }
 
-    /// 保存の形: [{"path": …, "name": …（表示名を変えたときだけ）}]
+    /// 保存の形: [{"path": …, "name": …（表示名を変えたときだけ）}]。タグは {"tag": ID}
     private func saveFavorites() {
         let records: [[String: String]] = favorites.map { item in
-            var record = ["path": item.url.path]
+            var record = item.tagID.map { ["tag": $0.uuidString] } ?? ["path": item.url.path]
             if let customName = item.customName { record["name"] = customName }
             return record
         }
-        UserDefaults.standard.set(records, forKey: Self.favoritesKey)
+        defaults.set(records, forKey: Self.favoritesKey)
     }
 
-    private static func loadFavorites() -> [SidebarItem] {
-        let defaults = UserDefaults.standard
+    private static func loadFavorites(from defaults: UserDefaults) -> [SidebarItem] {
         var records: [[String: String]]
         if let saved = defaults.array(forKey: favoritesKey) as? [[String: String]] {
             records = saved
@@ -116,15 +188,97 @@ final class SidebarStore {
         } else {
             records = defaultFavoritePaths().map { ["path": $0] }
         }
-        records = records.filter { $0["path"] != nil }
-        return records.map { record in
-            var item = makeFavorite(URL(fileURLWithPath: record["path"]!))
+        return records.compactMap { record in
+            var item: SidebarItem
+            if let tag = record["tag"], let id = UUID(uuidString: tag) {
+                let name = TagStore.shared.tag(id: id)?.name ?? "（削除されたタグ）"
+                item = SidebarItem(url: TagLocation.url(for: id), name: name, symbol: "tag.fill", isMissing: TagStore.shared.tag(id: id) == nil, tagID: id)
+            } else if let path = record["path"] {
+                item = makeFavorite(URL(fileURLWithPath: path))
+            } else {
+                return nil
+            }
             if let name = record["name"] {
                 item.customName = name
                 item.name = name
             }
             return item
         }
+    }
+
+    // MARK: セクション
+
+    /// 表示するセクション（隠したもの・削除されたタグのものは除く）
+    var visibleSections: [SidebarSection] {
+        sections.filter { section in
+            guard !hiddenSections.contains(section.id) else { return false }
+            if case .tag(let id) = section { return TagStore.shared.tag(id: id) != nil }
+            return true
+        }
+    }
+
+    func isSectionHidden(_ section: SidebarSection) -> Bool { hiddenSections.contains(section.id) }
+
+    func setSection(_ section: SidebarSection, hidden: Bool) {
+        if hidden { hiddenSections.insert(section.id) } else { hiddenSections.remove(section.id) }
+        saveSections()
+    }
+
+    /// 表示中のセクションの中で、1つ上（-1）・下（+1）へ動かす
+    func moveSection(_ section: SidebarSection, by delta: Int) {
+        let visible = visibleSections
+        guard let position = visible.firstIndex(of: section) else { return }
+        let target = position + delta
+        guard visible.indices.contains(target), let from = sections.firstIndex(of: section),
+              let to = sections.firstIndex(of: visible[target]) else { return }
+        // 入れ替えではなく、目的の位置へずらして入れる（間のセクションの順番は保つ）
+        sections.remove(at: from)
+        sections.insert(section, at: to)
+        saveSections()
+    }
+
+    /// 設定画面のドラッグでの並べ替え
+    func moveSections(from source: IndexSet, to destination: Int) {
+        sections.move(fromOffsets: source, toOffset: destination)
+        saveSections()
+    }
+
+    func containsTagSection(_ id: UUID) -> Bool { sections.contains(.tag(id)) }
+
+    /// タグを1つのセクションとしてサイドバーに置く（お気に入りの下に入れる）
+    func addTagSection(_ id: UUID) {
+        guard !containsTagSection(id) else { return }
+        let position = (sections.firstIndex(of: .favorites) ?? -1) + 1
+        sections.insert(.tag(id), at: position)
+        hiddenSections.remove(SidebarSection.tag(id).id)
+        saveSections()
+    }
+
+    func removeTagSection(_ id: UUID) {
+        sections.removeAll { $0 == .tag(id) }
+        hiddenSections.remove(SidebarSection.tag(id).id)
+        saveSections()
+    }
+
+    func resetSections() {
+        sections = SidebarSection.defaultOrder
+        hiddenSections = []
+        saveSections()
+    }
+
+    private func loadSections() {
+        if let ids = defaults.stringArray(forKey: Self.sectionsKey) {
+            var loaded = ids.compactMap(SidebarSection.init(id:))
+            // あとから増えたセクションは最後に足す
+            for section in SidebarSection.defaultOrder where !loaded.contains(section) { loaded.append(section) }
+            sections = loaded
+        }
+        hiddenSections = Set(defaults.stringArray(forKey: Self.hiddenSectionsKey) ?? [])
+    }
+
+    private func saveSections() {
+        defaults.set(sections.map(\.id), forKey: Self.sectionsKey)
+        defaults.set(Array(hiddenSections), forKey: Self.hiddenSectionsKey)
     }
 
     private static func defaultFavoritePaths() -> [String] {

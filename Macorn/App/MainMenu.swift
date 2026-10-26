@@ -128,6 +128,16 @@ enum MainMenu {
         menu.addItem(item("隠しファイルを表示", #selector(AppDelegate.toggleHiddenFiles(_:)), ".", [.command, .shift]))
         menu.addItem(item("サイドバーを表示", #selector(NSSplitViewController.toggleSidebar(_:)), "s", [.command, .option]))
         menu.addItem(submenu(sortMenu()))
+        menu.addItem(.separator())
+        menu.addItem(item("プレビューを拡大", #selector(FileBrowserViewController.zoomInPreview(_:)), "+"))
+        // US キーボードでは ⌘= でも拡大できるようにする（メニューには出さない）
+        // ショートカットの変更で別の項目として扱えるよう、名前を分けておく
+        let zoomInAlternate = item("プレビューを拡大（⌘=）", #selector(FileBrowserViewController.zoomInPreview(_:)), "=")
+        zoomInAlternate.isHidden = true
+        zoomInAlternate.allowsKeyEquivalentWhenHidden = true
+        menu.addItem(zoomInAlternate)
+        menu.addItem(item("プレビューを縮小", #selector(FileBrowserViewController.zoomOutPreview(_:)), "-"))
+        menu.addItem(item("プレビューを実際のサイズに", #selector(FileBrowserViewController.resetPreviewZoom(_:)), "0"))
         menu.addItem(item("プレビュー", #selector(FileBrowserViewController.toggleFilePreview(_:)), "p", [.command, .option]))
         menu.addItem(.separator())
         menu.addItem(item("2画面表示", #selector(BrowserWindowController.toggleSplit(_:)), "\\"))

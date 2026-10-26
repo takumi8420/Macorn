@@ -26,7 +26,20 @@
       buildConfiguration = "Debug"
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
-      shouldUseLaunchSchemeArgsEnv = "YES">
+      shouldUseLaunchSchemeArgsEnv = "NO">
+      <EnvironmentVariables>
+         <!-- テストで普段のタグ・履歴を書き換えないよう、一時ファイルを使う -->
+         <EnvironmentVariable
+            key = "MACORN_TAGS_PATH"
+            value = "/tmp/macorn-tests/tags.json"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "MACORN_HISTORY_PATH"
+            value = "/tmp/macorn-tests/history.sqlite"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+      </EnvironmentVariables>
       <Testables>
          <TestableReference
             skipped = "NO">

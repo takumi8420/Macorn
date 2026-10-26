@@ -50,6 +50,14 @@ extension FileBrowserViewController: NSSplitViewDelegate {
         NotificationCenter.default.post(name: .macornDisplayPreferencesChanged, object: nil)
     }
 
+    // MARK: - プレビューの拡大・縮小（⌘+ ⌘− ⌘0）
+
+    @objc func zoomInPreview(_ sender: Any?) { filePreview.zoomIn(sender) }
+    @objc func zoomOutPreview(_ sender: Any?) { filePreview.zoomOut(sender) }
+    @objc func resetPreviewZoom(_ sender: Any?) { filePreview.resetZoom(sender) }
+
+    var canZoomPreview: Bool { isFilePreviewVisible && filePreview.canZoom }
+
     @objc func themeDidChange(_ notification: Notification) {
         outlineView.enumerateAvailableRowViews { rowView, _ in rowView.needsDisplay = true }
         reloadVisibleRows()

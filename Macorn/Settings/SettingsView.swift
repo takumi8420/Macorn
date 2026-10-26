@@ -38,7 +38,7 @@ final class SettingsWindowController: NSWindowController {
 }
 
 enum SettingsTab: Hashable {
-    case general, integration, tags, shortcuts, history
+    case general, integration, sidebar, tags, shortcuts, history
 }
 
 /// 設定ウィンドウで開いているタブ（ほかの画面から切り替えられるように共有する）
@@ -59,6 +59,9 @@ struct SettingsView: View {
             IntegrationSettingsView()
                 .tabItem { Label("連携", systemImage: "terminal") }
                 .tag(SettingsTab.integration)
+            SidebarSettingsView()
+                .tabItem { Label("サイドバー", systemImage: "sidebar.left") }
+                .tag(SettingsTab.sidebar)
             TagManagerView()
                 .tabItem { Label("タグ", systemImage: "tag") }
                 .tag(SettingsTab.tags)
@@ -401,5 +404,71 @@ private struct AccentSwatch: View {
         }
         .buttonStyle(.plain)
         .help(preset.name)
+    }
+}
+
+
+// MARK: - サイドバー
+
+/// サイドバーの構成: セクションの順番（ドラッグ）、表示・非表示、タグのセクションの追加・削除
+private struct SidebarSettingsView: View {
+    var store: SidebarStore = .shared
+    var tags: TagStore = .shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("セクションはドラッグで並べ替えられます。チェックを外すと隠れます。タグを1つのセクションとして置くこともできます。")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            List {
+                ForEach(store.sections) { section in
+                    HStack {
+                        Image(systemName: "line.3.horizontal")
+                            .foregroundStyle(.tertiary)
+                        Toggle(isOn: Binding(
+                            get: { !store.isSectionHidden(section) },
+                            set: { store.setSection(section, hidden: !$0) }
+                        )) {
+                            Label(section.title, systemImage: symbol(for: section))
+                        }
+                        Spacer()
+                        if case .tag(let id) = section {
+                            Button {
+                                store.removeTagSection(id)
+                            } label: {
+                                Image(systemName: "minus.circle")
+                            }
+                            .buttonStyle(.borderless)
+                            .help("このタグのセクションを外す")
+                        }
+                    }
+                }
+                .onMove { store.moveSections(from: $0, to: $1) }
+            }
+            HStack {
+                Menu("タグのセクションを追加") {
+                    ForEach(tags.sortedTags.filter { !store.containsTagSection($0.id) }) { tag in
+                        Button(tag.name) { store.addTagSection(tag.id) }
+                    }
+                }
+                .disabled(tags.sortedTags.allSatisfy { store.containsTagSection($0.id) })
+                .fixedSize()
+                Spacer()
+                Button("元に戻す") { store.resetSections() }
+            }
+            Text("お気に入りには、フォルダのほかにタグも入れられます（サイドバーのタグを右クリック ›「お気に入りに追加」）。お気に入りの中の順番はサイドバーでドラッグして変えられます。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding()
+    }
+
+    private func symbol(for section: SidebarSection) -> String {
+        switch section {
+        case .favorites: "star"
+        case .tags: "tag"
+        case .locations: "externaldrive"
+        case .tag: "tag.fill"
+        }
     }
 }
