@@ -65,6 +65,8 @@ struct SidebarView: View {
                     }
                     .buttonStyle(.borderless)
                     .help("タグを作る")
+                    // 見出しは行より右端まで広がるので、下の件数の列とそろうよう内側に寄せる
+                    .padding(.trailing, 10)
                 }
             }
 
