@@ -79,3 +79,13 @@ struct MarkdownRendererTests {
         #expect(render("一行目  \n二行目").contains("一行目<br>\n二行目"))
     }
 }
+
+struct FilePreviewKindTests {
+    @Test func detectsPreviewableFiles() {
+        #expect(FilePreviewController.kind(for: URL(fileURLWithPath: "/a/README.md")) == .markdown)
+        #expect(FilePreviewController.kind(for: URL(fileURLWithPath: "/a/notes.MARKDOWN")) == .markdown)
+        #expect(FilePreviewController.kind(for: URL(fileURLWithPath: "/a/index.html")) == .html)
+        #expect(FilePreviewController.kind(for: URL(fileURLWithPath: "/a/page.HTM")) == .html)
+        #expect(FilePreviewController.kind(for: URL(fileURLWithPath: "/a/app.swift")) == nil)
+    }
+}

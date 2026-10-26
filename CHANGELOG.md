@@ -6,6 +6,19 @@
 
 ## 2026-10-26
 
+### Macorn：HTML のプレビュー
+
+- **きっかけ**：konta の依頼「html をプレビュー表示できるようにして」
+- **意図・方針**
+  - Markdown のプレビューと同じ場所（一覧の右）に、HTML のページをそのまま表示する。保存すると自動で表示し直す
+  - ダウンロードした HTML などで勝手にスクリプトが動かないよう、スクリプトは初めは止め、プレビューの上部のボタンでそのファイルに限って動かせるようにした。読めるファイルも同じフォルダの中だけにした
+  - HTML は白い背景を前提に作られていることが多いので、HTML のときだけ背景を描く
+  - プレビューを Markdown 専用から「ファイルのプレビュー」に作り替えた（設定の保存先は以前のまま）
+- 移動 `Macorn/Preview/MarkdownPreviewController.swift` → `Macorn/Preview/FilePreviewController.swift` — Markdown と HTML の両方を表示。スクリプトの切り替え、ブラウザで開くボタン
+- 変更 `Macorn/Browser/FileBrowserViewController+Preview.swift`、`FileBrowserViewController.swift`、`Macorn/Model/Preferences.swift`、`Macorn/App/MainMenu.swift`、`Macorn/Settings/SettingsView.swift`、`Macorn/Palette/CommandCatalog.swift`、`Macorn/App/DebugAutomation.swift` — 名前の変更、HTML もプレビューの対象に、メニュー・設定の文言
+- 変更 `MacornTests/MarkdownRendererTests.swift` — プレビューできるファイルの判定のテスト（合計 104 件）
+- 変更 `README.md`、`docs/REQUIREMENTS.md`、`AGENTS.md` — 操作一覧、S-05 の内容、確定している前提
+
 ### Macorn：タグの件数の修正、タグの色でフォルダを塗る、余白、Markdown のプレビュー、テーマ
 
 - **きっかけ**：konta の依頼が続けて4件。「タグをつけたがサイドバー上で数が0のまま」「タグの色などに応じてフォルダの色も変えられてほしい」「右のペインの余白がないのでギチギチに感じる」「md ファイルは VS Code のようにアプリ内でプレビュー表示されるようにしてほしい」「アプリのテーマカラーも変えられるようにしてほしい」

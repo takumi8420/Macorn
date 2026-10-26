@@ -178,15 +178,18 @@ enum DebugAutomation {
                 print("[debug] no popover")
             }
         case "mdstate":
-            let preview = browser.markdownPreview
-            print("[debug] md visible=\(browser.isMarkdownPreviewVisible) file=\(preview.fileURL?.lastPathComponent ?? "-") html=\(preview.lastHTMLLength) width=\(Int(preview.view.frame.width))/\(Int(browser.contentSplit.bounds.width))")
+            let preview = browser.filePreview
+            print("[debug] md visible=\(browser.isFilePreviewVisible) file=\(preview.fileURL?.lastPathComponent ?? "-") html=\(preview.lastHTMLLength) width=\(Int(preview.view.frame.width))/\(Int(browser.contentSplit.bounds.width))")
         case "snapmd":
             await withCheckedContinuation { continuation in
-                browser.markdownPreview.debugSnapshot(to: outDir.appendingPathComponent("\(argument).png")) {
+                browser.filePreview.debugSnapshot(to: outDir.appendingPathComponent("\(argument).png")) {
                     continuation.resume()
                 }
             }
             print("[debug] saved md \(argument)")
+        case "scripts":
+            browser.filePreview.debugToggleScripts()
+            print("[debug] scripts=\(browser.filePreview.scriptsEnabled) kind=\(browser.filePreview.kind)")
         case "append":
             let parts = argument.split(separator: "=", maxSplits: 1).map(String.init)
             if parts.count == 2, let handle = FileHandle(forWritingAtPath: browser.state.currentURL.appendingPathComponent(parts[0]).path) {

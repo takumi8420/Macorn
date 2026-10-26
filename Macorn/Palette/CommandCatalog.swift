@@ -102,6 +102,7 @@ enum CommandCatalog {
         "copyPath:": "Copy Path",
         "beginFilter:": "Filter Find Search",
         "editTags:": "Edit Tags Label",
+        "toggleFilePreview:": "Preview Markdown HTML",
         "toggleFavoriteFolder:": "Favorite Star Bookmark",
         "bulkRename:": "Batch Rename Multiple",
         "makeSymbolicLink:": "Make Symbolic Link Symlink Alias",

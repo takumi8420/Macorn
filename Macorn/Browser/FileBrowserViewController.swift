@@ -27,7 +27,7 @@ final class FileBrowserViewController: NSViewController {
     var resortForSizesScheduled = false
     private let headerMenu = NSMenu()
     let contentSplit = NSSplitView()
-    let markdownPreview = MarkdownPreviewController()
+    let filePreview = FilePreviewController()
     private let rowMenu = NSMenu()
 
     private var watcher: DirectoryWatcher?
@@ -106,10 +106,10 @@ final class FileBrowserViewController: NSViewController {
         contentSplit.dividerStyle = .thin
         contentSplit.delegate = self
         contentSplit.addArrangedSubview(listContainer)
-        addChild(markdownPreview)
-        contentSplit.addArrangedSubview(markdownPreview.view)
-        markdownPreview.view.isHidden = true
-        configureMarkdownPreview()
+        addChild(filePreview)
+        contentSplit.addArrangedSubview(filePreview.view)
+        filePreview.view.isHidden = true
+        configureFilePreview()
 
         for subview in [pathBar, filterBar, contentSplit, statusBar, messageHost] {
             subview.translatesAutoresizingMaskIntoConstraints = false
@@ -579,7 +579,7 @@ final class FileBrowserViewController: NSViewController {
     func tearDown() {
         watcher?.stop()
         watcher = nil
-        markdownPreview.stop()
+        filePreview.stop()
     }
 
     private func handleFileSystemEvents(_ paths: [String]) {
@@ -633,7 +633,7 @@ final class FileBrowserViewController: NSViewController {
 
         // フォルダの色分けの切り替えなど、見た目だけの設定はその場で描き直す
         reloadVisibleRows()
-        updateMarkdownPreview()
+        updateFilePreview()
 
         let folderSizes = Preferences.calculateFolderSizes
         if folderSizes != lastFolderSizes {
@@ -723,7 +723,7 @@ extension FileBrowserViewController: NSOutlineViewDelegate {
     func outlineViewSelectionDidChange(_ notification: Notification) {
         state.selectedCount = outlineView.selectedRowIndexes.count
         updatePreviewPanel()
-        updateMarkdownPreview()
+        updateFilePreview()
     }
 
     /// 選択中の行を、テーマのアクセントカラーで塗る
@@ -936,8 +936,8 @@ extension FileBrowserViewController: NSMenuDelegate {
 
 extension FileBrowserViewController: NSMenuItemValidation {
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
-        if menuItem.action == #selector(toggleMarkdownPreview(_:)) {
-            menuItem.state = Preferences.markdownPreview ? .on : .off
+        if menuItem.action == #selector(toggleFilePreview(_:)) {
+            menuItem.state = Preferences.filePreview ? .on : .off
             return true
         }
         return validateFileMenuItem(menuItem) ?? validateIntegrationMenuItem(menuItem) ?? validateExtrasMenuItem(menuItem) ?? true

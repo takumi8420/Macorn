@@ -119,10 +119,10 @@ private struct GeneralSettingsView: View {
                 .onChange(of: calculateFolderSizes) { _, _ in
                     NotificationCenter.default.post(name: .macornDisplayPreferencesChanged, object: nil)
                 }
-            Toggle("Markdown（.md）を選んだら、右にプレビューを出す（⌥⌘P）", isOn: Binding(
-                get: { Preferences.markdownPreview },
+            Toggle("Markdown（.md）・HTML（.html）を選んだら、右にプレビューを出す（⌥⌘P）", isOn: Binding(
+                get: { Preferences.filePreview },
                 set: {
-                    Preferences.markdownPreview = $0
+                    Preferences.filePreview = $0
                     NotificationCenter.default.post(name: .macornDisplayPreferencesChanged, object: nil)
                 }
             ))

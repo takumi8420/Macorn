@@ -1,31 +1,49 @@
 import AppKit
 import WebKit
 
-/// Markdown のプレビュー（VS Code のプレビューのように、一覧の右に整形して表示する）。
+/// ファイルのプレビュー（VS Code のプレビューのように、一覧の右に表示する）。
+/// Markdown は整形して、HTML はそのページを表示する。
 /// ファイルが保存されたら自動で表示し直し、読んでいた位置も保つ。
-final class MarkdownPreviewController: NSViewController {
-    static let extensions: Set<String> = ["md", "markdown", "mdown", "mkd", "mkdn"]
-
-    static func isMarkdown(_ url: URL) -> Bool {
-        extensions.contains(url.pathExtension.lowercased())
+final class FilePreviewController: NSViewController {
+    enum Kind: Equatable {
+        case markdown, html
     }
 
+    static let markdownExtensions: Set<String> = ["md", "markdown", "mdown", "mkd", "mkdn"]
+    static let htmlExtensions: Set<String> = ["html", "htm", "xhtml"]
+
+    /// プレビューできるファイルの種類。できなければ nil
+    static func kind(for url: URL) -> Kind? {
+        let ext = url.pathExtension.lowercased()
+        if markdownExtensions.contains(ext) { return .markdown }
+        if htmlExtensions.contains(ext) { return .html }
+        return nil
+    }
+
+    static func isMarkdown(_ url: URL) -> Bool { kind(for: url) == .markdown }
+
     private(set) var fileURL: URL?
+    private(set) var kind: Kind = .markdown
+    /// HTML のスクリプトを動かすか（安全のため初めは動かさない。ファイルごとにボタンで切り替える）
+    private(set) var scriptsEnabled = false
     private(set) var lastHTMLLength = 0
     var onOpenInEditor: ((URL) -> Void)?
     var onClose: (() -> Void)?
-    /// プレビューの中のリンクから、別の Markdown を開いたとき
-    var onOpenMarkdown: ((URL) -> Void)?
+    /// プレビューの中のリンクから、別のプレビューできるファイル（Markdown・HTML）を開いたとき
+    var onOpenPreviewable: ((URL) -> Void)?
 
     private let webView: WKWebView = {
         let configuration = WKWebViewConfiguration()
-        // Markdown に書かれたスクリプトは動かさない（表示し直すときのスクロール位置の保存はアプリ側から行う）
+        // ファイルに書かれたスクリプトは初めは動かさない（スクロール位置の保存はアプリ側から行うので動く）
         configuration.defaultWebpagePreferences.allowsContentJavaScript = false
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.setValue(false, forKey: "drawsBackground")
         return webView
     }()
     private let titleLabel = NSTextField(labelWithString: "")
+    private let iconView = NSImageView()
+    private var scriptButton: NSButton?
+    private var browserButton: NSButton?
     private var watcher: DispatchSourceFileSystemObject?
     private var pendingScrollY: Double?
     private let htmlFile = FileManager.default.temporaryDirectory
@@ -39,16 +57,21 @@ final class MarkdownPreviewController: NSViewController {
         header.orientation = .horizontal
         header.spacing = 8
         header.edgeInsets = NSEdgeInsets(top: 0, left: 12, bottom: 0, right: 8)
-        let icon = NSImageView(image: NSImage(systemSymbolName: "doc.richtext", accessibilityDescription: "Markdown")!)
+        let icon = iconView
         icon.contentTintColor = .secondaryLabelColor
         titleLabel.font = .systemFont(ofSize: 12, weight: .semibold)
         titleLabel.lineBreakMode = .byTruncatingMiddle
         titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        let scriptButton = Self.headerButton(symbol: "curlybraces", tip: "", target: self, action: #selector(toggleScripts(_:)))
+        let browserButton = Self.headerButton(symbol: "safari", tip: "ブラウザで開く", target: self, action: #selector(openInBrowser(_:)))
+        self.scriptButton = scriptButton
+        self.browserButton = browserButton
         let editButton = Self.headerButton(symbol: "square.and.pencil", tip: "エディタで開く（⌥⌘E）", target: self, action: #selector(openInEditor(_:)))
         let closeButton = Self.headerButton(symbol: "xmark", tip: "プレビューを閉じる（⌥⌘P で切り替え）", target: self, action: #selector(closePreview(_:)))
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        [icon, titleLabel, spacer, editButton, closeButton].forEach(header.addArrangedSubview)
+        [icon, titleLabel, spacer, scriptButton, browserButton, editButton, closeButton].forEach(header.addArrangedSubview)
+        updateHeader()
 
         let separator = NSBox()
         separator.boxType = .separator
@@ -87,8 +110,11 @@ final class MarkdownPreviewController: NSViewController {
     func show(_ url: URL) {
         if fileURL?.standardizedFileURL.path != url.standardizedFileURL.path {
             fileURL = url
+            kind = Self.kind(for: url) ?? .markdown
+            scriptsEnabled = false
             pendingScrollY = nil
             startWatching(url)
+            updateHeader()
         }
         titleLabel.stringValue = url.lastPathComponent
         titleLabel.toolTip = url.path
@@ -116,7 +142,27 @@ final class MarkdownPreviewController: NSViewController {
         }
     }
 
+    /// 見出しのアイコンとボタンを、ファイルの種類に合わせる
+    private func updateHeader() {
+        let isHTML = kind == .html
+        iconView.image = NSImage(systemSymbolName: isHTML ? "globe" : "doc.richtext", accessibilityDescription: isHTML ? "HTML" : "Markdown")
+        scriptButton?.isHidden = !isHTML
+        browserButton?.isHidden = !isHTML
+        scriptButton?.contentTintColor = scriptsEnabled ? Theme.shared.accentColor : .secondaryLabelColor
+        scriptButton?.toolTip = scriptsEnabled
+            ? "スクリプトを動かしています（クリックで止める）"
+            : "スクリプトは止めています（クリックで、このファイルに限って動かす）"
+        // HTML は白い背景を前提に作られていることが多いので、背景を描く。Markdown は画面の背景になじませる
+        webView.setValue(isHTML, forKey: "drawsBackground")
+    }
+
     private func render(_ url: URL) {
+        if kind == .html {
+            lastHTMLLength = (try? Data(contentsOf: url).count) ?? 0
+            // 同じフォルダの CSS・画像・スクリプトだけを読めるようにする
+            webView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
+            return
+        }
         let text: String
         if let data = try? Data(contentsOf: url) {
             text = String(data: data, encoding: .utf8) ?? String(decoding: data, as: UTF8.self)
@@ -175,7 +221,20 @@ final class MarkdownPreviewController: NSViewController {
         onClose?()
     }
 
+    @objc private func toggleScripts(_ sender: Any?) {
+        scriptsEnabled.toggle()
+        updateHeader()
+        reload(keepingScroll: true)
+    }
+
+    @objc private func openInBrowser(_ sender: Any?) {
+        guard let fileURL else { return }
+        NSWorkspace.shared.open(fileURL)
+    }
+
     #if DEBUG
+    func debugToggleScripts() { toggleScripts(nil) }
+
     func debugSnapshot(to url: URL, completion: @escaping () -> Void) {
         webView.takeSnapshot(with: nil) { image, _ in
             MainActor.assumeIsolated {
@@ -235,20 +294,28 @@ final class MarkdownPreviewController: NSViewController {
 
 // MARK: - リンク
 
-extension MarkdownPreviewController: WKNavigationDelegate {
-    func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping @MainActor (WKNavigationActionPolicy) -> Void) {
+extension FilePreviewController: WKNavigationDelegate {
+    func webView(
+        _ webView: WKWebView,
+        decidePolicyFor navigationAction: WKNavigationAction,
+        preferences: WKWebpagePreferences,
+        decisionHandler: @escaping @MainActor (WKNavigationActionPolicy, WKWebpagePreferences) -> Void
+    ) {
+        // スクリプトは、HTML でボタンを押して許したときだけ動かす
+        preferences.allowsContentJavaScript = kind == .html && scriptsEnabled
         guard navigationAction.navigationType == .linkActivated, let url = navigationAction.request.url else {
-            decisionHandler(.allow)
+            decisionHandler(.allow, preferences)
             return
         }
-        // 同じページの見出しへのリンク
-        if url.isFileURL, url.path == htmlFile.path, url.fragment != nil {
-            decisionHandler(.allow)
+        // 同じページの中へのリンク（#見出し）
+        let currentPage = kind == .html ? fileURL?.path : htmlFile.path
+        if url.isFileURL, url.path == currentPage, url.fragment != nil {
+            decisionHandler(.allow, preferences)
             return
         }
-        decisionHandler(.cancel)
-        if url.isFileURL, Self.isMarkdown(url) {
-            onOpenMarkdown?(url)
+        decisionHandler(.cancel, preferences)
+        if url.isFileURL, Self.kind(for: url) != nil {
+            onOpenPreviewable?(url)
         } else {
             NSWorkspace.shared.open(url)
         }

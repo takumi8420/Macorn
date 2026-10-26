@@ -1,59 +1,59 @@
 import AppKit
 
-/// Markdown のプレビュー（.md を選ぶと一覧の右に整形して表示する）とテーマの反映。
+/// ファイルのプレビュー（.md・.html を選ぶと一覧の右に表示する）とテーマの反映。
 extension FileBrowserViewController: NSSplitViewDelegate {
-    func configureMarkdownPreview() {
-        markdownPreview.onClose = { [weak self] in
-            Preferences.markdownPreview = false
-            self?.hideMarkdownPreview()
+    func configureFilePreview() {
+        filePreview.onClose = { [weak self] in
+            Preferences.filePreview = false
+            self?.hideFilePreview()
         }
-        markdownPreview.onOpenInEditor = { url in EditorLauncher.open([url]) }
-        markdownPreview.onOpenMarkdown = { [weak self] url in
-            // プレビューの中のリンクから別の Markdown を開いたら、一覧もそのファイルの場所へ移る
+        filePreview.onOpenInEditor = { url in EditorLauncher.open([url]) }
+        filePreview.onOpenPreviewable = { [weak self] url in
+            // プレビューの中のリンクから別の Markdown・HTML を開いたら、一覧もそのファイルの場所へ移る
             self?.navigate(to: url.deletingLastPathComponent(), selecting: url)
         }
     }
 
-    var isMarkdownPreviewVisible: Bool { !markdownPreview.view.isHidden }
+    var isFilePreviewVisible: Bool { !filePreview.view.isHidden }
 
-    /// 選択が1つの Markdown ならプレビューを出し、それ以外なら閉じる
-    func updateMarkdownPreview() {
+    /// 選択が1つのプレビューできるファイル（Markdown・HTML）ならプレビューを出し、それ以外なら閉じる
+    func updateFilePreview() {
         let nodes = selectedNodes
-        guard Preferences.markdownPreview, nodes.count == 1, let node = nodes.first,
-              !node.entry.isFolder, MarkdownPreviewController.isMarkdown(node.url) else {
-            if isMarkdownPreviewVisible { hideMarkdownPreview() }
+        guard Preferences.filePreview, nodes.count == 1, let node = nodes.first,
+              !node.entry.isFolder, FilePreviewController.kind(for: node.url) != nil else {
+            if isFilePreviewVisible { hideFilePreview() }
             return
         }
-        showMarkdownPreview(node.url)
+        showFilePreview(node.url)
     }
 
-    func showMarkdownPreview(_ url: URL) {
-        markdownPreview.show(url)
-        guard !isMarkdownPreviewVisible else { return }
-        markdownPreview.view.isHidden = false
+    func showFilePreview(_ url: URL) {
+        filePreview.show(url)
+        guard !isFilePreviewVisible else { return }
+        filePreview.view.isHidden = false
         contentSplit.adjustSubviews()
         let width = contentSplit.bounds.width
         if width > 0 {
-            contentSplit.setPosition(width * (1 - Preferences.markdownPreviewFraction), ofDividerAt: 0)
+            contentSplit.setPosition(width * (1 - Preferences.filePreviewFraction), ofDividerAt: 0)
         }
     }
 
-    func hideMarkdownPreview() {
-        markdownPreview.stop()
-        markdownPreview.view.isHidden = true
+    func hideFilePreview() {
+        filePreview.stop()
+        filePreview.view.isHidden = true
         contentSplit.adjustSubviews()
     }
 
-    /// ⌥⌘P: Markdown のプレビューを使うかどうか
-    @objc func toggleMarkdownPreview(_ sender: Any?) {
-        Preferences.markdownPreview.toggle()
+    /// ⌥⌘P: プレビュー（Markdown・HTML）を使うかどうか
+    @objc func toggleFilePreview(_ sender: Any?) {
+        Preferences.filePreview.toggle()
         NotificationCenter.default.post(name: .macornDisplayPreferencesChanged, object: nil)
     }
 
     @objc func themeDidChange(_ notification: Notification) {
         outlineView.enumerateAvailableRowViews { rowView, _ in rowView.needsDisplay = true }
         reloadVisibleRows()
-        if isMarkdownPreviewVisible { markdownPreview.reload(keepingScroll: true) }
+        if isFilePreviewVisible { filePreview.reload(keepingScroll: true) }
     }
 
     // MARK: - 一覧とプレビューの境目
@@ -68,8 +68,8 @@ extension FileBrowserViewController: NSSplitViewDelegate {
 
     /// プレビューの幅を覚えておき、次に開いたときも同じ幅にする
     func splitViewDidResizeSubviews(_ notification: Notification) {
-        guard isMarkdownPreviewVisible, contentSplit.bounds.width > 0 else { return }
-        let fraction = markdownPreview.view.frame.width / contentSplit.bounds.width
-        if fraction > 0.1, fraction < 0.9 { Preferences.markdownPreviewFraction = fraction }
+        guard isFilePreviewVisible, contentSplit.bounds.width > 0 else { return }
+        let fraction = filePreview.view.frame.width / contentSplit.bounds.width
+        if fraction > 0.1, fraction < 0.9 { Preferences.filePreviewFraction = fraction }
     }
 }
