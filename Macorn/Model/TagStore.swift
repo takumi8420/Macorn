@@ -33,8 +33,11 @@ nonisolated struct TaggedItem: Codable, Hashable, Sendable {
 }
 
 nonisolated struct TagLibrary: Codable, Equatable, Sendable {
+    /// 並び順どおり（同じ親の下では、この順に並べる）
     var tags: [Tag] = []
     var items: [TaggedItem] = []
+    /// tags の並びが利用者の決めた順か（以前は名前の順で表示していたので、初めて読むときに名前の順へ並べ直す）
+    var manualOrder: Bool? = nil
 }
 
 extension Notification.Name {
@@ -79,6 +82,10 @@ final class TagStore {
            let library = try? JSONDecoder().decode(TagLibrary.self, from: data) {
             tags = library.tags
             itemsByPath = Dictionary(library.items.map { (Self.key($0.path), $0) }, uniquingKeysWith: { first, _ in first })
+            if library.manualOrder != true {
+                // 今まで見えていた順（名前の順）を、そのまま最初の並び順にする
+                tags.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+            }
         }
         ensureFavoritesTag()
     }
@@ -107,19 +114,31 @@ final class TagStore {
 
     // MARK: - タグの定義
 
-    /// 名前の順（階層は親の直後に子が来る）
+    /// 並び順（利用者がドラッグで決めた順）。階層は親の直後に子が来る
     var sortedTags: [Tag] {
-        tags.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        var result: [Tag] = []
+        var visited = Set<UUID>()
+        func visit(_ parent: String?) {
+            for tag in tags where tag.parentName == parent && !visited.contains(tag.id) {
+                visited.insert(tag.id)
+                result.append(tag)
+                visit(tag.name)
+            }
+        }
+        visit(nil)
+        // 親が見つからないタグ（ふつうは無い）も最後に出す
+        result += tags.filter { !visited.contains($0.id) }
+        return result
     }
 
     func tag(id: UUID) -> Tag? { tags.first { $0.id == id } }
     func tag(named name: String) -> Tag? { tags.first { $0.name.caseInsensitiveCompare(name) == .orderedSame } }
 
     func children(of tag: Tag) -> [Tag] {
-        sortedTags.filter { $0.parentName == tag.name }
+        tags.filter { $0.parentName == tag.name }
     }
 
-    var rootTags: [Tag] { sortedTags.filter { $0.parentName == nil } }
+    var rootTags: [Tag] { tags.filter { $0.parentName == nil } }
 
     /// タグ名をそろえる（前後の空白と、/ の前後の空白・空の階層を取り除く）
     static func normalize(_ name: String) -> String {
@@ -179,12 +198,38 @@ final class TagStore {
         return self.tag(named: newName) == nil
     }
 
-    /// 親のタグを変える（nil ならいちばん上へ）。子のタグもいっしょに移る。付けた項目はそのまま
+    /// 親のタグを変える（nil ならいちばん上へ）。子のタグもいっしょに移る。付けた項目はそのまま。
+    /// index を指定すると、新しい親の下（同じ親なら今の並び）の index 番目の位置に入れる（行の間へのドロップ）
     @discardableResult
-    func moveTag(_ id: UUID, under parentID: UUID?) -> Bool {
-        guard canMoveTag(id, under: parentID), let tag = tag(id: id) else { return false }
-        let parentName = parentID.flatMap { self.tag(id: $0)?.name }
-        return renameTag(id, to: parentName.map { $0 + "/" + tag.leafName } ?? tag.leafName)
+    func moveTag(_ id: UUID, under parentID: UUID?, at index: Int? = nil) -> Bool {
+        guard let tag = tag(id: id) else { return false }
+        var parentName: String?
+        if let parentID {
+            guard let parent = self.tag(id: parentID) else { return false }
+            parentName = parent.name
+        }
+        let wasSibling = tag.parentName == parentName
+        if !wasSibling {
+            guard canMoveTag(id, under: parentID),
+                  renameTag(id, to: parentName.map { $0 + "/" + tag.leafName } ?? tag.leafName) else { return false }
+        } else if index == nil {
+            return false
+        }
+        if let index { reorder(id, to: index, countingSelf: wasSibling) }
+        return true
+    }
+
+    /// 同じ親の下で、タグを index 番目へ動かす。countingSelf は index が自分を含めた並びでの位置か
+    private func reorder(_ id: UUID, to index: Int, countingSelf: Bool) {
+        guard let tag = tag(id: id) else { return }
+        let slots = tags.indices.filter { tags[$0].parentName == tag.parentName }
+        var siblings = slots.map { tags[$0] }
+        guard let from = siblings.firstIndex(where: { $0.id == id }) else { return }
+        let moved = siblings.remove(at: from)
+        let target = countingSelf && index > from ? index - 1 : index
+        siblings.insert(moved, at: max(0, min(target, siblings.count)))
+        for (slot, sibling) in zip(slots, siblings) { tags[slot] = sibling }
+        save()
     }
 
     func setColor(_ id: UUID, to color: String) {
@@ -207,7 +252,7 @@ final class TagStore {
 
     // MARK: - 項目へのタグ付け
 
-    /// 項目に付いているタグ（名前の順）。子のタグが付いていれば、その親のタグも付いているとみなして含める。
+    /// 項目に付いているタグ（並び順）。子のタグが付いていれば、その親のタグも付いているとみなして含める。
     /// （「仕事/案件A」が付いていれば「仕事」も付いている。保存しているのは実際に付けたタグだけ）
     func tags(for url: URL) -> [Tag] {
         let explicit = explicitTags(for: url)
@@ -215,7 +260,7 @@ final class TagStore {
         return sortedTags.filter { tag in explicit.contains { $0.isSelfOrDescendant(of: tag.name) } }
     }
 
-    /// 実際に付けたタグだけ（親のタグは含めない。名前の順）
+    /// 実際に付けたタグだけ（親のタグは含めない。並び順）
     func explicitTags(for url: URL) -> [Tag] {
         guard let item = itemsByPath[Self.key(url)] else { return [] }
         return sortedTags.filter { item.tagIDs.contains($0.id) }
@@ -278,12 +323,13 @@ final class TagStore {
 
     func count(for id: UUID) -> Int { urls(taggedWith: id).count }
 
-    /// タグ別に並べるときの基準（付いているタグのうち、名前の順で最初のタグの名前）
+    /// タグ別に並べるときの基準（付いているタグのうち、並び順で最初のタグの位置）。サイドバーのタグの順に並ぶ
     func sortKey(for url: URL) -> String? {
-        explicitTags(for: url).first?.name
+        guard let first = explicitTags(for: url).first, let position = sortedTags.firstIndex(where: { $0.id == first.id }) else { return nil }
+        return String(format: "%05d", position)
     }
 
-    /// フォルダのアイコンを塗る色（付いているタグのうち、名前の順で最初のもの）。
+    /// フォルダのアイコンを塗る色（付いているタグのうち、並び順で最初のもの）。
     /// 設定で色分けを切っているとき、またはタグが無いときは nil
     func folderColor(for url: URL) -> String? {
         guard Preferences.colorFoldersByTag else { return nil }
@@ -337,7 +383,7 @@ final class TagStore {
     // MARK: - 保存
 
     var library: TagLibrary {
-        TagLibrary(tags: tags, items: Array(itemsByPath.values).sorted { $0.path < $1.path })
+        TagLibrary(tags: tags, items: Array(itemsByPath.values).sorted { $0.path < $1.path }, manualOrder: true)
     }
 
     private func save(notify: Bool = true) {

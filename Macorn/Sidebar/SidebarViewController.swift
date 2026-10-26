@@ -427,10 +427,10 @@ extension SidebarViewController: NSOutlineViewDataSource {
                 retarget(place.node, dropChildIndex: place.index)
                 return .move
             }
-            // 「タグ」の中: ほかのタグの上なら、その下の階層へ。見出しの上なら、いちばん上の階層へ
-            if let parent = tagParentTarget(target: target) {
-                guard tags.canMoveTag(id, under: parent.parentID) else { return [] }
-                retarget(parent.node, dropChildIndex: NSOutlineViewDropOnItemIndex)
+            // 「タグ」の中: 行の上ならそのタグの下の階層へ、行の間ならその位置へ（並べ替え・親の変更）
+            if let move = tagMoveTarget(target: target, index: index) {
+                guard canPlaceTag(id, under: move.parentID, nesting: move.index == NSOutlineViewDropOnItemIndex) else { return [] }
+                retarget(move.node, dropChildIndex: move.index)
                 return .move
             }
             // 見出しの間に置くと、そのタグのセクションになる（自分のセクションの中は除く）
@@ -480,11 +480,30 @@ extension SidebarViewController: NSOutlineViewDataSource {
         }
     }
 
-    /// 「タグ」のセクションの中に置くときの、新しい親（タグの行ならそのタグ、見出しや空き場所なら nil ＝いちばん上）
-    private func tagParentTarget(target: SidebarNode?) -> (node: SidebarNode, parentID: UUID?)? {
+    /// 「タグ」のセクションの中に置くときの、置き先と新しい親。
+    /// タグの行の上ならそのタグの下（最後）へ、行の間ならその親の index 番目へ。見出しの上ならいちばん上の階層の最後へ
+    private func tagMoveTarget(target: SidebarNode?, index: Int) -> (node: SidebarNode, index: Int, parentID: UUID?)? {
         guard let target, let section = sectionNode(containing: target), section.section == .tags else { return nil }
-        if case .tag(let tag) = target.kind { return (target, tag.id) }
-        return (section, nil)
+        switch target.kind {
+        case .tag(let tag):
+            return (target, index, tag.id)
+        case .section:
+            return index == NSOutlineViewDropOnItemIndex ? (section, tags.rootTags.count, nil) : (section, index, nil)
+        default:
+            // 空のときの案内の行など
+            return (section, tags.rootTags.count, nil)
+        }
+    }
+
+    /// タグをその親の下へ置けるか。nesting は行の上（その下の階層へ入れる）か
+    private func canPlaceTag(_ id: UUID, under parentID: UUID?, nesting: Bool) -> Bool {
+        guard let tag = tags.tag(id: id) else { return false }
+        let parentName = parentID.flatMap { tags.tag(id: $0)?.name }
+        // 自分や自分の子孫の中へは入れない
+        if let parentName, parentName == tag.name || parentName.hasPrefix(tag.name + "/") { return false }
+        // 同じ親の中での並べ替えはいつでもできる。行の上（すでにその下にいる）は何も変わらないので不可
+        if tag.parentName == parentName { return !nesting }
+        return tags.canMoveTag(id, under: parentID)
     }
 
     /// 見出しの間（ルート）に置き先を合わせる。セクションの中に入ったら、そのセクションの前にする
@@ -534,9 +553,13 @@ extension SidebarViewController: NSOutlineViewDataSource {
         case .tag(let id):
             if let section = target?.section, section.holdsItems {
                 store.placeTag(id, in: section, at: index)
-            } else if let target, let parent = tagParentTarget(target: target) {
-                if parent.parentID != nil { collapsedTagIDs.remove(parent.node.id) }
-                return tags.moveTag(id, under: parent.parentID)
+            } else if let target, let section = sectionNode(containing: target), section.section == .tags {
+                var parentID: UUID?
+                if case .tag(let parent) = target.kind {
+                    parentID = parent.id
+                    collapsedTagIDs.remove(target.id)
+                }
+                return tags.moveTag(id, under: parentID, at: index == NSOutlineViewDropOnItemIndex ? nil : index)
             } else if target == nil {
                 store.placeTagSection(id, before: sectionBefore)
             } else {

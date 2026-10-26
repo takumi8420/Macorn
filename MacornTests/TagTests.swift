@@ -102,6 +102,40 @@ final class TagStoreTests {
         #expect(!store.renameTag(parent.id, to: "業務/案件A/中"))
     }
 
+    @Test func reordersTagsManually() throws {
+        let store = TagStore(fileURL: fileURL)
+        let a = try #require(store.createTag(named: "A"))
+        let b = try #require(store.createTag(named: "B"))
+        let c = try #require(store.createTag(named: "C"))
+        #expect(store.rootTags.map(\.name) == ["お気に入り", "A", "B", "C"])
+
+        // 同じ親の中で並べ替える（index は今の並びでの位置。自分より後ろなら、その前に入る）
+        #expect(store.moveTag(c.id, under: nil, at: 0))
+        #expect(store.rootTags.map(\.name) == ["C", "お気に入り", "A", "B"])
+        #expect(store.moveTag(c.id, under: nil, at: 4))
+        #expect(store.rootTags.map(\.name) == ["お気に入り", "A", "B", "C"])
+
+        // ほかの親の下の、指定の位置へ入れる
+        let child = try #require(store.createTag(named: "A/子"))
+        #expect(store.moveTag(b.id, under: a.id, at: 0))
+        #expect(store.children(of: store.tag(id: a.id)!).map(\.leafName) == ["B", "子"])
+        #expect(store.sortedTags.map(\.name) == ["お気に入り", "A", "A/B", "A/子", "C"])
+        _ = child
+
+        // 並び順は保存され、次に開いたときも同じ
+        let reloaded = TagStore(fileURL: fileURL)
+        #expect(reloaded.sortedTags.map(\.name) == ["お気に入り", "A", "A/B", "A/子", "C"])
+        _ = c
+    }
+
+    @Test func oldLibrariesStartInNameOrder() throws {
+        // 並び順を持たない以前のファイルは、今まで見えていた名前の順で始める
+        let library = TagLibrary(tags: [Tag(id: UUID(), name: "仕事", color: "#000000"), Tag(id: UUID(), name: "個人", color: "#000000")], items: [])
+        try JSONEncoder().encode(library).write(to: fileURL)
+        let store = TagStore(fileURL: fileURL)
+        #expect(store.rootTags.map(\.name) == ["個人", "仕事", "お気に入り"])
+    }
+
     @Test func childTagImpliesParentTag() throws {
         let store = TagStore(fileURL: fileURL)
         let child = try #require(store.createTag(named: "仕事/案件A"))
