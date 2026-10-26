@@ -27,6 +27,8 @@ v1.x 以降（内蔵ターミナル、カスタムコマンド、ワークスペ
 | 絞り込み | ⌘F または / |
 | タグを編集（名前は自由、`仕事/案件A` で階層） | ⌥⌘G |
 | お気に入りに追加・外す | ⌃⌘T、ツールバーの ★ |
+| Markdown のプレビュー（.md を選ぶと右に表示）の切り替え | ⌥⌘P |
+| テーマ（外観・アクセントカラー） | 設定（⌘,）› 一般 |
 | 名前を変更（複数選択なら一括） | Return |
 | クイックルック | スペース |
 | パスを入力（Tab で補完） | ⌘L |
@@ -64,6 +66,7 @@ xcodebuild -project Macorn.xcodeproj -scheme Macorn -derivedDataPath build/Deriv
 | `Macorn/Window` | 1つのウィンドウ（サイドバー＋1〜2画面＋ツールバー）と2画面表示 |
 | `Macorn/Browser` | 1つの画面（ファイル一覧・パスバー・絞り込み・ステータスバー）と、その操作 |
 | `Macorn/Operations` | コピー・移動・ゴミ箱・名前変更などの実行と取り消し、進み具合の表示、クリップボード |
+| `Macorn/Preview` | Markdown のプレビュー（Markdown → HTML の変換と、表示） |
 | `Macorn/Palette` | コマンドパレット（あいまい検索・ローマ字・フォルダ履歴） |
 | `Macorn/Integration` | ターミナル・エディタ連携、パスのコピー、Git の状態 |
 | `Macorn/Settings` | 設定ウィンドウ、ショートカットの変更、コマンドラインツール |

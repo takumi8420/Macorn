@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // 旧名 noxy の設定・履歴を引き継ぐ（メニューのショートカットの変更も含むので、メニューを作る前に行う）
         if !isRunningTests && !DebugFlags.isAutomating { LegacyMigration.runIfNeeded() }
+        Theme.shared.apply()
         NSApp.mainMenu = MainMenu.build()
         ShortcutStore.apply(to: NSApp.mainMenu)
         guard !isRunningTests else { return }

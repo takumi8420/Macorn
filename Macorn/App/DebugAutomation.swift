@@ -177,6 +177,27 @@ enum DebugAutomation {
             } else {
                 print("[debug] no popover")
             }
+        case "mdstate":
+            let preview = browser.markdownPreview
+            print("[debug] md visible=\(browser.isMarkdownPreviewVisible) file=\(preview.fileURL?.lastPathComponent ?? "-") html=\(preview.lastHTMLLength) width=\(Int(preview.view.frame.width))/\(Int(browser.contentSplit.bounds.width))")
+        case "snapmd":
+            await withCheckedContinuation { continuation in
+                browser.markdownPreview.debugSnapshot(to: outDir.appendingPathComponent("\(argument).png")) {
+                    continuation.resume()
+                }
+            }
+            print("[debug] saved md \(argument)")
+        case "append":
+            let parts = argument.split(separator: "=", maxSplits: 1).map(String.init)
+            if parts.count == 2, let handle = FileHandle(forWritingAtPath: browser.state.currentURL.appendingPathComponent(parts[0]).path) {
+                handle.seekToEndOfFile()
+                handle.write(Data(("\n" + parts[1] + "\n").utf8))
+                try? handle.close()
+            }
+        case "accent":
+            Theme.shared.accentHex = argument == "system" ? nil : argument
+        case "appearance":
+            Theme.shared.appearance = Theme.Appearance(rawValue: argument) ?? .system
         case "favs":
             print("[debug] favorites=\(SidebarStore.shared.favorites.map { $0.name + ($0.isMissing ? "(missing)" : "") })")
         case "favrename":

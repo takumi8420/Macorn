@@ -9,6 +9,7 @@ final class FileNode {
     var children: [FileNode]?
 
     private var cachedIcon: NSImage?
+    private var cachedTintedIcon: (color: String, image: NSImage)?
 
     init(entry: FileEntry, parent: FileNode? = nil) {
         self.entry = entry
@@ -24,6 +25,28 @@ final class FileNode {
         image.size = NSSize(width: 16, height: 16)
         cachedIcon = image
         return image
+    }
+
+    /// タグの色で塗ったアイコン（フォルダの色分け）。色が無ければふつうのアイコン
+    func icon(tintedWith color: String?) -> NSImage {
+        guard let color else { return icon }
+        if let cachedTintedIcon, cachedTintedIcon.color == color { return cachedTintedIcon.image }
+        let image = Self.tint(icon, with: NSColor(hex: color))
+        cachedTintedIcon = (color, image)
+        return image
+    }
+
+    /// アイコンの陰影は残したまま、色だけを置き換える（Finder の色付きフォルダと同じ見え方）
+    static func tint(_ icon: NSImage, with color: NSColor) -> NSImage {
+        let size = icon.size
+        return NSImage(size: size, flipped: false) { rect in
+            icon.draw(in: rect)
+            color.setFill()
+            rect.fill(using: .color)
+            // 塗った色を、元のアイコンの形で切り抜く
+            icon.draw(in: rect, from: .zero, operation: .destinationIn, fraction: 1)
+            return true
+        }
     }
 
     /// 裏で計算したフォルダの合計サイズを入れる

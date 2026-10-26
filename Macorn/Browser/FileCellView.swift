@@ -173,14 +173,15 @@ final class FileCellView: NSTableCellView {
         textField.delegate = nil
     }
 
-    func configure(with node: FileNode, gitStatus: GitFileStatus? = nil, tags: [Tag] = [], showsLocation: Bool = false) {
+    func configure(with node: FileNode, gitStatus: GitFileStatus? = nil, tags: [Tag] = [], folderColor: String? = nil, showsLocation: Bool = false) {
         if isEditingName { endEditing() }
         let entry = node.entry
         switch column {
         case .name:
             textField?.attributedStringValue = NSAttributedString(string: "")
             textField?.stringValue = entry.name
-            imageView?.image = node.icon
+            // フォルダは、付いているタグの色で塗る
+            imageView?.image = entry.isFolder ? node.icon(tintedWith: folderColor) : node.icon
             // Git で無視されているものは薄く、変更のあるものには印を付ける（要件 T-21）
             textField?.textColor = gitStatus == .ignored ? .tertiaryLabelColor : .labelColor
             if entry.isFolder, let gitStatus, gitStatus != .ignored {

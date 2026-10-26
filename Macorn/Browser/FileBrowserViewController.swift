@@ -26,6 +26,8 @@ final class FileBrowserViewController: NSViewController {
     var pendingG = false
     var resortForSizesScheduled = false
     private let headerMenu = NSMenu()
+    let contentSplit = NSSplitView()
+    let markdownPreview = MarkdownPreviewController()
     private let rowMenu = NSMenu()
 
     private var watcher: DirectoryWatcher?
@@ -70,7 +72,7 @@ final class FileBrowserViewController: NSViewController {
     // MARK: - 画面の組み立て
 
     override func loadView() {
-        let container = NSView()
+        let container = PaneBackgroundView()
 
         let pathBar = NSHostingView(rootView: PathBarView(state: state, actions: pathBarActions))
         pathBar.sizingOptions = []
@@ -96,7 +98,20 @@ final class FileBrowserViewController: NSViewController {
         filterBar.sizingOptions = []
         filterBar.clipsToBounds = true
 
-        for subview in [pathBar, filterBar, scrollView, statusBar, messageHost] {
+        // 一覧と Markdown のプレビューを左右に並べる（プレビューは .md を選んだときだけ出る）
+        let listContainer = NSView()
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        listContainer.addSubview(scrollView)
+        contentSplit.isVertical = true
+        contentSplit.dividerStyle = .thin
+        contentSplit.delegate = self
+        contentSplit.addArrangedSubview(listContainer)
+        addChild(markdownPreview)
+        contentSplit.addArrangedSubview(markdownPreview.view)
+        markdownPreview.view.isHidden = true
+        configureMarkdownPreview()
+
+        for subview in [pathBar, filterBar, contentSplit, statusBar, messageHost] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             container.addSubview(subview)
         }
@@ -111,10 +126,16 @@ final class FileBrowserViewController: NSViewController {
             filterBar.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             filterBar.trailingAnchor.constraint(equalTo: container.trailingAnchor),
 
-            scrollView.topAnchor.constraint(equalTo: filterBar.bottomAnchor),
-            scrollView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: statusBar.topAnchor),
+            contentSplit.topAnchor.constraint(equalTo: filterBar.bottomAnchor),
+            contentSplit.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            contentSplit.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            contentSplit.bottomAnchor.constraint(equalTo: statusBar.topAnchor),
+
+            // 一覧の左右に余白を入れ、画面の端や隣の画面との境目に詰まって見えないようにする
+            scrollView.topAnchor.constraint(equalTo: listContainer.topAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: listContainer.bottomAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: listContainer.leadingAnchor, constant: Self.listInset),
+            scrollView.trailingAnchor.constraint(equalTo: listContainer.trailingAnchor, constant: -Self.listInset),
 
             statusBar.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             statusBar.trailingAnchor.constraint(equalTo: container.trailingAnchor),
@@ -135,6 +156,9 @@ final class FileBrowserViewController: NSViewController {
         view = container
     }
 
+    /// 一覧の左右の余白
+    static let listInset: CGFloat = 10
+
     override func viewDidLoad() {
         super.viewDidLoad()
         scrollView.contentView.postsFrameChangedNotifications = true
@@ -150,6 +174,12 @@ final class FileBrowserViewController: NSViewController {
             self,
             selector: #selector(displayPreferencesChanged(_:)),
             name: .macornDisplayPreferencesChanged,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(themeDidChange(_:)),
+            name: .macornThemeChanged,
             object: nil
         )
         NotificationCenter.default.addObserver(
@@ -183,7 +213,9 @@ final class FileBrowserViewController: NSViewController {
         outlineView.columnAutoresizingStyle = .noColumnAutoresizing
         outlineView.autoresizesOutlineColumn = false
         outlineView.indentationPerLevel = 14
-        outlineView.rowHeight = 22
+        // 行の高さと列の間隔は、詰めすぎず読みやすい程度に取る
+        outlineView.rowHeight = 24
+        outlineView.intercellSpacing = NSSize(width: 10, height: 4)
 
         for column in FileColumn.allCases {
             let tableColumn = NSTableColumn(identifier: column.identifier)
@@ -547,6 +579,7 @@ final class FileBrowserViewController: NSViewController {
     func tearDown() {
         watcher?.stop()
         watcher = nil
+        markdownPreview.stop()
     }
 
     private func handleFileSystemEvents(_ paths: [String]) {
@@ -597,6 +630,10 @@ final class FileBrowserViewController: NSViewController {
                 outlineView.reloadItem(nil, reloadChildren: true)
             }
         }
+
+        // フォルダの色分けの切り替えなど、見た目だけの設定はその場で描き直す
+        reloadVisibleRows()
+        updateMarkdownPreview()
 
         let folderSizes = Preferences.calculateFolderSizes
         if folderSizes != lastFolderSizes {
@@ -677,6 +714,7 @@ extension FileBrowserViewController: NSOutlineViewDelegate {
             with: node,
             gitStatus: gitSnapshot?.status(for: node.url),
             tags: column == .tags ? TagStore.shared.tags(for: node.url) : [],
+            folderColor: column == .name && node.entry.isFolder ? TagStore.shared.folderColor(for: node.url) : nil,
             showsLocation: isTagView && node.parent === root
         )
         return cell
@@ -685,6 +723,12 @@ extension FileBrowserViewController: NSOutlineViewDelegate {
     func outlineViewSelectionDidChange(_ notification: Notification) {
         state.selectedCount = outlineView.selectedRowIndexes.count
         updatePreviewPanel()
+        updateMarkdownPreview()
+    }
+
+    /// 選択中の行を、テーマのアクセントカラーで塗る
+    func outlineView(_ outlineView: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? {
+        ThemedRowView()
     }
 
     func outlineView(_ outlineView: NSOutlineView, typeSelectStringFor tableColumn: NSTableColumn?, item: Any) -> String? {
@@ -892,6 +936,20 @@ extension FileBrowserViewController: NSMenuDelegate {
 
 extension FileBrowserViewController: NSMenuItemValidation {
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
-        validateFileMenuItem(menuItem) ?? validateIntegrationMenuItem(menuItem) ?? validateExtrasMenuItem(menuItem) ?? true
+        if menuItem.action == #selector(toggleMarkdownPreview(_:)) {
+            menuItem.state = Preferences.markdownPreview ? .on : .off
+            return true
+        }
+        return validateFileMenuItem(menuItem) ?? validateIntegrationMenuItem(menuItem) ?? validateExtrasMenuItem(menuItem) ?? true
+    }
+}
+
+
+/// 画面の背景。余白の部分も一覧と同じ色にして、枠ではなく余白に見えるようにする（ライト・ダークに追従）
+final class PaneBackgroundView: NSView {
+    override var wantsUpdateLayer: Bool { true }
+
+    override func updateLayer() {
+        layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
     }
 }

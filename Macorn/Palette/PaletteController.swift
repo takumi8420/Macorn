@@ -285,7 +285,7 @@ private struct PaletteRow: View {
         .foregroundStyle(isSelected ? Color.white : Color.primary)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(isSelected ? Color.accentColor : .clear)
+                .fill(isSelected ? Theme.shared.accent : .clear)
         )
     }
 
@@ -309,7 +309,7 @@ private struct PaletteRow: View {
             var part = AttributedString(String(character))
             if positions.contains(index) {
                 part.font = .body.bold()
-                if !isSelected { part.foregroundColor = .accentColor }
+                if !isSelected { part.foregroundColor = Theme.shared.accent }
             }
             text += part
         }

@@ -121,7 +121,7 @@ private struct TagToggleRow: View {
         Button(action: toggle) {
             HStack(spacing: 6) {
                 Image(systemName: state == .on ? "checkmark.square.fill" : (state == .mixed ? "minus.square.fill" : "square"))
-                    .foregroundStyle(state == .off ? Color.secondary : Color.accentColor)
+                    .foregroundStyle(state == .off ? Color.secondary : Theme.shared.accent)
                 Circle()
                     .fill(Color(nsColor: NSColor(hex: tag.color)))
                     .frame(width: 10, height: 10)

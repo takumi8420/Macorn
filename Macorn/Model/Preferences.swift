@@ -17,6 +17,9 @@ enum Preferences {
         static let terminalNewTab = "openTerminalInNewTab"
         static let folderSizes = "calculateFolderSizes"
         static let vim = "vimKeyBindings"
+        static let colorFolders = "colorFoldersByTag"
+        static let markdownPreview = "markdownPreview"
+        static let markdownPreviewFraction = "markdownPreviewFraction"
     }
 
     private static var defaults: UserDefaults { .standard }
@@ -62,6 +65,24 @@ enum Preferences {
     static var vimKeyBindings: Bool {
         get { defaults.bool(forKey: Key.vim) }
         set { defaults.set(newValue, forKey: Key.vim) }
+    }
+
+    /// フォルダのアイコンを、付いているタグの色で塗る
+    static var colorFoldersByTag: Bool {
+        get { defaults.object(forKey: Key.colorFolders) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: Key.colorFolders) }
+    }
+
+    /// .md を選んだときに、一覧の右にプレビューを出す
+    static var markdownPreview: Bool {
+        get { defaults.object(forKey: Key.markdownPreview) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: Key.markdownPreview) }
+    }
+
+    /// プレビューが画面の幅に占める割合
+    static var markdownPreviewFraction: Double {
+        get { defaults.object(forKey: Key.markdownPreviewFraction) as? Double ?? 0.5 }
+        set { defaults.set(newValue, forKey: Key.markdownPreviewFraction) }
     }
 
     static var sort: FileSort {

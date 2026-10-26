@@ -95,6 +95,8 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
+        // 選択の色やアイコンを、テーマのアクセントカラーにする
+        .tint(Theme.shared.accent)
         .onAppear { store.refreshMissing() }
     }
 
@@ -136,13 +138,20 @@ struct SidebarView: View {
 private struct FavoriteRow: View {
     let item: SidebarItem
     var store: SidebarStore
+    var tags: TagStore = .shared
 
     var body: some View {
         Label {
             Text(item.name)
                 .foregroundStyle(item.isMissing ? .secondary : .primary)
         } icon: {
-            Image(systemName: item.isMissing ? "exclamationmark.triangle" : item.symbol)
+            // タグの付いたフォルダは、タグの色で塗る
+            if let color = tags.folderColor(for: item.url), !item.isMissing {
+                Image(systemName: item.symbol == "folder" ? "folder.fill" : item.symbol)
+                    .foregroundStyle(Color(nsColor: NSColor(hex: color)))
+            } else {
+                Image(systemName: item.isMissing ? "exclamationmark.triangle" : item.symbol)
+            }
         }
         .help(item.isMissing ? "\(item.url.path) が見つかりません" : item.url.path)
         .contextMenu {

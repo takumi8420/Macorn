@@ -35,16 +35,16 @@ struct PathBarView: View {
                 }
             }
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 14)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .opacity(isDimmed ? 0.55 : 1)
-        .background(isHighlighted ? Color.accentColor.opacity(0.10) : .clear)
+        .background(isHighlighted ? Theme.shared.accent.opacity(0.10) : .clear)
         .contentShape(Rectangle())
         .onTapGesture(count: 2) { state.isEditingPath = true }
         .overlay(alignment: .bottom) {
             // 2画面のときは、操作対象の画面の下に色付きの線を引いて区別する（要件 P-03）
             if isHighlighted {
-                Rectangle().fill(Color.accentColor).frame(height: 2)
+                Rectangle().fill(Theme.shared.accent).frame(height: 2)
             } else {
                 Divider()
             }

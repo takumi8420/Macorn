@@ -51,7 +51,8 @@ final class TagStore {
     static let palette = ["#FF5F57", "#FF9F0A", "#FFD60A", "#32D74B", "#0A84FF", "#BF5AF2", "#FF6FAE", "#8E8E93"]
 
     private(set) var tags: [Tag] = []
-    @ObservationIgnored private var itemsByPath: [String: TaggedItem] = [:]
+    /// パス → タグを付けた項目。サイドバーの件数などが付け外しに合わせて変わるよう、変更を画面に知らせる
+    private var itemsByPath: [String: TaggedItem] = [:]
     @ObservationIgnored private let fileURL: URL
 
     private static var defaultURL: URL {
@@ -67,7 +68,7 @@ final class TagStore {
         if let data = try? Data(contentsOf: fileURL),
            let library = try? JSONDecoder().decode(TagLibrary.self, from: data) {
             tags = library.tags
-            itemsByPath = Dictionary(library.items.map { ($0.path, $0) }, uniquingKeysWith: { first, _ in first })
+            itemsByPath = Dictionary(library.items.map { (Self.key($0.path), $0) }, uniquingKeysWith: { first, _ in first })
         }
     }
 
@@ -153,18 +154,18 @@ final class TagStore {
     // MARK: - 項目へのタグ付け
 
     func tags(for url: URL) -> [Tag] {
-        guard let item = itemsByPath[url.standardizedFileURL.path] else { return [] }
+        guard let item = itemsByPath[Self.key(url)] else { return [] }
         return sortedTags.filter { item.tagIDs.contains($0.id) }
     }
 
     func hasTag(_ id: UUID, on url: URL) -> Bool {
-        itemsByPath[url.standardizedFileURL.path]?.tagIDs.contains(id) ?? false
+        itemsByPath[Self.key(url)]?.tagIDs.contains(id) ?? false
     }
 
     func assign(_ id: UUID, to urls: [URL]) {
         guard tag(id: id) != nil else { return }
         for url in urls {
-            let path = url.standardizedFileURL.path
+            let path = Self.key(url)
             var item = itemsByPath[path] ?? TaggedItem(path: path, bookmark: Self.bookmark(for: url), tagIDs: [])
             item.tagIDs.insert(id)
             itemsByPath[path] = item
@@ -174,7 +175,7 @@ final class TagStore {
 
     func unassign(_ id: UUID, from urls: [URL]) {
         for url in urls {
-            let path = url.standardizedFileURL.path
+            let path = Self.key(url)
             itemsByPath[path]?.tagIDs.remove(id)
             if itemsByPath[path]?.tagIDs.isEmpty == true { itemsByPath[path] = nil }
         }
@@ -202,12 +203,19 @@ final class TagStore {
 
     func count(for id: UUID) -> Int { urls(taggedWith: id).count }
 
+    /// フォルダのアイコンを塗る色（付いているタグのうち、名前の順で最初のもの）。
+    /// 設定で色分けを切っているとき、またはタグが無いときは nil
+    func folderColor(for url: URL) -> String? {
+        guard Preferences.colorFoldersByTag else { return nil }
+        return tags(for: url).first?.color
+    }
+
     // MARK: - 移動・名前の変更への追従
 
     /// Macorn の中で項目を移動・改名したときに呼ぶ。中の項目のパスもいっしょに直す。
     func itemMoved(from old: URL, to new: URL) {
-        let oldPath = old.standardizedFileURL.path
-        let newPath = new.standardizedFileURL.path
+        let oldPath = Self.key(old)
+        let newPath = Self.key(new)
         guard oldPath != newPath else { return }
         var changed = false
         for (path, item) in itemsByPath where path == oldPath || path.hasPrefix(oldPath + "/") {
@@ -228,13 +236,17 @@ final class TagStore {
                 var stale = false
                 guard let url = try? URL(resolvingBookmarkData: bookmark, options: [.withoutUI, .withoutMounting], bookmarkDataIsStale: &stale),
                       FileManager.default.fileExists(atPath: url.path) else { return nil }
-                return (item.path, url.standardizedFileURL.path)
+                return (item.path, Self.key(url))
             }
         }.value
         for (old, new) in moves {
             itemMoved(from: URL(fileURLWithPath: old), to: URL(fileURLWithPath: new))
         }
     }
+
+    /// 項目を引くときのキー。日本語の名前は「ダ」が「タ＋゛」に分かれて届くことがあるので、合成した形にそろえる
+    nonisolated static func key(_ url: URL) -> String { key(url.standardizedFileURL.path) }
+    nonisolated static func key(_ path: String) -> String { path.precomposedStringWithCanonicalMapping }
 
     private static func bookmark(for url: URL) -> Data? {
         try? url.bookmarkData(options: [], includingResourceValuesForKeys: nil, relativeTo: nil)

@@ -6,6 +6,26 @@
 
 ## 2026-10-26
 
+### Macorn：タグの件数の修正、タグの色でフォルダを塗る、余白、Markdown のプレビュー、テーマ
+
+- **きっかけ**：konta の依頼が続けて4件。「タグをつけたがサイドバー上で数が0のまま」「タグの色などに応じてフォルダの色も変えられてほしい」「右のペインの余白がないのでギチギチに感じる」「md ファイルは VS Code のようにアプリ内でプレビュー表示されるようにしてほしい」「アプリのテーマカラーも変えられるようにしてほしい」
+- **意図・方針**
+  - 件数が0のままだったのは、タグの付け外しを画面に知らせていなかったため（保存はできていた）。項目の一覧も変更を知らせるようにした。あわせて、日本語の名前の表記揺れ（濁点の合成・分解）でも同じ項目として扱うようにした
+  - フォルダのアイコンは、付いているタグのうち名前の順で最初のタグの色で塗る。陰影は残して色だけ置き換える。サイドバーのお気に入りも同じ色にする。設定で切れる
+  - 余白：一覧の左右に余白を入れ、行の高さと列の間隔を少し広げ、パスバー・ステータスバーの内側の余白も増やした（2画面の左右とも）
+  - Markdown のプレビュー：.md を1つ選ぶと一覧の右に出し、それ以外を選ぶと閉じる。保存すると読んでいた位置を保ったまま表示し直す。プロジェクトの方針（外部ライブラリなし）に合わせて、変換は自前で書いた。Markdown に書かれたスクリプトは動かさない。リンクはブラウザで開き、別の .md へのリンクはそのファイルの場所へ移る
+  - テーマ：外観（macOS に合わせる・ライト・ダーク）とアクセントカラー（どんぐり色を含む9色＋自由な色）を設定で選べるようにした。選択中の行は macOS の色ではなくテーマの色で塗る
+- 変更 `Macorn/Model/TagStore.swift` — 付け外しを画面に知らせる、名前の表記揺れをそろえる、フォルダの色
+- 変更 `Macorn/Model/FileNode.swift`、`Macorn/Browser/FileCellView.swift`、`Macorn/Sidebar/SidebarView.swift` — タグの色で塗ったアイコン
+- 変更 `Macorn/Browser/FileBrowserViewController.swift`、`PathBarView.swift`、`StatusBarView.swift`、`FilterBarView.swift` — 余白、行の高さ、一覧とプレビューを並べる、テーマの色の行
+- 追加 `Macorn/Preview/MarkdownRenderer.swift` — Markdown → HTML（見出し・強調・コード・引用・リスト・チェックボックス・表・リンク・画像・front matter）
+- 追加 `Macorn/Preview/MarkdownPreviewController.swift` — プレビューの表示、保存の検知、リンク
+- 追加 `Macorn/Browser/FileBrowserViewController+Preview.swift` — プレビューの出し入れ（⌥⌘P）、幅の記憶、テーマの反映
+- 追加 `Macorn/Settings/Theme.swift` — 外観とアクセントカラー、テーマの色で塗る行
+- 変更 `Macorn/Settings/SettingsView.swift`、`Macorn/Model/Preferences.swift`、`Macorn/App/MainMenu.swift`、`AppDelegate.swift`、`DebugAutomation.swift`、`Macorn/Palette/PaletteController.swift`、`Macorn/Browser/TagEditorView.swift` — 設定（テーマ・プレビュー・フォルダの色分け）、メニュー、テーマの色
+- 追加 `MacornTests/MarkdownRendererTests.swift`、変更 `MacornTests/TagTests.swift` — テスト 15 件を追加（合計 103 件）
+- 変更 `README.md`、`docs/REQUIREMENTS.md`、`AGENTS.md` — 操作一覧、S-05・V-07 の内容、確定している前提
+
 ### Macorn：サイドバーの「タグ」の＋ボタンの位置を直す
 
 - **きっかけ**：konta がスクリーンショットを添えて「タグの横のプラスボタンが端にありすぎるので修正して」と依頼

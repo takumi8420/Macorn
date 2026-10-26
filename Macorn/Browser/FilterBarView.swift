@@ -26,7 +26,7 @@ struct FilterBarView: View {
             .buttonStyle(.borderless)
             .help("絞り込みをやめる（Esc）")
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 14)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .controlBackgroundColor))
         .overlay(alignment: .bottom) { Divider() }

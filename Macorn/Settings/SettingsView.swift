@@ -80,9 +80,36 @@ private struct GeneralSettingsView: View {
     @AppStorage("confirmPaneTransfer") private var confirmPaneTransfer = true
     @AppStorage("calculateFolderSizes") private var calculateFolderSizes = true
     @AppStorage("vimKeyBindings") private var vimKeyBindings = false
+    @AppStorage("colorFoldersByTag") private var colorFoldersByTag = true
+
+    @Bindable private var theme = Theme.shared
 
     var body: some View {
         Form {
+            Section("テーマ") {
+                Picker("外観", selection: $theme.appearance) {
+                    ForEach(Theme.Appearance.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                LabeledContent("アクセントカラー") {
+                    HStack(spacing: 8) {
+                        ForEach(Theme.presets) { preset in
+                            AccentSwatch(preset: preset, isSelected: theme.accentHex == preset.hex) {
+                                theme.accentHex = preset.hex
+                            }
+                        }
+                        ColorPicker("", selection: Binding(
+                            get: { theme.accent },
+                            set: { theme.accentHex = NSColor($0).hexString }
+                        ), supportsOpacity: false)
+                        .labelsHidden()
+                        .help("好きな色を選ぶ")
+                    }
+                }
+                Text("選択中の行・操作対象の画面の線・コマンドパレットの選択・Markdown のリンクなどの色です。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             Toggle("隠しファイルを表示する（⇧⌘.）", isOn: $showHiddenFiles)
                 .onChange(of: showHiddenFiles) { _, value in
                     // 開いているウィンドウにもすぐ反映する
@@ -90,6 +117,17 @@ private struct GeneralSettingsView: View {
                 }
             Toggle("フォルダのサイズを計算して表示する", isOn: $calculateFolderSizes)
                 .onChange(of: calculateFolderSizes) { _, _ in
+                    NotificationCenter.default.post(name: .macornDisplayPreferencesChanged, object: nil)
+                }
+            Toggle("Markdown（.md）を選んだら、右にプレビューを出す（⌥⌘P）", isOn: Binding(
+                get: { Preferences.markdownPreview },
+                set: {
+                    Preferences.markdownPreview = $0
+                    NotificationCenter.default.post(name: .macornDisplayPreferencesChanged, object: nil)
+                }
+            ))
+            Toggle("フォルダのアイコンをタグの色で塗る", isOn: $colorFoldersByTag)
+                .onChange(of: colorFoldersByTag) { _, _ in
                     NotificationCenter.default.post(name: .macornDisplayPreferencesChanged, object: nil)
                 }
             Toggle("F5 / F6 で反対側の画面へコピー・移動する前に確認する", isOn: $confirmPaneTransfer)
@@ -336,5 +374,32 @@ private struct HistorySettingsView: View {
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+
+/// アクセントカラーの見本（丸）。「macOS に合わせる」は虹色の輪で表す
+private struct AccentSwatch: View {
+    let preset: Theme.Preset
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                if let hex = preset.hex {
+                    Circle().fill(Color(nsColor: NSColor(hex: hex)))
+                } else {
+                    Circle().fill(AngularGradient(colors: [.red, .orange, .yellow, .green, .blue, .purple, .red], center: .center))
+                }
+                if isSelected {
+                    Circle().fill(.white).frame(width: 6, height: 6)
+                }
+            }
+            .frame(width: 18, height: 18)
+            .overlay(Circle().strokeBorder(Color.primary.opacity(isSelected ? 0.5 : 0.12), lineWidth: isSelected ? 2 : 1))
+        }
+        .buttonStyle(.plain)
+        .help(preset.name)
     }
 }

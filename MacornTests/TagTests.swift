@@ -124,6 +124,33 @@ final class TagStoreTests {
         #expect(TagLocation.location(from: "/tmp").path == "/tmp")
     }
 
+    @Test func japaneseNamesMatchRegardlessOfNormalization() throws {
+        let store = TagStore(fileURL: fileURL)
+        let tag = try #require(store.createTag(named: "重要"))
+        let composed = "ダウンロード".precomposedStringWithCanonicalMapping
+        let decomposed = "ダウンロード".decomposedStringWithCanonicalMapping
+        #expect(composed != decomposed.unicodeScalars.map(String.init).joined() || composed.unicodeScalars.count != decomposed.unicodeScalars.count)
+        store.assign(tag.id, to: [URL(fileURLWithPath: "/tmp/" + decomposed)])
+        #expect(store.hasTag(tag.id, on: URL(fileURLWithPath: "/tmp/" + composed)))
+    }
+
+    @Test func folderColorFollowsFirstTag() throws {
+        let store = TagStore(fileURL: fileURL)
+        let work = try #require(store.createTag(named: "仕事", color: "#0A84FF"))
+        let important = try #require(store.createTag(named: "重要", color: "#FF5F57"))
+        store.assign(important.id, to: [url("project")])
+        store.assign(work.id, to: [url("project")])
+        // 名前の順で最初のタグの色（「仕事」が「重要」より先）
+        #expect(store.folderColor(for: url("project")) == "#0A84FF")
+        #expect(store.folderColor(for: url("b.txt")) == nil)
+    }
+
+    @Test func tintKeepsIconSize() {
+        let icon = NSWorkspace.shared.icon(forFile: NSTemporaryDirectory())
+        icon.size = NSSize(width: 16, height: 16)
+        #expect(FileNode.tint(icon, with: .systemRed).size == icon.size)
+    }
+
     @Test func colorHexRoundTrip() {
         #expect(NSColor(hex: "#0A84FF").hexString == "#0A84FF")
     }
