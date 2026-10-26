@@ -13,6 +13,8 @@ nonisolated struct FileEntry: Sendable, Hashable {
     var size: Int64?
     let dateModified: Date?
     let kind: String
+    /// タグ別に並べるときの基準（付いているタグのうち名前の順で最初のもの）。タグが無ければ nil
+    var tagSortKey: String? = nil
 
     var path: String { url.path }
 }

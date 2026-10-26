@@ -27,7 +27,7 @@ enum FileColumn: String, CaseIterable {
         case .dateModified: .dateModified
         case .size: .size
         case .kind: .kind
-        case .tags: nil
+        case .tags: .tags
         }
     }
 

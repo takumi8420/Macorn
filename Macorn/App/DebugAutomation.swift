@@ -245,7 +245,7 @@ enum DebugAutomation {
         }
     }
 
-    private static func perform(_ action: Selector, in controller: BrowserWindowController) {
+    private static func perform(_ action: Selector, in controller: BrowserWindowController, sender: Any? = nil) {
         guard let window = controller.window else { return }
         var responder: NSResponder? = window.firstResponder
         var target: AnyObject?
@@ -269,7 +269,7 @@ enum DebugAutomation {
             print("[debug] \(action) is disabled")
             return
         }
-        _ = (target as? NSObject)?.perform(action, with: nil)
+        _ = (target as? NSObject)?.perform(action, with: sender)
     }
 
     /// 例: "return", "space", "cmd+delete", "cmd+opt+delete", "cmd+shift+n"
@@ -312,7 +312,7 @@ enum DebugAutomation {
                 return
             }
             print("[debug] key \(spec) -> \(item.title)")
-            perform(action, in: controller)
+            perform(action, in: controller, sender: item)
         } else {
             window.firstResponder?.keyDown(with: event)
         }

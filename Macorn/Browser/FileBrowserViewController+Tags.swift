@@ -64,6 +64,14 @@ extension FileBrowserViewController {
     }
 
     @objc func tagsDidChange(_ notification: Notification) {
+        // タグ別に並べているときは、付け外しに合わせて並べ直す
+        if Preferences.sort.key == .tags {
+            let selected = selectedURLs
+            root.resort(Preferences.sort)
+            if state.isFiltering { filteredRootChildren = nil; applyFilter() }
+            outlineView.reloadItem(nil, reloadChildren: true)
+            select(selected)
+        }
         if isTagView {
             if currentTag == nil {
                 // 開いているタグが削除されたら、ホームへ戻る

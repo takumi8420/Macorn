@@ -6,6 +6,21 @@
 
 ## 2026-10-26
 
+### Macorn：タグ別の並べ替え
+
+- **きっかけ**：konta の依頼「フォルダの並び順に関してタグ別でソートできるようにもしてほしい」
+- **意図・方針**
+  - 「タグ」列の見出しをクリックすると、タグごとにまとめて並べる。基準は、付いているタグのうち名前の順で最初のタグ（フォルダの色と同じタグ）。同じタグの中は名前の順
+  - タグの無い項目は、昇順でも降順でも最後にまとめる（降順にしたときに、タグの無い項目が先頭に来て探しにくくならないように）
+  - タグを付け外ししたら、その場で並べ直す
+  - 列の見出しだけでは気づきにくいので、表示 ›「並び順」（⌃⌘1〜5、降順の切り替え）も追加した
+- 変更 `Macorn/Model/FileSort.swift`、`FileEntry.swift`、`FileNode.swift`、`TagStore.swift` — タグ別の並べ替えの基準
+- 変更 `Macorn/Browser/FileCellView.swift`、`FileBrowserViewController+Tags.swift` — 「タグ」列で並べ替え、付け外しで並べ直す
+- 変更 `Macorn/App/MainMenu.swift`、`AppDelegate.swift`、`Macorn/Palette/CommandCatalog.swift` — 表示 ›「並び順」
+- 変更 `Macorn/App/DebugAutomation.swift` — メニューのショートカットを試すときに、メニュー項目を送り手として渡す
+- 変更 `MacornTests/FileSortTests.swift` — タグ別の並べ替えのテスト（合計 107 件）
+- 変更 `README.md`、`docs/REQUIREMENTS.md` — 操作一覧、V-01 の内容
+
 ### Macorn：画像・PDF・動画などのプレビューと、タグを続けて付けられるメニュー
 
 - **きっかけ**：konta の依頼「PDF や動画など視覚的に確認できるものはプレビュー表示できるようにしてほしい」。作業中に「タグをフォルダに割り振る際は複数選択全体なので、選択するごとにダイアログが閉じてしまうと不便」と依頼

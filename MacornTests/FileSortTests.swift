@@ -45,3 +45,24 @@ struct FileSortTests {
         #expect(FileSort(descriptor: NSSortDescriptor(key: "unknown", ascending: true)) == nil)
     }
 }
+
+struct TagSortTests {
+    private func entry(_ name: String, tag: String?) -> FileEntry {
+        var entry = FileEntry(
+            url: URL(fileURLWithPath: "/tmp/\(name)"), name: name, isFolder: true, isPackage: false,
+            isHidden: false, isSymbolicLink: false, size: nil, dateModified: nil, kind: "フォルダ"
+        )
+        entry.tagSortKey = tag
+        return entry
+    }
+
+    @Test func groupsByTagAndKeepsUntaggedLast() {
+        let entries = [entry("c", tag: nil), entry("b", tag: "重要"), entry("a", tag: "仕事"), entry("d", tag: "仕事/案件A"), entry("e", tag: "仕事")]
+        let ascending = FileSort(key: .tags).sorted(entries).map(\.name)
+        #expect(ascending == ["a", "e", "d", "b", "c"])
+        // 降順でも、タグの無い項目は最後
+        let descending = FileSort(key: .tags, ascending: false).sorted(entries).map(\.name)
+        #expect(descending.last == "c")
+        #expect(descending.first == "b")
+    }
+}

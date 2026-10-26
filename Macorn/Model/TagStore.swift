@@ -203,6 +203,11 @@ final class TagStore {
 
     func count(for id: UUID) -> Int { urls(taggedWith: id).count }
 
+    /// タグ別に並べるときの基準（付いているタグのうち、名前の順で最初のタグの名前）
+    func sortKey(for url: URL) -> String? {
+        tags(for: url).first?.name
+    }
+
     /// フォルダのアイコンを塗る色（付いているタグのうち、名前の順で最初のもの）。
     /// 設定で色分けを切っているとき、またはタグが無いときは nil
     func folderColor(for url: URL) -> String? {

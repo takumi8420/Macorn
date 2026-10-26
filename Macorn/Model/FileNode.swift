@@ -75,7 +75,13 @@ final class FileNode {
             sized.size = size
             return sized
         }
-        children = sort.sorted(entries).map { entry in
+        // タグ別に並べるための基準を入れておく
+        let tagged = entries.map { entry in
+            var tagged = entry
+            tagged.tagSortKey = TagStore.shared.sortKey(for: entry.url)
+            return tagged
+        }
+        children = sort.sorted(tagged).map { entry in
             if let node = existing[entry.path] {
                 node.update(entry)
                 return node
@@ -87,6 +93,8 @@ final class FileNode {
     /// 読み込み済みの子孫も含めて並べ替える。
     func resort(_ sort: FileSort) {
         guard var children else { return }
+        // タグの付け外しで並びが変わるので、基準を入れ直してから並べる
+        for child in children { child.entry.tagSortKey = TagStore.shared.sortKey(for: child.url) }
         children.sort { sort.areInIncreasingOrder($0.entry, $1.entry) }
         self.children = children
         children.forEach { $0.resort(sort) }

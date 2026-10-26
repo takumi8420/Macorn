@@ -102,6 +102,8 @@ enum CommandCatalog {
         "copyPath:": "Copy Path",
         "beginFilter:": "Filter Find Search",
         "editTags:": "Edit Tags Label",
+        "sortBy:": "Sort By Order",
+        "toggleSortDirection:": "Sort Descending Ascending Reverse",
         "toggleFilePreview:": "Preview Markdown HTML",
         "toggleFavoriteFolder:": "Favorite Star Bookmark",
         "bulkRename:": "Batch Rename Multiple",

@@ -5,6 +5,8 @@ nonisolated enum FileSortKey: String, CaseIterable, Sendable {
     case dateModified
     case size
     case kind
+    /// タグ別（付いているタグの名前の順。タグの無い項目は最後）
+    case tags
 }
 
 /// 並び順。アプリ全体で1つの設定を共有する（要件 V-08）。
@@ -31,6 +33,10 @@ nonisolated struct FileSort: Equatable, Sendable {
     }
 
     func areInIncreasingOrder(_ a: FileEntry, _ b: FileEntry) -> Bool {
+        // タグ別のときは、タグの無い項目を昇順・降順どちらでも最後にまとめる
+        if key == .tags, (a.tagSortKey == nil) != (b.tagSortKey == nil) {
+            return a.tagSortKey != nil
+        }
         let result = compare(a, b)
         if result == .orderedSame {
             // 同じ値どうしは、いつも名前の昇順で並べる
@@ -50,6 +56,8 @@ nonisolated struct FileSort: Equatable, Sendable {
             return Self.compare(a.size ?? -1, b.size ?? -1)
         case .kind:
             return a.kind.localizedStandardCompare(b.kind)
+        case .tags:
+            return (a.tagSortKey ?? "").localizedStandardCompare(b.tagSortKey ?? "")
         }
     }
 

@@ -108,6 +108,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Preferences.showHiddenFiles.toggle()
     }
 
+    /// 表示 › 並び順。同じ基準をもう一度選ぶと、昇順・降順を入れ替える
+    @objc func sortBy(_ sender: Any?) {
+        guard let raw = (sender as? NSMenuItem)?.representedObject as? String, let key = FileSortKey(rawValue: raw) else { return }
+        let current = Preferences.sort
+        Preferences.sort = FileSort(key: key, ascending: current.key == key ? !current.ascending : true)
+    }
+
+    @objc func toggleSortDirection(_ sender: Any?) {
+        var sort = Preferences.sort
+        sort.ascending.toggle()
+        Preferences.sort = sort
+    }
+
     @objc func showSettings(_ sender: Any?) {
         SettingsWindowController.shared.show()
     }
@@ -219,6 +232,12 @@ extension AppDelegate: NSMenuItemValidation {
             return true
         case #selector(reopenClosedTab(_:)):
             return !closedTabs.isEmpty
+        case #selector(sortBy(_:)):
+            menuItem.state = (menuItem.representedObject as? String) == Preferences.sort.key.rawValue ? .on : .off
+            return true
+        case #selector(toggleSortDirection(_:)):
+            menuItem.state = Preferences.sort.ascending ? .off : .on
+            return true
         default:
             return true
         }

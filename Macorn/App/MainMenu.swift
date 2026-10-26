@@ -127,6 +127,7 @@ enum MainMenu {
         menu.addItem(.separator())
         menu.addItem(item("隠しファイルを表示", #selector(AppDelegate.toggleHiddenFiles(_:)), ".", [.command, .shift]))
         menu.addItem(item("サイドバーを表示", #selector(NSSplitViewController.toggleSidebar(_:)), "s", [.command, .option]))
+        menu.addItem(submenu(sortMenu()))
         menu.addItem(item("プレビュー", #selector(FileBrowserViewController.toggleFilePreview(_:)), "p", [.command, .option]))
         menu.addItem(.separator())
         menu.addItem(item("2画面表示", #selector(BrowserWindowController.toggleSplit(_:)), "\\"))
@@ -136,6 +137,20 @@ enum MainMenu {
         menu.addItem(item("左右のフォルダを入れ替え", #selector(BrowserWindowController.swapPanes(_:)), "u", [.command, .option]))
         menu.addItem(.separator())
         menu.addItem(item("フルスクリーンにする", #selector(NSWindow.toggleFullScreen(_:)), "f", [.command, .control]))
+        return menu
+    }
+
+    /// 表示 › 並び順（列の見出しをクリックするのと同じ。⌃⌘1〜5）
+    private static func sortMenu() -> NSMenu {
+        let menu = NSMenu(title: "並び順")
+        let keys: [(String, FileSortKey)] = [("名前", .name), ("変更日", .dateModified), ("サイズ", .size), ("種類", .kind), ("タグ", .tags)]
+        for (index, (title, key)) in keys.enumerated() {
+            let sortItem = item(title, #selector(AppDelegate.sortBy(_:)), "\(index + 1)", [.command, .control])
+            sortItem.representedObject = key.rawValue
+            menu.addItem(sortItem)
+        }
+        menu.addItem(.separator())
+        menu.addItem(item("降順にする", #selector(AppDelegate.toggleSortDirection(_:))))
         return menu
     }
 
