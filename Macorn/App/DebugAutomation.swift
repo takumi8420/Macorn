@@ -232,6 +232,11 @@ enum DebugAutomation {
             let views = menu?.items.compactMap { $0.view as? TagCheckboxMenuView } ?? []
             views.forEach { $0.debugToggle() }
             print("[debug] tagmenu rows=\(views.count) states=\(views.map(\.debugState.rawValue))")
+        case "splitinfo":
+            let split = browser.contentSplit
+            print("[debug] split bounds=\(split.bounds) subviews=\(split.subviews.map { "\(type(of: $0)) \($0.frame) hidden=\($0.isHidden)" }) arranged=\(split.arrangedSubviews.count)")
+        case "closepopover":
+            browser.tagPopover?.performClose(nil)
         case "popover":
             print("[debug] popover shown=\(browser.tagPopover?.isShown ?? false)")
         case "sections":
@@ -278,9 +283,67 @@ enum DebugAutomation {
             }
         case "focus":
             browser.focusList()
+        case "winsize":
+            // winsize:1280x720 ― ウィンドウの大きさを変えて画面の中央へ（宣伝用の撮影）
+            let size = argument.split(separator: "x").compactMap { Double($0) }
+            if size.count == 2, let window = controller.window {
+                window.setFrame(NSRect(x: 0, y: 0, width: size[0], height: size[1]), display: true)
+                window.center()
+            }
+        case "shot":
+            // shot:<名前> ― 撮影の合図を標準エラーに出し、2秒待つ。外の撮影スクリプトがこの間に撮る。
+            // 「SHOT 名前 倍率 本体=番号:x,y,w,h 重なり=番号:x,y,w,h;…」（座標は画面の左下が原点）
+            guard let main = controller.window else { break }
+            func describe(_ window: NSWindow) -> String {
+                let f = window.frame
+                return "\(window.windowNumber):\(Int(f.minX)),\(Int(f.minY)),\(Int(f.width)),\(Int(f.height))"
+            }
+            let windows = NSApp.windows.filter { $0 !== main && $0.isVisible && $0.windowNumber > 0 && $0.frame.intersects(main.frame) }
+            // パレット・ポップオーバーは、見えていないデスクトップのウィンドウを撮ると後ろまで写るので、中身を描いて重ねる
+            let overlays: [NSWindow] = []
+            var images: [String] = []
+            for (index, popover) in windows.enumerated() {
+                guard let view = popover.contentView else { continue }
+                let path = outDir.appendingPathComponent("\(argument)_overlay\(index).png").path
+                snapshotOpaque(view, to: URL(fileURLWithPath: path))
+                let rect = popover.convertToScreen(view.convert(view.bounds, to: nil))
+                images.append("\(path)|\(Int(rect.minX)),\(Int(rect.minY)),\(Int(rect.width)),\(Int(rect.height))")
+            }
+            // Web の表示（Markdown・HTML のプレビュー）は、見えていないデスクトップのウィンドウを撮ると空になるので、別に撮って重ねる
+            if browser.isFilePreviewVisible, let web = browser.filePreview.debugVisibleWebView, web.window === main {
+                let path = outDir.appendingPathComponent("\(argument)_web.png").path
+                await withCheckedContinuation { continuation in
+                    browser.filePreview.debugSnapshot(to: URL(fileURLWithPath: path)) { continuation.resume() }
+                }
+                let rect = main.convertToScreen(web.convert(web.bounds, to: nil))
+                images.append("\(path)|\(Int(rect.minX)),\(Int(rect.minY)),\(Int(rect.width)),\(Int(rect.height))")
+            }
+            let line = "SHOT \(argument) \(main.backingScaleFactor) main=\(describe(main)) overlays=\(overlays.map(describe).joined(separator: ";")) images=\(images.joined(separator: ";"))\n"
+            FileHandle.standardError.write(Data(line.utf8))
+            try? await Task.sleep(for: .seconds(2))
         case "quit": NSApp.terminate(nil)
         default: print("[debug] unknown step \(step)")
         }
+    }
+
+    /// 画面の部品を、背景（ウィンドウの色・角丸）を敷いて 2 倍の解像度で PNG にする（半透明の背景は写らないため）
+    private static func snapshotOpaque(_ view: NSView, to url: URL) {
+        let size = view.bounds.size
+        guard size.width > 0, size.height > 0, let cached = view.bitmapImageRepForCachingDisplay(in: view.bounds),
+              let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width * 2), pixelsHigh: Int(size.height * 2),
+                                         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                         colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else { return }
+        view.cacheDisplay(in: view.bounds, to: cached)
+        rep.size = size
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        view.effectiveAppearance.performAsCurrentDrawingAppearance {
+            NSColor.windowBackgroundColor.setFill()
+            NSBezierPath(roundedRect: NSRect(origin: .zero, size: size), xRadius: 10, yRadius: 10).fill()
+        }
+        cached.draw(in: NSRect(origin: .zero, size: size))
+        NSGraphicsContext.restoreGraphicsState()
+        try? rep.representation(using: .png, properties: [:])?.write(to: url)
     }
 
     private static func perform(_ action: Selector, in controller: BrowserWindowController, sender: Any? = nil) {

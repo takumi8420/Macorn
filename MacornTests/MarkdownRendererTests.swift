@@ -95,7 +95,8 @@ struct VisualPreviewKindTests {
         for name in ["photo.png", "photo.JPG", "scan.heic", "icon.svg", "paper.pdf", "clip.mov", "clip.mp4", "song.mp3", "deck.key", "deck.pptx", "sheet.xlsx", "doc.docx"] {
             #expect(FilePreviewController.kind(for: URL(fileURLWithPath: "/a/" + name)) == .visual, "\(name)")
         }
-        for name in ["app.swift", "data.json", "archive.zip"] {
+        // TypeScript は動画（MPEG-2 TS）と拡張子が同じだが、プレビューしない
+        for name in ["app.swift", "data.json", "archive.zip", "config.ts", "App.tsx"] {
             #expect(FilePreviewController.kind(for: URL(fileURLWithPath: "/a/" + name)) == nil, "\(name)")
         }
     }

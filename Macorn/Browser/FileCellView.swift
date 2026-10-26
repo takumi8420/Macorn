@@ -121,6 +121,10 @@ final class FileCellView: NSTableCellView {
             text.append(NSAttributedString(string: "● ", attributes: [.foregroundColor: NSColor(hex: tag.color)]))
             text.append(NSAttributedString(string: tag.leafName, attributes: [.foregroundColor: NSColor.labelColor, .font: NSFont.systemFont(ofSize: 12)]))
         }
+        // 装飾つきの文字は欄の折り返しの設定を使わないので、ここで1行に収める（はみ出したら末尾を省略）
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineBreakMode = .byTruncatingTail
+        text.addAttribute(.paragraphStyle, value: paragraph, range: NSRange(location: 0, length: text.length))
         return text
     }
 

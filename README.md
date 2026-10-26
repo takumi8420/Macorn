@@ -98,6 +98,25 @@ MACORN_DEBUG_OUT=/tmp/shots MACORN_HISTORY_PATH=/tmp/history.sqlite MACORN_DEBUG
 | `MACORN_DEBUG_OUT` | 画像の保存先 |
 | `MACORN_HISTORY_PATH` | フォルダ履歴の保存先（普段の履歴を汚さないため） |
 | `MACORN_TAGS_PATH` | タグの保存先（普段のタグを汚さないため） |
-| `MACORN_DEFAULTS_SUITE` | サイドバーの設定の保存先（UserDefaults のスイート名。普段のお気に入りの並びなどを汚さないため） |
+| `MACORN_DEFAULTS_SUITE` | 設定の保存先（UserDefaults のスイート名。お気に入りの並び・表示の設定など、普段の設定を汚さないため） |
 | `MACORN_DEBUG_LAUNCH_LOG` | ターミナル・エディタを実際には起動せず、起動しようとした内容をこのファイルに書く |
 | `MACORN_DEBUG_COPY_DELAY_US` | コピーをわざと遅くする（進み具合の表示と中止の確認用） |
+
+## 紹介動画と LP
+
+| 場所 | 内容 |
+|---|---|
+| `promo/sample/make-sample.sh` | 撮影に使う架空のフォルダ一式を `/Users/Shared/MacornDemo` に作る |
+| `promo/capture/` | Debug ビルドを自動操作して画面を撮る（`capture.py` と手順の `steps.txt`） |
+| `promo/video/` | 紹介動画（Remotion）。場面は `src/Flow.tsx` |
+| `promo/build-site-assets.sh` | LP 用の画像・動画を `site/assets/` に作る |
+| `site/` | LP（静的な HTML。Vercel ではルートを `site` にして置く） |
+
+```bash
+bash promo/sample/make-sample.sh
+python3 promo/capture/capture.py promo/capture/steps.txt promo/video/public/flow
+(cd promo/video && npm install && npm run render)
+bash promo/build-site-assets.sh
+```
+
+画面のロック中・ディスプレイのスリープ中はウィンドウを撮れない。

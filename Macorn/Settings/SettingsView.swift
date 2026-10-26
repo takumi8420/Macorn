@@ -370,7 +370,7 @@ private struct HistorySettingsView: View {
             }
             Section("コマンドの使用履歴") {
                 Button("使用履歴を消す", role: .destructive) {
-                    UserDefaults.standard.removeObject(forKey: "paletteCommandUsage")
+                    AppDefaults.store.removeObject(forKey: "paletteCommandUsage")
                     cleared = true
                 }
                 if cleared { Text("消しました。").foregroundStyle(.secondary) }

@@ -75,8 +75,8 @@ final class SidebarViewController: NSViewController {
     private var isSyncingSelection = false
     private var isRestoringExpansion = false
     /// 閉じたタグの行（"tag:<ID>"）。次に開いたときも閉じたままにする
-    private var collapsedTagIDs = Set(UserDefaults.standard.stringArray(forKey: "sidebarCollapsedTags") ?? []) {
-        didSet { UserDefaults.standard.set(Array(collapsedTagIDs).sorted(), forKey: "sidebarCollapsedTags") }
+    private var collapsedTagIDs = Set(AppDefaults.store.stringArray(forKey: "sidebarCollapsedTags") ?? []) {
+        didSet { AppDefaults.store.set(Array(collapsedTagIDs).sorted(), forKey: "sidebarCollapsedTags") }
     }
     private var lastRetarget: (node: SidebarNode?, index: Int) = (nil, -1)
     private let contextMenu = NSMenu()
@@ -721,8 +721,9 @@ extension SidebarViewController: NSOutlineViewDelegate {
         case .placed(let item, _):
             if let tagID = item.tagID {
                 let tag = tags.tag(id: tagID)
+                // 階層は見出しや「タグ」の一覧で分かるので、名前は一番下の階層だけを出す（「会社A/案件A」→「案件A」）
                 cell.configure(
-                    title: item.customName ?? tag?.name ?? "（削除されたタグ）",
+                    title: item.customName ?? tag?.leafName ?? "（削除されたタグ）",
                     symbol: "tag.fill", tint: NSColor(hex: tag?.color ?? "#8E8E93"),
                     count: tag.map { tags.count(for: $0.id) }, dimmed: tag == nil
                 )
@@ -736,7 +737,7 @@ extension SidebarViewController: NSOutlineViewDelegate {
                     tint: color.map(NSColor.init(hex:)), dimmed: item.isMissing
                 )
             }
-            cell.toolTip = item.url.isFileURL ? item.url.path : nil
+            cell.toolTip = item.url.isFileURL ? item.url.path : item.tagID.flatMap { tags.tag(id: $0)?.name }
         case .tag(let tag):
             cell.configure(title: tag.leafName, dotColor: NSColor(hex: tag.color), count: tags.count(for: tag.id))
             cell.toolTip = tag.name

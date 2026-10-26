@@ -60,11 +60,11 @@ enum ShortcutStore {
 
     static var overrides: [String: KeyCombo] {
         get {
-            guard let data = UserDefaults.standard.data(forKey: key) else { return [:] }
+            guard let data = AppDefaults.store.data(forKey: key) else { return [:] }
             return (try? JSONDecoder().decode([String: KeyCombo].self, from: data)) ?? [:]
         }
         set {
-            UserDefaults.standard.set(try? JSONEncoder().encode(newValue), forKey: key)
+            AppDefaults.store.set(try? JSONEncoder().encode(newValue), forKey: key)
         }
     }
 

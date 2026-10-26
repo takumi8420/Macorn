@@ -154,7 +154,7 @@ final class BrowserWindowController: NSWindowController {
         alert.informativeText = "サーバのアドレスを入力してください（例: smb://server/share、afp://、nfs://）"
         let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 320, height: 24))
         field.placeholderString = "smb://"
-        field.stringValue = UserDefaults.standard.string(forKey: "lastServerAddress") ?? ""
+        field.stringValue = AppDefaults.store.string(forKey: "lastServerAddress") ?? ""
         alert.accessoryView = field
         alert.addButton(withTitle: "接続")
         alert.addButton(withTitle: "キャンセル")
@@ -165,7 +165,7 @@ final class BrowserWindowController: NSWindowController {
                 guard response == .alertFirstButtonReturn,
                       let url = URL(string: field.stringValue.trimmingCharacters(in: .whitespaces)),
                       url.scheme != nil else { return }
-                UserDefaults.standard.set(url.absoluteString, forKey: "lastServerAddress")
+                AppDefaults.store.set(url.absoluteString, forKey: "lastServerAddress")
                 NSWorkspace.shared.open(url)
             }
         }

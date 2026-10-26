@@ -18,7 +18,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.mainMenu = MainMenu.build()
         ShortcutStore.apply(to: NSApp.mainMenu)
         guard !isRunningTests else { return }
-        if !restoreSession() {
+        // 自動操作では前回のウィンドウを開かない（利用者のフォルダを映さず、毎回同じ状態から始めるため）
+        if DebugFlags.isAutomating || !restoreSession() {
             openWindow(at: homeURL)
         }
         if !DebugFlags.isAutomating { NSApp.activate() }
@@ -38,7 +39,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         isTerminating = true
-        guard !isRunningTests else { return }
+        // テストと自動操作では、利用者の前回のウィンドウを上書きしない
+        guard !isRunningTests, !DebugFlags.isAutomating else { return }
         saveSession()
     }
 

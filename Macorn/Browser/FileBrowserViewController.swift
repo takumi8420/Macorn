@@ -107,7 +107,7 @@ final class FileBrowserViewController: NSViewController {
         contentSplit.delegate = self
         contentSplit.addArrangedSubview(listContainer)
         addChild(filePreview)
-        contentSplit.addArrangedSubview(filePreview.view)
+        // プレビューは出すときに分割へ入れる（閉じているときは境目の線も出さない）
         filePreview.view.isHidden = true
         configureFilePreview()
 
@@ -314,6 +314,8 @@ final class FileBrowserViewController: NSViewController {
         if state.isFiltering { endFilter(clear: true, focus: false) }
         setError(nil)
         outlineView.reloadData()
+        // 選択が消えるので、前のフォルダのファイルのプレビューも閉じる（reloadData では選択の変更が知らされない）
+        updateFilePreview()
 
         loadRoot()
         gitSnapshot = nil

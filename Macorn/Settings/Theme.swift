@@ -56,7 +56,7 @@ final class Theme {
 
     var appearance: Appearance {
         didSet {
-            UserDefaults.standard.set(appearance.rawValue, forKey: Key.appearance)
+            AppDefaults.store.set(appearance.rawValue, forKey: Key.appearance)
             apply()
         }
     }
@@ -64,14 +64,14 @@ final class Theme {
     /// 選んだアクセントカラー（#RRGGBB）。nil なら macOS に合わせる
     var accentHex: String? {
         didSet {
-            UserDefaults.standard.set(accentHex, forKey: Key.accent)
+            AppDefaults.store.set(accentHex, forKey: Key.accent)
             apply()
         }
     }
 
     init() {
-        appearance = UserDefaults.standard.string(forKey: Key.appearance).flatMap(Appearance.init(rawValue:)) ?? .system
-        accentHex = UserDefaults.standard.string(forKey: Key.accent)
+        appearance = AppDefaults.store.string(forKey: Key.appearance).flatMap(Appearance.init(rawValue:)) ?? .system
+        accentHex = AppDefaults.store.string(forKey: Key.accent)
     }
 
     /// 実際に使うアクセントカラー

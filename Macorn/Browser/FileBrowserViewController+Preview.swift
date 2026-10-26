@@ -30,6 +30,7 @@ extension FileBrowserViewController: NSSplitViewDelegate {
     func showFilePreview(_ url: URL) {
         filePreview.show(url)
         guard !isFilePreviewVisible else { return }
+        if filePreview.view.superview == nil { contentSplit.addArrangedSubview(filePreview.view) }
         filePreview.view.isHidden = false
         contentSplit.adjustSubviews()
         let width = contentSplit.bounds.width
@@ -41,6 +42,9 @@ extension FileBrowserViewController: NSSplitViewDelegate {
     func hideFilePreview() {
         filePreview.stop()
         filePreview.view.isHidden = true
+        // 隠すだけだと境目の線が描かれたまま残るので、分割から外す（次に出すときに戻す）
+        contentSplit.removeArrangedSubview(filePreview.view)
+        filePreview.view.removeFromSuperview()
         contentSplit.adjustSubviews()
     }
 

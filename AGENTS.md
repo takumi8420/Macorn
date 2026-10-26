@@ -34,6 +34,8 @@
 | `Macorn.xcodeproj/` | Xcode プロジェクト（フォルダ同期形式。`Macorn/` に置いたファイルは自動でビルド対象になる） |
 | `Macorn.entitlements` | 署名の権限（iTerm2 連携用の Apple Events） |
 | `Branding/` | Macorn のアイコン・ロゴ・カラー（[Branding/README.md](Branding/README.md)） |
+| `promo/` | 紹介動画（Remotion）と、その撮影・LP 用の画像づくり（[promo/video/README.md](promo/video/README.md)） |
+| `site/` | LP（静的な HTML。Vercel ではルートを `site` にして置く想定。まだ公開していない） |
 | `build/` | ビルドの出力（git 管理外。読まない） |
 
 - 2026-10-26 に noxy から Macorn へ改名した。コード・プロジェクト名・バンドル ID（`dev.macorn.Macorn`）も Macorn にそろえてある

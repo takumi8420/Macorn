@@ -91,7 +91,7 @@ final class SidebarStore {
     /// 普段の設定（お気に入りの並びなど）を書き換えないよう別の場所を使う
     private static var sharedDefaults: UserDefaults {
         let env = ProcessInfo.processInfo.environment
-        if let suite = env["MACORN_DEFAULTS_SUITE"], let defaults = UserDefaults(suiteName: suite) { return defaults }
+        if env["MACORN_DEFAULTS_SUITE"] != nil { return AppDefaults.store }
         if env["XCTestConfigurationFilePath"] != nil || NSClassFromString("XCTestCase") != nil {
             return UserDefaults(suiteName: "dev.macorn.Macorn.tests") ?? .standard
         }

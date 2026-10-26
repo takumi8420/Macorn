@@ -41,8 +41,13 @@ final class FilePreviewController: NSViewController {
     static let htmlExtensions: Set<String> = ["html", "htm", "xhtml"]
 
     /// プレビューできるファイルの種類。できなければ nil
+    /// 拡張子がほかの種類（動画など）と重なるソースコード
+    static let sourceCodeExtensions: Set<String> = ["ts", "mts", "cts", "tsx"]
+
     static func kind(for url: URL) -> Kind? {
         let ext = url.pathExtension.lowercased()
+        // TypeScript（.ts）は動画の MPEG-2 TS と同じ拡張子なので、動画として扱わない
+        if sourceCodeExtensions.contains(ext) { return nil }
         if markdownExtensions.contains(ext) { return .markdown }
         if htmlExtensions.contains(ext) { return .html }
         if let type = UTType(filenameExtension: ext), visualTypes.contains(where: { type.conforms(to: $0) }) {
@@ -480,6 +485,11 @@ final class FilePreviewController: NSViewController {
 
     var debugQuickLookState: String {
         "pdfPage=\(pdfView.currentPage.flatMap { pdfView.document?.index(for: $0) } ?? -1) pdfDoc=\(pdfView.documentView.map { "\(Int($0.frame.width))x\(Int($0.frame.height))" } ?? "-") scale=\(String(format: "%.2f", pdfView.scaleFactor)) pdfFrame=\(Int(pdfView.frame.width))x\(Int(pdfView.frame.height)) " + "viewer=\(viewer) image=\(imageView.image.map { "\(Int($0.size.width))x\(Int($0.size.height))" } ?? "-") pdfPages=\(pdfView.document?.pageCount ?? 0) player=\(playerView.player?.currentItem?.status.rawValue ?? -1) " + "ql hidden=\(quickLookView?.isHidden ?? true) item=\((quickLookView?.previewItem as? NSURL)?.lastPathComponent ?? "-") web hidden=\(webView.isHidden) edit hidden=\(editButton?.isHidden ?? true) open=\(browserButton?.toolTip ?? "-")"
+    }
+
+    /// 表示中の Web の領域（Markdown・HTML のときだけ）。ウィンドウの撮影では映らないので、宣伝用の撮影で別に撮って重ねる
+    var debugVisibleWebView: NSView? {
+        webView.window != nil && !webView.isHiddenOrHasHiddenAncestor ? webView : nil
     }
 
     func debugSnapshot(to url: URL, completion: @escaping () -> Void) {

@@ -23,7 +23,7 @@ enum Preferences {
         static let previewZoom = "previewZoom"
     }
 
-    private static var defaults: UserDefaults { .standard }
+    private static var defaults: UserDefaults { AppDefaults.store }
 
     static var showHiddenFiles: Bool {
         get { defaults.bool(forKey: Key.showHiddenFiles) }

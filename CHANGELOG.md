@@ -6,6 +6,48 @@
 
 ## 2026-10-26
 
+### Macorn：紹介動画と LP を作る
+
+- **きっかけ**：konta の依頼「~/.claude に登録されている create-demo-video をもとにプロモーション動画を作成してほしい」「LP の作成もお願いします。公開は Vercel を想定」。確認した結果、タイトルと締めの画面を入れる／見せる機能は2画面・コマンドパレット・タグとサイドバー・プレビュー・ターミナルとエディタ連携の全部／映すフォルダは架空のサンプルを用意する、とした
+- **意図・方針**
+  - create-demo-video は Web アプリ向け（ヘッドレス Chrome で撮る）なので、Macorn では Debug ビルドの自動操作で画面を作り、合図ごとにウィンドウを撮る形にした（`promo/capture/capture.py`）。ウィンドウは 1280×720 で撮って 1920×1080 にする。利用者のキー入力を奪わず、別のデスクトップにあっても撮れる
+  - 見えていないデスクトップのウィンドウを撮ると、Web の表示（Markdown のプレビュー）が空になり、パレット・ポップオーバーは後ろまで写る。これらはアプリが自分で描いた画像を重ねる。パレットを開いている間は本体も撮れないことがあるので、開く前に下地を撮っておく
+  - 実在の顧客名や個人のフォルダを映さないよう、`/Users/Shared/MacornDemo` に架空の開発プロジェクト一式を作るスクリプトを用意した（`promo/sample/make-sample.sh`）
+  - 撮影では、設定・タグ・履歴に普段とは別の保存先を使う。アクセントの色はブランドのリスの色、外観はダーク
+  - 動画は Remotion（スキルのひな形）で、タイトル → 6場面 → 締めの約 72 秒。色はブランドの紺・クリーム・オレンジにした
+  - LP は Vercel にそのまま置ける静的な HTML と CSS（`site/`）。画面写真・動画・SNS 用の画像は `promo/build-site-assets.sh` で作る。配布方法はまだ決まっていないので「近日公開」とした。公開（Vercel への配置）は行っていない
+- 追加 `promo/sample/make-sample.sh`、`promo/capture/`（撮影スクリプトと手順）、`promo/video/`（Remotion のプロジェクト）、`promo/build-site-assets.sh` — 撮影・動画・LP 用の画像
+- 追加 `site/` — LP（`index.html`・`style.css`・`vercel.json`・`assets/`）。PC とスマートフォンの幅で表示を確かめた
+- 追加 `.claude/launch.json` — LP を手元で見るためのサーバー（python3 -m http.server）
+- 変更 `.gitignore` — Remotion の node_modules と書き出しを除く
+- 変更 `AGENTS.md`、`README.md` — フォルダ構成、紹介動画と LP の作り方
+
+### Macorn：撮影の準備で見つかった不具合を直し、自動操作が普段の設定を使わないようにする
+
+- **きっかけ**：紹介動画の撮影の準備（上の作業）で見つかったもの
+- **意図・方針**
+  - プレビューを閉じたあと、一覧の上に境目の線が残っていた。閉じるときはプレビューを分割から外すようにした
+  - 別のフォルダへ移っても、前のフォルダのファイルのプレビューが出たままだった。移ったときにプレビューを更新する
+  - TypeScript（.ts）のファイルを、拡張子が同じ動画（MPEG-2 TS）としてプレビューしていた。.ts・.tsx などはプレビューしない
+  - タグの列で、タグが多いと2行に折り返していた。1行に収め、はみ出したら末尾を省略する
+  - 自動操作（MACORN_DEBUG_STEPS）が、終了時に利用者の前回のウィンドウを上書きし、起動時にも前回のウィンドウを開いていた。自動操作では前回のウィンドウを開かず、保存もしない
+  - MACORN_DEFAULTS_SUITE を指定した自動操作では、サイドバーだけでなく表示の設定（プレビュー・テーマ・列など）も別の保存先を使う（`AppDefaults`）
+  - 撮影用の手順を足した（winsize・shot・closepopover・splitinfo）
+- 追加 `Macorn/App/AppDefaults.swift` — 設定の保存先
+- 変更 `Macorn/Browser/FileBrowserViewController.swift`、`FileBrowserViewController+Preview.swift` — プレビューの境目の線、移ったときのプレビュー
+- 変更 `Macorn/Preview/FilePreviewController.swift` — .ts をプレビューしない、撮影用に Web の表示を返す
+- 変更 `Macorn/Browser/FileCellView.swift` — タグの列を1行に
+- 変更 `Macorn/App/AppDelegate.swift` — 自動操作では前回のウィンドウを開かず、保存もしない
+- 変更 `Macorn/Model/Preferences.swift`、`Macorn/Settings/Theme.swift`・`SettingsView.swift`・`ShortcutStore.swift`、`Macorn/Sidebar/SidebarStore.swift`・`SidebarViewController.swift`、`Macorn/Palette/PaletteModel.swift`、`Macorn/Window/BrowserWindowController.swift` — 設定の保存先を `AppDefaults` に
+- 変更 `Macorn/App/DebugAutomation.swift` — 撮影用の手順
+- 変更 `MacornTests/MarkdownRendererTests.swift` — .ts をプレビューしないテスト（合計 124 件）
+
+### Macorn：お気に入り・セクションに置いたタグは、一番下の階層の名前だけを出す
+
+- **きっかけ**：konta の指摘（スクリーンショットつき）「セクション化のタグが二重でセクション表示されていて不自然。"会社A/" の部分は不要」。「会社A」というセクションの中に「会社A/案件A」と出ていた
+- **意図・方針**：お気に入り・自分で作ったセクションに置いたタグの行は、「タグ」の一覧と同じく一番下の階層の名前（「案件A」）だけを出す。階層を含む名前はマウスを乗せたときの説明に出す。表示名を自分で付けた場合はそちらを優先する
+- 変更 `Macorn/Sidebar/SidebarViewController.swift` — 置いたタグの行の名前と説明
+
 ### Macorn：タグの並び順をドラッグで変えられるようにする
 
 - **きっかけ**：konta の指摘「タグなどの並び順を入れ替えられない」

@@ -74,11 +74,11 @@ enum CommandUsage {
         let name = NSStringFromSelector(action)
         let count = (usage[name]?.first ?? 0) + 1
         usage[name] = [count, Date().timeIntervalSince1970]
-        UserDefaults.standard.set(usage, forKey: key)
+        AppDefaults.store.set(usage, forKey: key)
     }
 
     static var all: [String: [Double]] {
-        UserDefaults.standard.dictionary(forKey: key) as? [String: [Double]] ?? [:]
+        AppDefaults.store.dictionary(forKey: key) as? [String: [Double]] ?? [:]
     }
 }
 
