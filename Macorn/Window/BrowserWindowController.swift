@@ -121,14 +121,13 @@ final class BrowserWindowController: NSWindowController {
         toggleFavorites([browser.state.currentURL])
     }
 
-    /// お気に入りの対象: 選択中のフォルダ。何も選んでいなければ表示中のフォルダ。
-    /// ファイルだけを選んでいるときは対象なし（お気に入りはフォルダだけ）
+    /// お気に入りの対象: 選択中の項目（フォルダもファイルも）。何も選んでいなければ表示中のフォルダ
     private var favoriteTargets: [URL] {
         let selected = browser.selectedNodes
         if selected.isEmpty {
             return browser.state.currentURL.isFileURL ? [browser.state.currentURL] : []
         }
-        return selected.filter(\.entry.isFolder).map(\.url)
+        return selected.map(\.url)
     }
 
     private func toggleFavorites(_ urls: [URL]) {

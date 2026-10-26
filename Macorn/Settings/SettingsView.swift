@@ -417,7 +417,7 @@ private struct SidebarSettingsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("セクションはドラッグで並べ替えられます。チェックを外すと隠れます。タグを1つのセクションとして置くこともできます。")
+            Text("セクションはドラッグで並べ替えられます。チェックを外すと隠れます。タグを1つのセクションとして置いたり、自分でセクションを作ったりできます。")
                 .font(.callout)
                 .foregroundStyle(.secondary)
             List {
@@ -441,6 +441,22 @@ private struct SidebarSettingsView: View {
                             .buttonStyle(.borderless)
                             .help("このタグのセクションを外す")
                         }
+                        if case .custom(let id) = section {
+                            Button {
+                                SidebarPrompts.renameSection(id, in: store)
+                            } label: {
+                                Image(systemName: "pencil")
+                            }
+                            .buttonStyle(.borderless)
+                            .help("名前を変更")
+                            Button {
+                                SidebarPrompts.deleteSection(id, in: store)
+                            } label: {
+                                Image(systemName: "minus.circle")
+                            }
+                            .buttonStyle(.borderless)
+                            .help("このセクションを削除")
+                        }
                     }
                 }
                 .onMove { store.moveSections(from: $0, to: $1) }
@@ -453,10 +469,11 @@ private struct SidebarSettingsView: View {
                 }
                 .disabled(tags.sortedTags.allSatisfy { store.containsTagSection($0.id) })
                 .fixedSize()
+                Button("セクションを作る…") { SidebarPrompts.createSection(in: store) }
                 Spacer()
                 Button("元に戻す") { store.resetSections() }
             }
-            Text("お気に入りには、フォルダのほかにタグも入れられます（サイドバーのタグを右クリック ›「お気に入りに追加」）。お気に入りの中の順番はサイドバーでドラッグして変えられます。")
+            Text("お気に入りは「お気に入り」のタグが付いた項目の一覧です。自分で作るセクションは、タグ・フォルダ・ファイルをまとめる見出しで、項目には何も付きません。お気に入りと自分で作ったセクションにはタグも置けます（1つのタグは1か所だけ）。中の順番や置き場所はサイドバーでドラッグして変えられます。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -469,6 +486,7 @@ private struct SidebarSettingsView: View {
         case .tags: "tag"
         case .locations: "externaldrive"
         case .tag: "tag.fill"
+        case .custom: "rectangle.stack"
         }
     }
 }

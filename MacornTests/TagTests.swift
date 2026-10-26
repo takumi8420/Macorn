@@ -30,7 +30,7 @@ final class TagStoreTests {
         #expect(child.leafName == "案件A")
         #expect(child.depth == 1)
         #expect(store.tag(named: "仕事") != nil)
-        #expect(store.rootTags.map(\.name) == ["仕事"])
+        #expect(store.rootTags.map(\.name) == ["お気に入り", "仕事"])
         #expect(store.children(of: store.tag(named: "仕事")!).map(\.name) == ["仕事/案件A"])
         // 同じ名前（大文字・小文字の違いも）なら作らずに既存のものを返す
         #expect(store.createTag(named: "仕事/案件a")?.id == child.id)
@@ -102,13 +102,45 @@ final class TagStoreTests {
         #expect(!store.renameTag(parent.id, to: "業務/案件A/中"))
     }
 
+    @Test func favoritesTagIsBuiltIn() throws {
+        let store = TagStore(fileURL: fileURL)
+        let favorites = try #require(store.tag(id: TagStore.favoritesID))
+        #expect(favorites.name == "お気に入り")
+        // 名前の変更・削除・ほかのタグの下への移動はできない
+        #expect(!store.renameTag(favorites.id, to: "好き"))
+        store.deleteTag(favorites.id)
+        #expect(store.tag(id: TagStore.favoritesID) != nil)
+        let work = try #require(store.createTag(named: "仕事"))
+        #expect(!store.canMoveTag(favorites.id, under: work.id))
+        // ふつうのタグと同じように付け外しでき、フォルダの色分けには使わない
+        store.assign(favorites.id, to: [url("project")])
+        #expect(store.hasTag(favorites.id, on: url("project")))
+        #expect(store.folderColor(for: url("project")) == nil || !Preferences.colorFoldersByTag)
+        store.assign(work.id, to: [url("project")])
+        #expect(store.folderColor(for: url("project")) == work.color || !Preferences.colorFoldersByTag)
+    }
+
+    @Test func adoptsExistingFavoritesTag() throws {
+        // 以前に自分で「お気に入り」というタグを作っていたら、それを「お気に入り」のタグにする（付けた項目もそのまま）
+        let oldID = UUID()
+        let library = TagLibrary(
+            tags: [Tag(id: oldID, name: "お気に入り", color: "#0A84FF")],
+            items: [TaggedItem(path: TagStore.key(url("b.txt")), bookmark: nil, tagIDs: [oldID])]
+        )
+        try JSONEncoder().encode(library).write(to: fileURL)
+        let store = TagStore(fileURL: fileURL)
+        #expect(store.tags.count == 1)
+        #expect(store.tag(id: TagStore.favoritesID)?.color == "#0A84FF")
+        #expect(store.hasTag(TagStore.favoritesID, on: url("b.txt")))
+    }
+
     @Test func deletingRemovesChildrenAndAssignments() throws {
         let store = TagStore(fileURL: fileURL)
         let child = try #require(store.createTag(named: "仕事/案件A"))
         let parent = try #require(store.tag(named: "仕事"))
         store.assign(child.id, to: [url("b.txt")])
         store.deleteTag(parent.id)
-        #expect(store.tags.isEmpty)
+        #expect(store.tags.map(\.id) == [TagStore.favoritesID])
         #expect(store.tags(for: url("b.txt")).isEmpty)
     }
 

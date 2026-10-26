@@ -821,10 +821,8 @@ extension FileBrowserViewController: NSMenuDelegate {
 
         menu.addItem(.separator())
         menu.addItem(menuItem("Finder で表示", #selector(revealInFinder(_:)), urls))
-        if !folders.isEmpty {
-            let allFavorite = folders.allSatisfy(SidebarStore.shared.containsFavorite)
-            menu.addItem(menuItem(allFavorite ? "お気に入りから外す" : "お気に入りに追加", #selector(addToSidebarFromMenu(_:)), folders))
-        }
+        let allFavorite = urls.allSatisfy(SidebarStore.shared.containsFavorite)
+        menu.addItem(menuItem(allFavorite ? "お気に入りから外す" : "お気に入りに追加", #selector(addToSidebarFromMenu(_:)), urls))
         for item in menu.items where item.target == nil && item.action != nil {
             item.target = self
         }

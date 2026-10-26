@@ -75,12 +75,14 @@ enum DebugAutomation {
                 snapshotView(sidebarView, to: outDir.appendingPathComponent("sidebar.png"))
             }
         case "sbdrop":
-            // sbdrop:<ドラッグするもの>|<置き先の行 ID か root>|<何番目か（-1 は行の上）>
-            let parts = argument.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
-            if parts.count == 3, let split = controller.contentViewController as? NSSplitViewController,
+            // sbdrop:<ドラッグするもの>><置き先の行 ID か root>><何番目か（-1 は行の上）>[>copy]
+            let parts = argument.components(separatedBy: ">")
+            if parts.count >= 3, let split = controller.contentViewController as? NSSplitViewController,
                let sidebar = split.splitViewItems.first?.viewController as? SidebarViewController {
-                print("[debug] sbdrop \(argument) → \(sidebar.debugDrop(drag: parts[0], onto: parts[1], index: Int(parts[2]) ?? -1))")
+                print("[debug] sbdrop \(argument) → \(sidebar.debugDrop(drag: parts[0], onto: parts[1], index: Int(parts[2]) ?? -1, copy: parts.count > 3))")
             }
+        case "mksection":
+            SidebarStore.shared.createSection(named: argument)
         case "sbrows":
             if let split = controller.contentViewController as? NSSplitViewController,
                let sidebar = split.splitViewItems.first?.viewController as? SidebarViewController {

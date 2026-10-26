@@ -1,12 +1,13 @@
 import AppKit
 import Observation
 
-/// サイドバーの1行。セクションの見出し・お気に入り・タグ・場所・タグのセクションの項目。
+/// サイドバーの1行。セクションの見出し・置いた項目（お気に入り・自分で作ったセクション）・タグ・場所・タグのセクションの項目。
 /// NSOutlineView は行をオブジェクトの同一性で覚えるため、作り直しても同じ ID なら同じオブジェクトを使う。
 final class SidebarNode {
     enum Kind {
         case section(SidebarSection)
-        case favorite(SidebarItem)
+        /// お気に入り・自分で作ったセクションに置いた項目（フォルダ・ファイル・タグ）
+        case placed(SidebarItem, in: SidebarSection)
         case tag(Tag)
         case volume(SidebarItem)
         case taggedItem(URL)
@@ -33,14 +34,16 @@ private enum SidebarDrag {
     static let type = NSPasteboard.PasteboardType("dev.macorn.sidebar-item")
 
     case section(SidebarSection)
+    /// 「タグ」の一覧のタグ
     case tag(UUID)
-    case favorite(String)
+    /// お気に入り・自分で作ったセクションに置いた項目
+    case placed(SidebarSection, String)
 
     var string: String {
         switch self {
         case .section(let section): "section:" + section.id
         case .tag(let id): "tag:" + id.uuidString
-        case .favorite(let id): "favorite:" + id
+        case .placed(let section, let id): "placed:" + section.id + "|" + id
         }
     }
 
@@ -49,8 +52,9 @@ private enum SidebarDrag {
             self = .section(section)
         } else if string.hasPrefix("tag:"), let id = UUID(uuidString: String(string.dropFirst(4))) {
             self = .tag(id)
-        } else if string.hasPrefix("favorite:") {
-            self = .favorite(String(string.dropFirst(9)))
+        } else if string.hasPrefix("placed:"), let bar = string.firstIndex(of: "|"),
+                  let section = SidebarSection(id: String(string[string.index(string.startIndex, offsetBy: 7)..<bar])) {
+            self = .placed(section, String(string[string.index(after: bar)...]))
         } else {
             return nil
         }
@@ -58,7 +62,7 @@ private enum SidebarDrag {
 }
 
 /// サイドバー（Finder や メール と同じ NSOutlineView のソースリスト）。
-/// 見出し・タグ・お気に入りはドラッグで並べ替えられ、ドラッグ中は行が動いて置き場所が空く。
+/// 見出し・タグ・置いた項目はドラッグで並べ替え・移動でき、ドラッグ中は行が動いて置き場所が空く。
 final class SidebarViewController: NSViewController {
     private let store: SidebarStore
     private let tags: TagStore
@@ -107,11 +111,12 @@ final class SidebarViewController: NSViewController {
         // ドラッグ＆ドロップ: 行の間に置き場所を空けて見せる（Finder のサイドバーと同じ動き）
         outlineView.registerForDraggedTypes([SidebarDrag.type, .fileURL])
         outlineView.draggingDestinationFeedbackStyle = .gap
-        // 置き先が .move を返すので「＋」は出ない。項目（タグのセクションのファイル）を一覧へ落とす場合に備えて、ほかの操作も許す
+        // ふつうは「移動」なので「＋」は出ない。⌥ を押すと「コピー」（元の場所にも残す）
         outlineView.setDraggingSourceOperationMask([.move, .copy, .link, .generic], forLocal: true)
         outlineView.setDraggingSourceOperationMask([.copy, .link, .generic], forLocal: false)
 
         contextMenu.delegate = self
+        contextMenu.autoenablesItems = false
         outlineView.menu = contextMenu
 
         let scrollView = NSScrollView()
@@ -139,6 +144,7 @@ final class SidebarViewController: NSViewController {
     private func observeSidebarStore() {
         withObservationTracking {
             _ = store.favorites
+            _ = store.customSections
             _ = store.sections
             _ = store.hiddenSections
             _ = store.volumes
@@ -170,13 +176,17 @@ final class SidebarViewController: NSViewController {
         node("tag:" + tag.id.uuidString, .tag(tag), children: tags.children(of: tag).map { tagNode($0) })
     }
 
+    private static func placedID(_ item: SidebarItem, in section: SidebarSection) -> String {
+        "placed:" + section.id + "|" + item.id
+    }
+
     private func buildTree() -> [SidebarNode] {
         store.visibleSections.map { section in
             var children: [SidebarNode]
             switch section {
-            case .favorites:
-                children = store.favorites.map { node("favorite:" + $0.id, .favorite($0)) }
-                if children.isEmpty { children = [node("hint:favorites", .hint("フォルダやタグをここへドラッグ"))] }
+            case .favorites, .custom:
+                children = store.items(in: section).map { node(Self.placedID($0, in: section), .placed($0, in: section)) }
+                if children.isEmpty { children = [node("hint:" + section.id, .hint("タグやフォルダをここへドラッグ"))] }
             case .tags:
                 children = tags.rootTags.map(tagNode)
                 if children.isEmpty { children = [node("hint:tags", .hint("項目を右クリック ›「タグ」で作れます"))] }
@@ -213,16 +223,16 @@ final class SidebarViewController: NSViewController {
     /// 表示中のフォルダ（またはタグ）に当たる行を選択状態にする
     func syncSelection() {
         let url = window.activePane.currentURL
-        let wanted: String? = TagLocation.tagID(from: url).map { "tag:" + $0.uuidString }
+        let wanted = TagLocation.tagID(from: url)
         var match: SidebarNode?
         func visit(_ nodes: [SidebarNode]) {
             for node in nodes where match == nil {
                 switch node.kind {
-                case .favorite(let item):
-                    if let wanted, item.tagID != nil, "tag:" + item.tagID!.uuidString == wanted { match = node }
+                case .placed(let item, _):
+                    if let wanted, item.tagID == wanted { match = node }
                     if wanted == nil, item.tagID == nil, item.url.path == url.path { match = node }
                 case .tag(let tag):
-                    if wanted == "tag:" + tag.id.uuidString { match = node }
+                    if wanted == tag.id { match = node }
                 case .volume(let item):
                     if wanted == nil, item.url.path == url.path { match = node }
                 case .taggedItem(let itemURL):
@@ -253,7 +263,7 @@ final class SidebarViewController: NSViewController {
 
     private func open(_ node: SidebarNode) {
         switch node.kind {
-        case .favorite(let item): onSelect(item.url)
+        case .placed(let item, _): onSelect(item.url)
         case .tag(let tag): onSelect(TagLocation.url(for: tag.id))
         case .volume(let item): onSelect(item.url)
         case .taggedItem(let url): onSelect(url)
@@ -294,21 +304,31 @@ extension SidebarViewController: NSOutlineViewDataSource {
         switch node.kind {
         case .section(let section): drag = .section(section)
         case .tag(let tag): drag = .tag(tag.id)
-        case .favorite(let item): drag = .favorite(item.id)
+        case .placed(let item, let section): drag = .placed(section, item.id)
         case .taggedItem(let url): return url as NSURL
         default: return nil
         }
         let pasteboardItem = NSPasteboardItem()
         pasteboardItem.setString(drag.string, forType: SidebarDrag.type)
+        // フォルダ・ファイルは、一覧やほかのアプリへも落とせるようにパスも載せる
+        if case .placed(let item, _) = node.kind, item.tagID == nil {
+            pasteboardItem.setString(item.url.absoluteString, forType: .fileURL)
+        }
         return pasteboardItem
     }
 
     func outlineView(_ outlineView: NSOutlineView, validateDrop info: any NSDraggingInfo, proposedItem item: Any?, proposedChildIndex index: Int) -> NSDragOperation {
-        validateDrop(info.draggingPasteboard, target: item as? SidebarNode, index: index)
+        validateDrop(info.draggingPasteboard, target: item as? SidebarNode, index: index, copy: Self.isCopy(info))
     }
 
     func outlineView(_ outlineView: NSOutlineView, acceptDrop info: any NSDraggingInfo, item: Any?, childIndex index: Int) -> Bool {
-        acceptDrop(info.draggingPasteboard, target: item as? SidebarNode, index: index)
+        acceptDrop(info.draggingPasteboard, target: item as? SidebarNode, index: index, copy: Self.isCopy(info))
+    }
+
+    /// ⌥ を押しながらのドロップ（元の場所にも残す）
+    private static func isCopy(_ info: any NSDraggingInfo) -> Bool {
+        let mask = info.draggingSourceOperationMask
+        return mask.contains(.copy) && !mask.contains(.move)
     }
 
     /// 置き先を変える（行の上・行の間）。デバッグ用に最後の置き先も覚えておく
@@ -317,24 +337,33 @@ extension SidebarViewController: NSOutlineViewDataSource {
         outlineView.setDropItem(node, dropChildIndex: index)
     }
 
-    private func validateDrop(_ pasteboard: NSPasteboard, target: SidebarNode?, index: Int) -> NSDragOperation {
+    private func validateDrop(_ pasteboard: NSPasteboard, target: SidebarNode?, index: Int, copy: Bool) -> NSDragOperation {
         lastRetarget = (target, index)
         if let string = pasteboard.string(forType: SidebarDrag.type), let drag = SidebarDrag(string) {
-            return validateInternalDrop(drag, target: target, index: index)
+            return validateInternalDrop(drag, target: target, index: index, copy: copy)
         }
         let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
-        guard !urls.isEmpty else { return [] }
-        return validateFileDrop(urls, target: target, index: index)
+        guard !urls.isEmpty, let target else { return [] }
+        // タグの上へ置くとそのタグを付け、お気に入り・自分で作ったセクションへ置くとその位置に入れる
+        if let assign = assignTarget(target: target, index: index) {
+            retarget(assign.node, dropChildIndex: NSOutlineViewDropOnItemIndex)
+            return .link
+        }
+        if let place = placementTarget(target: target, index: index) {
+            retarget(place.node, dropChildIndex: place.index)
+            return .link
+        }
+        return []
     }
 
-    private func validateInternalDrop(_ drag: SidebarDrag, target: SidebarNode?, index: Int) -> NSDragOperation {
+    private func validateInternalDrop(_ drag: SidebarDrag, target: SidebarNode?, index: Int, copy: Bool) -> NSDragOperation {
         switch drag {
         case .section:
             // 見出しどうしの間にだけ置ける
             return retargetBetweenSections(target: target, index: index) ? .move : []
         case .tag(let id):
-            if let favorites = favoritesTarget(target: target, index: index) {
-                retarget(favorites.node, dropChildIndex: favorites.index)
+            if let place = placementTarget(target: target, index: index) {
+                retarget(place.node, dropChildIndex: place.index)
                 return .move
             }
             // 「タグ」の中: ほかのタグの上なら、その下の階層へ。見出しの上なら、いちばん上の階層へ
@@ -346,23 +375,48 @@ extension SidebarViewController: NSOutlineViewDataSource {
             // 見出しの間に置くと、そのタグのセクションになる（自分のセクションの中は除く）
             if let target, let section = sectionNode(containing: target), section.section == .tag(id) { return [] }
             return retargetBetweenSections(target: target, index: index) ? .move : []
-        case .favorite:
-            guard let favorites = favoritesTarget(target: target, index: index) else { return [] }
-            retarget(favorites.node, dropChildIndex: favorites.index)
-            return .move
+        case .placed(let from, let id):
+            guard let item = store.items(in: from).first(where: { $0.id == id }) else { return [] }
+            // フォルダ・ファイルをタグの上へ置くと、そのタグへ移す（⌥ なら元の場所にも残す）
+            if item.tagID == nil, let target, let assign = assignTarget(target: target, index: index) {
+                retarget(assign.node, dropChildIndex: NSOutlineViewDropOnItemIndex)
+                return copy ? .copy : .move
+            }
+            guard let place = placementTarget(target: target, index: index) else { return [] }
+            retarget(place.node, dropChildIndex: place.index)
+            // タグは1か所にしか置けないので、いつも移動
+            return copy && item.tagID == nil && place.node.section != from ? .copy : .move
         }
     }
 
-    /// お気に入りの中に置くときの、置き先（お気に入りの見出しと何番目か）
-    private func favoritesTarget(target: SidebarNode?, index: Int) -> (node: SidebarNode, index: Int)? {
-        guard let target, let section = sectionNode(containing: target), section.section == .favorites else { return nil }
-        let count = store.favorites.count
+    /// お気に入り・自分で作ったセクションの中に置くときの、置き先（見出しと何番目か）。
+    /// 行の上に置いたら、その行の前に入れる
+    private func placementTarget(target: SidebarNode?, index: Int) -> (node: SidebarNode, index: Int)? {
+        guard let target, let section = sectionNode(containing: target), let kind = section.section, kind.holdsItems else { return nil }
+        let count = store.items(in: kind).count
         if target === section {
             return (section, index == NSOutlineViewDropOnItemIndex ? count : min(index, count))
         }
-        // お気に入りの行の上に置いたら、その行の前に入れる
         let position = section.children.firstIndex { $0 === target } ?? count
         return (section, min(position, count))
+    }
+
+    /// タグを付ける置き先: 「タグ」のタグの行、タグのセクション（見出しと中の項目）、
+    /// お気に入り・自分で作ったセクションに置いたタグの行の上
+    private func assignTarget(target: SidebarNode, index: Int) -> (node: SidebarNode, tagID: UUID)? {
+        guard let section = sectionNode(containing: target), let kind = section.section else { return nil }
+        switch kind {
+        case .favorites, .custom:
+            guard index == NSOutlineViewDropOnItemIndex, case .placed(let item, _) = target.kind, let tagID = item.tagID else { return nil }
+            return (target, tagID)
+        case .tags:
+            guard case .tag(let tag) = target.kind else { return nil }
+            return (target, tag.id)
+        case .tag(let id):
+            return (section, id)
+        case .locations:
+            return nil
+        }
     }
 
     /// 「タグ」のセクションの中に置くときの、新しい親（タグの行ならそのタグ、見出しや空き場所なら nil ＝いちばん上）
@@ -374,59 +428,42 @@ extension SidebarViewController: NSOutlineViewDataSource {
 
     /// 見出しの間（ルート）に置き先を合わせる。セクションの中に入ったら、そのセクションの前にする
     private func retargetBetweenSections(target: SidebarNode?, index: Int) -> Bool {
-        if target == nil {
-            return index != NSOutlineViewDropOnItemIndex
-        }
-        guard let section = sectionNode(containing: target!), let position = roots.firstIndex(where: { $0 === section }) else { return false }
+        guard let target else { return index != NSOutlineViewDropOnItemIndex }
+        guard let section = sectionNode(containing: target), let position = roots.firstIndex(where: { $0 === section }) else { return false }
         retarget(nil, dropChildIndex: position)
         return true
     }
 
-    private func validateFileDrop(_ urls: [URL], target: SidebarNode?, index: Int) -> NSDragOperation {
-        guard let target else { return [] }
-        // タグの行・お気に入りのタグ・タグのセクションへ置くと、そのタグを付ける
-        if let tagID = tagID(for: target) {
-            retarget(target, dropChildIndex: NSOutlineViewDropOnItemIndex)
-            _ = tagID
-            return .link
-        }
-        // お気に入りへ置くと、フォルダをその位置に入れる
-        if urls.contains(where: FileTransfer.isDirectory), let favorites = favoritesTarget(target: target, index: index) {
-            retarget(favorites.node, dropChildIndex: favorites.index)
-            return .link
-        }
-        return []
-    }
-
+    /// 置き先（ドロップ確定時の行）が指すタグ。タグを付けるドロップかどうかの判定に使う
     private func tagID(for node: SidebarNode) -> UUID? {
         switch node.kind {
         case .tag(let tag): return tag.id
-        case .favorite(let item): return item.tagID
+        case .placed(let item, _): return item.tagID
         case .section(.tag(let id)): return id
         default: return nil
         }
     }
 
-    private func acceptDrop(_ pasteboard: NSPasteboard, target: SidebarNode?, index: Int) -> Bool {
+    private func acceptDrop(_ pasteboard: NSPasteboard, target: SidebarNode?, index: Int, copy: Bool) -> Bool {
         if let string = pasteboard.string(forType: SidebarDrag.type), let drag = SidebarDrag(string) {
-            return acceptInternalDrop(drag, target: target, index: index)
+            return acceptInternalDrop(drag, target: target, index: index, copy: copy)
         }
         let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
         guard let target, !urls.isEmpty else { return false }
-        if let tagID = tagID(for: target) {
+        if index == NSOutlineViewDropOnItemIndex, let tagID = tagID(for: target) {
             tags.assign(tagID, to: urls)
             return true
         }
-        if target.section == .favorites {
-            for (offset, url) in urls.filter(FileTransfer.isDirectory).enumerated() {
-                store.addFavorite(url, at: index + offset)
+        if let section = target.section, section.holdsItems {
+            for (offset, url) in urls.enumerated() {
+                store.placeURL(url, in: section, at: index + offset)
             }
             return true
         }
         return false
     }
 
-    private func acceptInternalDrop(_ drag: SidebarDrag, target: SidebarNode?, index: Int) -> Bool {
+    private func acceptInternalDrop(_ drag: SidebarDrag, target: SidebarNode?, index: Int, copy: Bool) -> Bool {
         // ルートの index 番目の見出しの前（最後なら nil）
         let sectionBefore: SidebarSection? = target == nil && index < roots.count ? roots[index].section : nil
         switch drag {
@@ -434,8 +471,8 @@ extension SidebarViewController: NSOutlineViewDataSource {
             guard target == nil else { return false }
             if let sectionBefore { store.moveSection(section, before: sectionBefore) } else { store.moveSectionToEnd(section) }
         case .tag(let id):
-            if target?.section == .favorites {
-                store.addFavoriteTag(id, at: index)
+            if let section = target?.section, section.holdsItems {
+                store.placeTag(id, in: section, at: index)
             } else if let target, let parent = tagParentTarget(target: target) {
                 if parent.parentID != nil { collapsedTagIDs.remove(parent.node.id) }
                 return tags.moveTag(id, under: parent.parentID)
@@ -444,9 +481,23 @@ extension SidebarViewController: NSOutlineViewDataSource {
             } else {
                 return false
             }
-        case .favorite(let id):
-            guard target?.section == .favorites else { return false }
-            store.moveFavorite(id: id, to: index)
+        case .placed(let from, let id):
+            guard let item = store.items(in: from).first(where: { $0.id == id }), let target else { return false }
+            if index == NSOutlineViewDropOnItemIndex, item.tagID == nil, let tagID = tagID(for: target) {
+                // タグへ移す。お気に入りからなら「お気に入り」のタグは外れる
+                tags.assign(tagID, to: [item.url])
+                if !copy, !(from == .favorites && tagID == TagStore.favoritesID) { store.removeItem(id: id, from: from) }
+                return true
+            }
+            guard let section = target.section, section.holdsItems else { return false }
+            if section == from {
+                store.moveItem(id: id, in: section, to: index)
+            } else if let tagID = item.tagID {
+                store.placeTag(tagID, in: section, at: index)
+            } else {
+                store.placeURL(item.url, in: section, at: index)
+                if !copy { store.removeItem(id: id, from: from) }
+            }
         }
         return true
     }
@@ -454,8 +505,6 @@ extension SidebarViewController: NSOutlineViewDataSource {
 
 #if DEBUG
 extension SidebarViewController {
-    /// デバッグ用: ドラッグ＆ドロップを、本物と同じ確認・処理の流れで行う。
-    /// drag は "section:tags" "tag:<名前>" "favorite:<パス>"、onto は行の ID（"section:favorites" "tag:<名前>" など）か "root"
     /// デバッグ用: 表示中の行（字下げ＝階層）
     func debugRows() -> String {
         (0..<outlineView.numberOfRows).compactMap { row in
@@ -464,7 +513,7 @@ extension SidebarViewController {
             let title: String
             switch node.kind {
             case .section(let section): title = "[" + section.title + "]"
-            case .favorite(let item): title = item.name
+            case .placed(let item, _): title = (item.tagID != nil ? "#" : "") + item.name
             case .tag(let tag): title = "#" + tag.leafName
             case .volume(let item): title = item.name
             case .taggedItem(let url): title = url.lastPathComponent
@@ -474,20 +523,31 @@ extension SidebarViewController {
         }.joined(separator: " / ")
     }
 
-    func debugDrop(drag: String, onto: String, index: Int) -> String {
+    /// デバッグ用: ドラッグ＆ドロップを、本物と同じ確認・処理の流れで行う。
+    /// drag は "section:tags" "tag:<名前>" "placed:favorites|<パス>"、onto は行の ID か "root"。
+    /// 名前で書いたタグ（tag:仕事）とセクション（custom:<名前>）は ID に直す
+    func debugDrop(drag: String, onto: String, index: Int, copy: Bool = false) -> String {
         func resolve(_ text: String) -> String {
-            guard text.hasPrefix("tag:"), UUID(uuidString: String(text.dropFirst(4))) == nil else { return text }
-            return tags.tag(named: String(text.dropFirst(4))).map { "tag:" + $0.id.uuidString } ?? text
+            var text = text
+            for section in store.customSections {
+                text = text.replacingOccurrences(of: "custom:" + section.name, with: "custom:" + section.id.uuidString)
+            }
+            if let range = text.range(of: "tag:"), UUID(uuidString: String(text[range.upperBound...])) == nil,
+               let tag = tags.tag(named: String(text[range.upperBound...])) {
+                text = String(text[..<range.upperBound]) + tag.id.uuidString
+            }
+            return text
         }
         let pasteboard = NSPasteboard(name: NSPasteboard.Name("dev.macorn.debug-drop"))
         pasteboard.clearContents()
         pasteboard.setString(resolve(drag), forType: SidebarDrag.type)
         let target: SidebarNode? = onto == "root" ? nil : nodeCache[resolve(onto)]
-        if onto != "root", target == nil { return "no-target" }
-        let operation = validateDrop(pasteboard, target: target, index: index)
+        if onto != "root", target == nil { return "no-target \(resolve(onto))" }
+        let operation = validateDrop(pasteboard, target: target, index: index, copy: copy)
         guard !operation.isEmpty else { return "refused" }
         let (node, retargetIndex) = lastRetarget
-        return acceptDrop(pasteboard, target: node, index: retargetIndex) ? "moved→\(node?.id ?? "root")@\(retargetIndex)" : "failed"
+        let done = acceptDrop(pasteboard, target: node, index: retargetIndex, copy: copy)
+        return done ? "\(operation == .copy ? "copied" : "moved")→\(node?.id ?? "root")@\(retargetIndex)" : "failed"
     }
 }
 #endif
@@ -538,7 +598,7 @@ extension SidebarViewController: NSOutlineViewDelegate {
         }
         let cell = outlineView.makeView(withIdentifier: SidebarCellView.identifier, owner: self) as? SidebarCellView ?? SidebarCellView()
         switch node.kind {
-        case .favorite(let item):
+        case .placed(let item, _):
             if let tagID = item.tagID {
                 let tag = tags.tag(id: tagID)
                 cell.configure(
@@ -546,6 +606,8 @@ extension SidebarViewController: NSOutlineViewDelegate {
                     symbol: "tag.fill", tint: NSColor(hex: tag?.color ?? "#8E8E93"),
                     count: tag.map { tags.count(for: $0.id) }, dimmed: tag == nil
                 )
+            } else if !item.isMissing, !FileTransfer.isDirectory(item.url) {
+                cell.configure(title: item.name, image: NSWorkspace.shared.icon(forFile: item.url.path))
             } else {
                 let color = tags.folderColor(for: item.url)
                 cell.configure(
@@ -587,12 +649,16 @@ extension SidebarViewController: NSMenuDelegate {
         menu.removeAllItems()
         let row = outlineView.clickedRow
         guard row >= 0, let node = outlineView.item(atRow: row) as? SidebarNode else {
+            menu.addItem(item("セクションを作る…") { [weak self] in
+                guard let self else { return }
+                SidebarPrompts.createSection(in: store)
+            })
             menu.addItem(item("サイドバーをカスタマイズ…") { SettingsWindowController.shared.show(tab: .sidebar) })
             return
         }
         switch node.kind {
         case .section(let section): sectionMenu(menu, section)
-        case .favorite(let favorite): favoriteMenu(menu, favorite)
+        case .placed(let placed, let section): placedMenu(menu, placed, in: section)
         case .tag(let tag): tagMenu(menu, tag)
         case .volume(let volume):
             if volume.isEjectable { menu.addItem(item("取り出す") { [weak self] in self?.store.eject(volume) }) }
@@ -611,9 +677,19 @@ extension SidebarViewController: NSMenuDelegate {
         down.isEnabled = visible.last != section
         [up, down].forEach(menu.addItem)
         menu.addItem(.separator())
-        if case .tag(let id) = section {
+        switch section {
+        case .tag(let id):
             menu.addItem(item("サイドバーから外す") { [weak self] in self?.store.removeTagSection(id) })
-        } else {
+        case .custom(let id):
+            menu.addItem(item("名前を変更…") { [weak self] in
+                guard let self else { return }
+                SidebarPrompts.renameSection(id, in: store)
+            })
+            menu.addItem(item("セクションを削除…") { [weak self] in
+                guard let self else { return }
+                SidebarPrompts.deleteSection(id, in: store)
+            })
+        default:
             menu.addItem(item("「\(section.title)」を隠す") { [weak self] in self?.store.setSection(section, hidden: true) })
         }
         if section == .tags {
@@ -623,35 +699,42 @@ extension SidebarViewController: NSMenuDelegate {
             })
         }
         menu.addItem(.separator())
+        menu.addItem(item("この上にセクションを作る…") { [weak self] in
+            guard let self else { return }
+            SidebarPrompts.createSection(before: section, in: store)
+        })
         menu.addItem(item("サイドバーをカスタマイズ…") { SettingsWindowController.shared.show(tab: .sidebar) })
     }
 
-    private func favoriteMenu(_ menu: NSMenu, _ favorite: SidebarItem) {
-        menu.addItem(item("名前を変更…") { [weak self] in
+    private func placedMenu(_ menu: NSMenu, _ placed: SidebarItem, in section: SidebarSection) {
+        menu.addItem(item("表示名を変更…") { [weak self] in
             guard let self else { return }
-            SidebarPrompts.renameFavorite(favorite, in: store)
+            SidebarPrompts.renameItem(placed, in: section, store: store)
         })
-        if favorite.customName != nil {
-            menu.addItem(item(favorite.tagID == nil ? "フォルダ名に戻す" : "タグの名前に戻す") { [weak self] in
-                self?.store.renameFavorite(favorite.url, to: "")
+        if placed.customName != nil {
+            menu.addItem(item(placed.tagID == nil ? "元の名前に戻す" : "タグの名前に戻す") { [weak self] in
+                self?.store.renameItem(id: placed.id, in: section, to: "")
             })
         }
-        if favorite.tagID == nil {
-            let reveal = item("Finder で表示") { NSWorkspace.shared.activateFileViewerSelecting([favorite.url]) }
-            reveal.isEnabled = !favorite.isMissing
+        if placed.tagID == nil {
+            let reveal = item("Finder で表示") { NSWorkspace.shared.activateFileViewerSelecting([placed.url]) }
+            reveal.isEnabled = !placed.isMissing
             menu.addItem(reveal)
         }
         menu.addItem(.separator())
-        menu.addItem(item("お気に入りから外す") { [weak self] in
-            if let tagID = favorite.tagID { self?.store.removeFavoriteTag(tagID) } else { self?.store.removeFavorite(favorite.url) }
+        menu.addItem(item(section == .favorites ? "お気に入りから外す" : "「\(section.title)」から外す") { [weak self] in
+            self?.store.removeItem(id: placed.id, from: section)
         })
     }
 
     private func tagMenu(_ menu: NSMenu, _ tag: Tag) {
-        menu.addItem(item("名前を変更…") { [weak self] in
+        let builtIn = TagStore.isBuiltIn(tag.id)
+        let rename = item("名前を変更…") { [weak self] in
             guard let self else { return }
             SidebarPrompts.renameTag(tag, in: tags)
-        })
+        }
+        rename.isEnabled = !builtIn
+        menu.addItem(rename)
         let colors = NSMenuItem(title: "色", action: nil, keyEquivalent: "")
         let colorMenu = NSMenu()
         let names = ["赤", "オレンジ", "黄", "緑", "青", "紫", "ピンク", "グレー"]
@@ -669,12 +752,17 @@ extension SidebarViewController: NSMenuDelegate {
             guard let self else { return }
             SidebarPrompts.createTag(parent: tag, in: tags)
         })
-        menu.addItem(parentMenuItem(for: tag))
+        if !builtIn { menu.addItem(parentMenuItem(for: tag)) }
         menu.addItem(.separator())
-        if store.containsFavoriteTag(tag.id) {
-            menu.addItem(item("お気に入りから外す") { [weak self] in self?.store.removeFavoriteTag(tag.id) })
-        } else {
-            menu.addItem(item("お気に入りに追加") { [weak self] in self?.store.addFavoriteTag(tag.id) })
+        if !builtIn {
+            if store.containsFavoriteTag(tag.id) {
+                menu.addItem(item("お気に入りから外す") { [weak self] in self?.store.removeFavoriteTag(tag.id) })
+            } else {
+                menu.addItem(item("お気に入りに置く") { [weak self] in self?.store.addFavoriteTag(tag.id) })
+            }
+        }
+        if !store.customSections.isEmpty {
+            menu.addItem(placeMenuItem(for: tag))
         }
         if store.containsTagSection(tag.id) {
             menu.addItem(item("サイドバーのセクションから外す") { [weak self] in self?.store.removeTagSection(tag.id) })
@@ -682,10 +770,31 @@ extension SidebarViewController: NSMenuDelegate {
             menu.addItem(item("サイドバーのセクションにする") { [weak self] in self?.store.addTagSection(tag.id) })
         }
         menu.addItem(.separator())
-        menu.addItem(item("タグを削除…") { [weak self] in
+        let delete = item("タグを削除…") { [weak self] in
             guard let self else { return }
             SidebarPrompts.deleteTag(tag, in: tags)
-        })
+        }
+        delete.isEnabled = !builtIn
+        menu.addItem(delete)
+    }
+
+    /// 「セクションに置く」: 自分で作ったセクションへタグを置く（1か所だけなので、ほかに置いてあれば移る）
+    private func placeMenuItem(for tag: Tag) -> NSMenuItem {
+        let placeItem = NSMenuItem(title: "セクションに置く", action: nil, keyEquivalent: "")
+        let submenu = NSMenu()
+        submenu.autoenablesItems = false
+        let current = store.placement(ofTag: tag.id)
+        for section in store.customSections {
+            let entry = item(section.name) { [weak self] in self?.store.placeTag(tag.id, in: .custom(section.id)) }
+            entry.state = current == .custom(section.id) ? .on : .off
+            submenu.addItem(entry)
+        }
+        if let current, case .custom = current {
+            submenu.addItem(.separator())
+            submenu.addItem(item("セクションから外す") { [weak self] in self?.store.removeItem(id: "tag:" + tag.id.uuidString, from: current) })
+        }
+        placeItem.submenu = submenu
+        return placeItem
     }
 
     /// 「親のタグ」: いちばん上か、ほかのタグの下へ移す（自分と自分の子孫は選べない）

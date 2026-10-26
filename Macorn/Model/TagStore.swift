@@ -50,7 +50,17 @@ final class TagStore {
     /// 新しいタグに順番に割り当てる色（赤・橙・黄・緑・青・紫・桃・灰）
     static let palette = ["#FF5F57", "#FF9F0A", "#FFD60A", "#32D74B", "#0A84FF", "#BF5AF2", "#FF6FAE", "#8E8E93"]
 
+    /// 最初から用意している「お気に入り」のタグ。ふつうのタグと同じように付け外しできるが、名前の変更・削除・移動はできない
+    static let favoritesID = UUID(uuidString: "00000000-0000-0000-0000-0000000FA001")!
+    static let favoritesName = "お気に入り"
+    static let favoritesColor = "#FFD60A"
+
+    /// 名前の変更・削除・ほかのタグの下への移動ができないタグか
+    static func isBuiltIn(_ id: UUID) -> Bool { id == favoritesID }
+
     private(set) var tags: [Tag] = []
+    /// 読み込んだときに「お気に入り」のタグが無く、新しく作ったか（お気に入りの引き継ぎに使う）
+    @ObservationIgnored private var createdFavoritesTag = false
     /// パス → タグを付けた項目。サイドバーの件数などが付け外しに合わせて変わるよう、変更を画面に知らせる
     private var itemsByPath: [String: TaggedItem] = [:]
     @ObservationIgnored private let fileURL: URL
@@ -70,6 +80,29 @@ final class TagStore {
             tags = library.tags
             itemsByPath = Dictionary(library.items.map { (Self.key($0.path), $0) }, uniquingKeysWith: { first, _ in first })
         }
+        ensureFavoritesTag()
+    }
+
+    /// 「お気に入り」のタグを用意する。同じ名前のタグを自分で作っていたら、それを「お気に入り」のタグにする
+    private func ensureFavoritesTag() {
+        guard tag(id: Self.favoritesID) == nil else { return }
+        if let index = tags.firstIndex(where: { $0.name == Self.favoritesName }) {
+            let oldID = tags[index].id
+            tags[index].id = Self.favoritesID
+            for path in itemsByPath.keys where itemsByPath[path]?.tagIDs.remove(oldID) != nil {
+                itemsByPath[path]?.tagIDs.insert(Self.favoritesID)
+            }
+        } else {
+            tags.append(Tag(id: Self.favoritesID, name: Self.favoritesName, color: Self.favoritesColor))
+            createdFavoritesTag = true
+        }
+        save(notify: false)
+    }
+
+    /// 「お気に入り」のタグを新しく作ったか。一度だけ true を返す
+    func consumeCreatedFavoritesTag() -> Bool {
+        defer { createdFavoritesTag = false }
+        return createdFavoritesTag
     }
 
     // MARK: - タグの定義
@@ -120,7 +153,7 @@ final class TagStore {
     @discardableResult
     func renameTag(_ id: UUID, to rawName: String) -> Bool {
         let newName = Self.normalize(rawName)
-        guard !newName.isEmpty, let old = tag(id: id) else { return false }
+        guard !newName.isEmpty, !Self.isBuiltIn(id), let old = tag(id: id) else { return false }
         if let other = tag(named: newName), other.id != id { return false }
         guard !newName.hasPrefix(old.name + "/") else { return false }
         for index in tags.indices where tags[index].isSelfOrDescendant(of: old.name) {
@@ -135,7 +168,7 @@ final class TagStore {
 
     /// 親のタグを変えられるか（自分や自分の子孫の下には入れない。同じ名前のタグが先にあるときも不可）
     func canMoveTag(_ id: UUID, under parentID: UUID?) -> Bool {
-        guard let tag = tag(id: id) else { return false }
+        guard !Self.isBuiltIn(id), let tag = tag(id: id) else { return false }
         var parentName: String?
         if let parentID {
             guard let parent = self.tag(id: parentID), !parent.isSelfOrDescendant(of: tag.name) else { return false }
@@ -162,7 +195,7 @@ final class TagStore {
 
     /// タグを削除する。子のタグもいっしょに削除し、項目からも外す。
     func deleteTag(_ id: UUID) {
-        guard let target = tag(id: id) else { return }
+        guard !Self.isBuiltIn(id), let target = tag(id: id) else { return }
         let removed = Set(tags.filter { $0.isSelfOrDescendant(of: target.name) }.map(\.id))
         tags.removeAll { removed.contains($0.id) }
         for path in itemsByPath.keys {
@@ -213,9 +246,9 @@ final class TagStore {
     }
 
     /// タグが付いている項目。子のタグが付いている項目も含める。見つからない項目は除く。
-    func urls(taggedWith id: UUID) -> [URL] {
+    func urls(taggedWith id: UUID, includingDescendants: Bool = true) -> [URL] {
         guard let target = tag(id: id) else { return [] }
-        let ids = Set(tags.filter { $0.isSelfOrDescendant(of: target.name) }.map(\.id))
+        let ids = includingDescendants ? Set(tags.filter { $0.isSelfOrDescendant(of: target.name) }.map(\.id)) : [id]
         return itemsByPath.values
             .filter { !$0.tagIDs.isDisjoint(with: ids) }
             .map { URL(fileURLWithPath: $0.path) }
@@ -233,7 +266,8 @@ final class TagStore {
     /// 設定で色分けを切っているとき、またはタグが無いときは nil
     func folderColor(for url: URL) -> String? {
         guard Preferences.colorFoldersByTag else { return nil }
-        return tags(for: url).first?.color
+        // 「お気に入り」はよく使うフォルダの多くに付くので、色分けには使わない
+        return tags(for: url).first { $0.id != Self.favoritesID }?.color
     }
 
     // MARK: - 移動・名前の変更への追従
@@ -284,7 +318,7 @@ final class TagStore {
         TagLibrary(tags: tags, items: Array(itemsByPath.values).sorted { $0.path < $1.path })
     }
 
-    private func save() {
+    private func save(notify: Bool = true) {
         do {
             try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             let encoder = JSONEncoder()
@@ -293,7 +327,7 @@ final class TagStore {
         } catch {
             NSLog("タグを保存できませんでした: \(error.localizedDescription)")
         }
-        NotificationCenter.default.post(name: .macornTagsChanged, object: nil)
+        if notify { NotificationCenter.default.post(name: .macornTagsChanged, object: self) }
     }
 }
 

@@ -37,13 +37,46 @@ enum SidebarPrompts {
         if alert.runModal() == .alertFirstButtonReturn { store.deleteTag(tag.id) }
     }
 
-    static func renameFavorite(_ item: SidebarItem, in store: SidebarStore) {
+    /// お気に入り・自分で作ったセクションの項目の表示名を変える
+    static func renameItem(_ item: SidebarItem, in section: SidebarSection, store: SidebarStore) {
+        let original = item.tagID.flatMap { TagStore.shared.tag(id: $0)?.name } ?? FileManager.default.displayName(atPath: item.url.path)
         guard let name = ask(
-            title: "お気に入りの表示名を変更",
-            message: "サイドバーに出す名前だけが変わります（フォルダの名前は変わりません）。空にするとフォルダ名に戻ります。",
-            value: item.name, placeholder: FileManager.default.displayName(atPath: item.url.path), button: "変更"
+            title: "表示名を変更",
+            message: "サイドバーに出す名前だけが変わります（フォルダやタグの名前は変わりません）。空にすると元の名前に戻ります。",
+            value: item.name, placeholder: original, button: "変更"
         ) else { return }
-        store.renameFavorite(item.url, to: name)
+        store.renameItem(id: item.id, in: section, to: name)
+    }
+
+    /// 新しいセクションを作る（サイドバーの見た目だけのまとまり）
+    static func createSection(before target: SidebarSection? = nil, in store: SidebarStore) {
+        guard let name = ask(
+            title: "セクションを作る",
+            message: "サイドバーでタグ・フォルダ・ファイルをまとめる見出しです。項目には何も付きません。作ったら、タグやフォルダをドラッグして入れてください。",
+            value: "", placeholder: "セクションの名前", button: "作成"
+        ) else { return }
+        store.createSection(named: name, before: target)
+    }
+
+    static func renameSection(_ id: UUID, in store: SidebarStore) {
+        guard let section = store.customSection(id), let name = ask(
+            title: "セクションの名前を変更", message: "", value: section.name, placeholder: "セクションの名前", button: "変更"
+        ) else { return }
+        store.renameSection(id, to: name)
+    }
+
+    static func deleteSection(_ id: UUID, in store: SidebarStore) {
+        guard let section = store.customSection(id) else { return }
+        if section.items.isEmpty {
+            store.deleteSection(id)
+            return
+        }
+        let alert = NSAlert()
+        alert.messageText = "セクション「\(section.name)」を削除しますか？"
+        alert.informativeText = "中の項目はサイドバーから外れるだけで、フォルダ・ファイル・タグはそのまま残ります。"
+        alert.addButton(withTitle: "削除")
+        alert.addButton(withTitle: "キャンセル")
+        if alert.runModal() == .alertFirstButtonReturn { store.deleteSection(id) }
     }
 
     private static func ask(title: String, message: String, value: String, placeholder: String, button: String) -> String? {
