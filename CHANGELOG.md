@@ -6,6 +6,15 @@
 
 ## 2026-10-27
 
+### Macorn：バージョン 0.2.0 を LP で公開する
+
+- **きっかけ**：konta の依頼「この機能（『Finder に表示』の切り替え）を入れた DMG を作り直して、LP に公開して。バージョンも上げて」
+- **意図・方針**
+  - 機能を足したので 0.1.0 → 0.2.0 にした（ビルド番号は 1 → 2）
+  - `scripts/release.sh --publish` で署名・公証した DMG を作り、`site/download/Macorn.dmg` と LP のバージョン・サイズの表記を差し替えた。main への push で GitHub Actions が LP ごと公開する
+- 変更 `Macorn.xcodeproj/project.pbxproj` — `MARKETING_VERSION` を 0.2.0、`CURRENT_PROJECT_VERSION` を 2 に
+- 変更 `site/download/Macorn.dmg`、`site/index.html` — 0.2.0 の DMG と表記
+
 ### Macorn：ほかのアプリの「Finder に表示」を Macorn で開けるようにする
 
 - **きっかけ**：konta の質問「ファイルを開くときなどのデフォルトのアプリとして指定できないのか」→ 依頼「フォルダの既定のアプリと『Finder に表示』の行き先を Macorn にできるよう、設定に切り替えを追加して。ファイルの種類は対象外で」
