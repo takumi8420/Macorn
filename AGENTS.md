@@ -89,8 +89,8 @@
 
 ## 関連リンク
 
-- リモートリポジトリはまだない（ローカルの git のみ）
-- LP：https://macorn.vercel.app（Vercel のチーム「konta's projects」のプロジェクト `macorn`。Git とはつないでおらず、CLI で直接デプロイする）
+- リモートリポジトリ：https://github.com/takumi8420/Macorn （`origin`、ブランチは `main`）
+- LP：https://macorn.vercel.app（Vercel のチーム「konta's projects」のプロジェクト `macorn`。GitHub とは連携しておらず、CLI で直接デプロイする）
 
 ---
 

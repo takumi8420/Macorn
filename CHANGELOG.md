@@ -6,6 +6,12 @@
 
 ## 2026-10-27
 
+### Macorn：GitHub のリモートを追加して push する
+
+- **きっかけ**：konta の依頼（`git remote add origin git@github.com:takumi8420/Macorn.git` → `git branch -M main` → `git push -u origin main`）
+- **意図・方針**：指示どおり `origin` を追加し、`main` を push した。push の前に、環境変数や Vercel の紐付けのファイルが履歴に入っていないことを確かめた。LP の Vercel は引き続き CLI から直接デプロイする（GitHub とは連携していない）
+- 変更 `AGENTS.md` — 関連リンクにリモートリポジトリを追加
+
 ### Macorn：LP のボタンと画面写真の間を空け、動画からバージョンの表記を外す
 
 - **きっかけ**：konta の指摘（スクリーンショットつき）「ここに余白がないのでブラッシュアップしてほしい」「動画において、mac のバージョン指定はしないでおいてください。デモが見れればいいので変に情報を載せないでほしい」
