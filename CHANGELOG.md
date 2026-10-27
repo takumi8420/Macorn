@@ -6,6 +6,13 @@
 
 ## 2026-10-27
 
+### Macorn：バージョン 0.3.2 を LP で公開する
+
+- **きっかけ**：konta の依頼「PDF の既定は Macorn のままでいい。変更をコミットして push し、0.3.2 として LP に公開して」
+- **意図・方針**：PDF・Markdown・画像などを Macorn で開ける版を配る。0.3.1 → 0.3.2（ビルド番号は 4 → 5）。`scripts/release.sh --publish` で署名・公証した DMG・LP の表記・`version.json` をまとめて差し替えた。0.3.0 以降の利用者には、起動時に新しい版の知らせが出る
+- 変更 `Macorn.xcodeproj/project.pbxproj` — `MARKETING_VERSION` を 0.3.2、`CURRENT_PROJECT_VERSION` を 5 に
+- 変更 `site/download/Macorn.dmg`、`site/index.html`、`site/version.json` — 0.3.2 の DMG・表記・最新版の情報
+
 ### Macorn：PDF・Markdown・画像などを Macorn で開けるようにする
 
 - **きっかけ**：konta の質問「Claude などから PDF を開くとき Finder は候補に出るが Macorn が出ない。既定で Macorn で開く設定はできないか」→ 依頼「PDF・Markdown・画像などプレビューできる種類を Macorn で開けるようにして（『このアプリケーションで開く』に出す）、設定から既定のアプリにもできるようにして」。途中で konta の指摘「アプリ内で PDF を選択したらプレビュー表示がされるようにしてほしい。今は新規でタブが表示されてしまう」
