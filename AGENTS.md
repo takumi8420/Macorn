@@ -34,6 +34,7 @@
 | `Macorn.xcodeproj/` | Xcode プロジェクト（フォルダ同期形式。`Macorn/` に置いたファイルは自動でビルド対象になる） |
 | `Macorn.entitlements` | 署名の権限（iTerm2 連携用の Apple Events） |
 | `Branding/` | Macorn のアイコン・ロゴ・カラー（[Branding/README.md](Branding/README.md)） |
+| `scripts/release.sh` | 配布用の DMG を作る（Developer ID 署名・公証。出力は `build/release/`） |
 | `promo/` | 紹介動画（Remotion）と、その撮影・LP 用の画像づくり（[promo/video/README.md](promo/video/README.md)） |
 | `site/` | LP（静的な HTML）。Vercel の `kontas-projects/macorn` に公開（https://macorn.vercel.app）。main に `site/` の変更を push すると GitHub Actions が本番に公開する |
 | `build/` | ビルドの出力（git 管理外。読まない） |
@@ -72,7 +73,8 @@
 - **ユニットテストは普段のタグ・履歴・サイドバーの設定を書き換えない**（スキームのテストの設定で `MACORN_TAGS_PATH` / `MACORN_HISTORY_PATH` を一時ファイルにしている。サイドバーの設定は、テストでは別の保存先（`dev.macorn.Macorn.tests`）を使い、各テストは専用の保存先を渡す）
   - 自動操作でサイドバーを触るときは `MACORN_DEFAULTS_SUITE` で別の保存先を指定する
 - **配布は Mac App Store ではなく、Developer ID 署名で直接配布する**（根拠：`docs/REQUIREMENTS.md` 9.4）
-  - サンドボックスではフォルダに自由にアクセスできないため。今は自分用で、簡易署名（`-`）で動かしている
+  - サンドボックスではフォルダに自由にアクセスできないため
+  - 普段の開発ビルドは簡易署名（`-`）のまま。配布用の DMG は `scripts/release.sh` が Developer ID（チーム TAKUMI KON・`Q9Q29NW29B`）で署名し、公証（キーチェーンのプロファイル `macorn-notary`）を通して作る（根拠：ユーザーの依頼 2026-10-27）
 - **macOS 15 以降、Swift 6（MainActor を既定）、外部ライブラリなし**（根拠：`docs/REQUIREMENTS.md` 0章 D4、10章、`Macorn.xcodeproj` の設定）
 - **実装は最後まで自走し、確認は要件に関わるときだけ**（根拠：ユーザーの指示 2026-10-26）
   - 実装 → ビルド → テスト → アプリを動かして確認 → 直す、を繰り返してから次へ進む

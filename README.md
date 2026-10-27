@@ -65,6 +65,20 @@ xcodebuild -project Macorn.xcodeproj -scheme Macorn -derivedDataPath build/Deriv
 
 ターミナルから `macorn .` で開けるようにするには、アプリのメニュー「Macorn › コマンドラインツールをインストール…」を使う。
 
+## 配布用の DMG
+
+Developer ID で署名し、Apple の公証を通した DMG を作る。ほかの Mac でも警告なしに開ける。
+
+```bash
+bash scripts/release.sh
+```
+
+- 出力は `build/release/Macorn-<バージョン>.dmg`。バージョンは Xcode の `MARKETING_VERSION`
+- 普段の開発ビルドは簡易署名（`-`）のまま。署名の設定はこのスクリプトの中でだけ上書きする
+- 前提：キーチェーンに「Developer ID Application: TAKUMI KON (Q9Q29NW29B)」の証明書と、公証の資格情報（`xcrun notarytool store-credentials macorn-notary …` で登録したもの）があること
+- 公証は数分〜数十分かかる（初回は約35分だった）。`--no-notarize` を付けると公証を省く（手元での確認用）
+- 公証の結果は DMG に添付する。DMG から取り出したアプリは、初めて開くときに macOS がネットで公証を確かめる
+
 ## フォルダ構成
 
 | 場所 | 内容 |

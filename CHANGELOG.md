@@ -6,6 +6,19 @@
 
 ## 2026-10-27
 
+### Macorn：配布用の DMG を Developer ID 署名・公証つきで作る
+
+- **きっかけ**：konta の質問「App Store に申請できるという理解で合っているか」。前提（9.4）どおり App Store ではなく直接配布だと答えたところ、「Developer の登録は済んでいるので確認してほしい」。konta が Developer ID の証明書を作り、公証の資格情報（`macorn-notary`）を登録した
+- **意図・方針**
+  - Xcode には有料の個人チームが2つある。証明書は「TAKUMI KON」（`Q9Q29NW29B`）で作られたので、署名も公証もこのチームにそろえた
+  - 普段の開発ビルドは簡易署名（`-`）のまま残し、プロジェクトの設定は変えない。配布用のスクリプトの中でだけ、署名の設定を Developer ID に上書きする（証明書のない環境でも開発ビルドが通るように）
+  - 手順：Release ビルド（Hardened Runtime・タイムスタンプつきの署名）→ DMG（アプリと「アプリケーション」への近道）→ DMG に署名 → 公証 → 結果を DMG に添付 → Gatekeeper で判定
+  - 公証のパスワードはキーチェーンにあり、スクリプトはプロファイル名だけを使う
+  - 実際に `Macorn-0.1.0.dmg`（Intel と Apple シリコンの両方で動く）を作った。公証は Accepted で、DMG と、そこから取り出したアプリ（ダウンロード扱いの印を付けたもの）の両方が Gatekeeper で「Notarized Developer ID」と判定された
+  - Sparkle による自動アップデートと GitHub Releases での配布は、まだ手を付けていない
+- 追加 `scripts/release.sh` — 配布用の DMG を作る
+- 変更 `README.md`、`AGENTS.md`、`docs/REQUIREMENTS.md` — 配布の手順と、9.4 の実装状況
+
 ### Macorn：LP の自動デプロイ（CD）を GitHub Actions で行う
 
 - **きっかけ**：konta の依頼「Vercel との連携も確認してほしい。CD 含めて」。確認の途中で「これを元にして、GitHub Actions に設定してほしい」（Qiita「Vercel × GitHub Actions」の記事）
