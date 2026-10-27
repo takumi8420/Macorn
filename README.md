@@ -40,6 +40,7 @@ v1.x 以降（内蔵ターミナル、カスタムコマンド、ワークスペ
 | クイックルック | スペース |
 | パスを入力（Tab で補完） | ⌘L |
 | ほかのアプリの「Finder に表示」を Macorn で開く（フォルダの既定のアプリは macOS の制限で変えられない） | 設定（⌘,）› 連携 ›「Finder の代わりに使う」 |
+| 新しいバージョンを確認（起動時にも確認。設定でオフにできる） | Macorn ›「アップデートを確認…」、設定（⌘,）› 一般 › アップデート |
 | 設定 | ⌘, |
 
 ショートカットは設定の「ショートカット」タブで変更できる。
@@ -58,7 +59,7 @@ xcodebuild -project Macorn.xcodeproj -scheme Macorn -derivedDataPath build/Deriv
 open build/DerivedData/Build/Products/Debug/Macorn.app
 ```
 
-テスト（124 件）:
+テスト（129 件）:
 
 ```bash
 xcodebuild -project Macorn.xcodeproj -scheme Macorn -derivedDataPath build/DerivedData test
@@ -80,7 +81,7 @@ bash scripts/release.sh
 - 公証は数分〜数十分かかる（初回は約35分だった）。`--no-notarize` を付けると公証を省く（手元での確認用）
 - 公証の結果は DMG に添付する。DMG から取り出したアプリは、初めて開くときに macOS がネットで公証を確かめる
 
-LP から配る DMG を新しくするときは `--publish` を付ける。`site/download/Macorn.dmg` を差し替え、LP のバージョンとサイズの表記（`data-release` の箇所）も書き換える。そのあと main に push すると、GitHub Actions が LP ごと公開する。
+LP から配る DMG を新しくするときは `--publish` を付ける。`site/download/Macorn.dmg` を差し替え、LP のバージョンとサイズの表記（`data-release` の箇所）と、アプリが新しい版を確かめる `site/version.json` も書き換える。バージョンは先に Xcode の `MARKETING_VERSION`（と `CURRENT_PROJECT_VERSION`）を上げておく。そのあと main に push すると、GitHub Actions が LP ごと公開する。
 
 ```bash
 bash scripts/release.sh --publish
@@ -122,6 +123,7 @@ MACORN_DEBUG_OUT=/tmp/shots MACORN_HISTORY_PATH=/tmp/history.sqlite MACORN_DEBUG
 | `MACORN_TAGS_PATH` | タグの保存先（普段のタグを汚さないため） |
 | `MACORN_DEFAULTS_SUITE` | 設定の保存先（UserDefaults のスイート名。お気に入りの並び・表示の設定など、普段の設定を汚さないため） |
 | `MACORN_DEBUG_LAUNCH_LOG` | ターミナル・エディタを実際には起動せず、起動しようとした内容をこのファイルに書く |
+| `MACORN_UPDATE_URL` | 新しい版を確かめる先（既定は https://macorn.vercel.app/version.json。`file://` も可） |
 | `MACORN_DEBUG_COPY_DELAY_US` | コピーをわざと遅くする（進み具合の表示と中止の確認用） |
 
 ## 紹介動画と LP

@@ -22,7 +22,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if DebugFlags.isAutomating || !restoreSession() {
             openWindow(at: homeURL)
         }
-        if !DebugFlags.isAutomating { NSApp.activate() }
+        if !DebugFlags.isAutomating {
+            NSApp.activate()
+            UpdateChecker.checkOnLaunch()
+        }
         #if DEBUG
         DebugAutomation.runIfRequested { [weak self] in self?.controllers ?? [] }
         #endif
@@ -131,6 +134,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         var sort = Preferences.sort
         sort.ascending.toggle()
         Preferences.sort = sort
+    }
+
+    @objc func checkForUpdates(_ sender: Any?) {
+        UpdateChecker.checkManually()
     }
 
     @objc func showSettings(_ sender: Any?) {

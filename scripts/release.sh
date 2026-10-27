@@ -12,7 +12,8 @@
 #   bash scripts/release.sh --publish       # 公証まで行い、LP（site/download/Macorn.dmg）も差し替える
 #
 # 出力：build/release/Macorn-<バージョン>.dmg
-# --publish のときは、site/index.html のバージョンとサイズ（data-release の箇所）も書き換える。
+# --publish のときは、site/index.html のバージョンとサイズ（data-release の箇所）と、
+# アプリが新しい版を確かめるための site/version.json も書き換える。
 # LP への公開は、そのあと main に push すると GitHub Actions が行う。
 set -euo pipefail
 
@@ -51,6 +52,7 @@ xcodebuild -project Macorn.xcodeproj -scheme Macorn -configuration Release \
   build -quiet
 
 VERSION=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" "$APP/Contents/Info.plist")
+BUILD=$(/usr/libexec/PlistBuddy -c "Print CFBundleVersion" "$APP/Contents/Info.plist")
 DMG="$OUT/Macorn-$VERSION.dmg"
 
 echo "== 2. 署名を確かめる"
@@ -83,14 +85,24 @@ if [[ $PUBLISH == 1 ]]; then
   mkdir -p site/download
   cp "$DMG" site/download/Macorn.dmg
   SIZE=$(python3 -c "import os,sys; print(f'{os.path.getsize(sys.argv[1])/1000/1000:.1f} MB')" "$DMG")
-  python3 - "$VERSION" "$SIZE" <<'PY'
-import re, sys
-version, size = sys.argv[1], sys.argv[2]
+  python3 - "$VERSION" "$SIZE" "$BUILD" <<'PY'
+import json, re, sys
+version, size, build = sys.argv[1], sys.argv[2], int(sys.argv[3])
 path = "site/index.html"
 html = open(path, encoding="utf-8").read()
 html = re.sub(r'(<span[^>]*data-release="version"[^>]*>)[^<]*(</span>)', rf"\g<1>{version}\g<2>", html)
 html = re.sub(r'(<span[^>]*data-release="size"[^>]*>)[^<]*(</span>)', rf"\g<1>{size}\g<2>", html)
 open(path, "w", encoding="utf-8").write(html)
+# アプリの「アップデートを確認…」が読む（Macorn/App/UpdateChecker.swift）
+info = {
+    "version": version,
+    "build": build,
+    "download": "https://macorn.vercel.app/download/Macorn.dmg",
+    "page": "https://macorn.vercel.app/#get",
+}
+with open("site/version.json", "w", encoding="utf-8") as f:
+    json.dump(info, f, ensure_ascii=False, indent=2)
+    f.write("\n")
 PY
   echo "LP を更新しました（バージョン $VERSION・$SIZE）。main に push すると公開されます"
 fi

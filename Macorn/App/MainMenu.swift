@@ -45,6 +45,7 @@ enum MainMenu {
     private static func appMenu() -> NSMenu {
         let menu = NSMenu(title: "Macorn")
         menu.addItem(item("Macorn について", #selector(NSApplication.orderFrontStandardAboutPanel(_:))))
+        menu.addItem(item("アップデートを確認…", #selector(AppDelegate.checkForUpdates(_:))))
         menu.addItem(.separator())
         menu.addItem(item("設定…", #selector(AppDelegate.showSettings(_:)), ","))
         menu.addItem(item("コマンドラインツールをインストール…", #selector(AppDelegate.installCommandLineTool(_:))))

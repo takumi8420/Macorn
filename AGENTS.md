@@ -76,6 +76,8 @@
 - **設定で、ほかのアプリの「Finder に表示」を Macorn で開ける。フォルダ・ファイルの種類の既定のアプリにはしない**（根拠：ユーザーの依頼 2026-10-27「フォルダの既定のアプリと Finder に表示の行き先を Macorn にできるよう、設定に切り替えを。ファイルの種類は対象外」）
   - 「Finder に表示」は macOS 全体の設定 `NSFileViewer` で切り替える（設定の「連携」）。届くのはふつうの「開く」要求（`application(_:open:)`）
   - フォルダの既定のアプリは、macOS（26.7 で確認）が `public.folder` の変更を受け付けないため作れなかった。Info.plist（`Macorn-Info.plist`）ではフォルダを開けるアプリとして申告だけしている
+- **新しい版の通知は自前（外部ライブラリなし）。入れ替えは手動**（根拠：ユーザーの選択 2026-10-27「外部ライブラリなしで、起動時とメニューの『アップデートを確認…』で新しい版を知らせる仕組みを。入れ替えは手動で構わない」）
+  - アプリは LP の `site/version.json` を読んで今の版と比べる（`Macorn/App/UpdateChecker.swift`）。`version.json` は `scripts/release.sh --publish` が書く。Sparkle は使わない
 - **配布は Mac App Store ではなく、Developer ID 署名で直接配布する**（根拠：`docs/REQUIREMENTS.md` 9.4）
   - サンドボックスではフォルダに自由にアクセスできないため
   - 普段の開発ビルドは簡易署名（`-`）のまま。配布用の DMG は `scripts/release.sh` が Developer ID（チーム TAKUMI KON・`Q9Q29NW29B`）で署名し、公証（キーチェーンのプロファイル `macorn-notary`）を通して作る（根拠：ユーザーの依頼 2026-10-27）

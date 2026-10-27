@@ -6,6 +6,23 @@
 
 ## 2026-10-27
 
+### Macorn：新しいバージョンを知らせる（アップデートの確認）
+
+- **きっかけ**：konta の質問「アプリを更新するときはどうなるか。ユーザーが確認することはできないのか」→ 選択「外部ライブラリなしで、起動時とメニューの『アップデートを確認…』で新しい版を知らせる仕組みを作って。入れ替えは手動で構わない」
+- **意図・方針**
+  - 前提の変更：要件定義書 9.4 の「Sparkle による自動アップデート」をやめた。外部ライブラリなしの前提を守り、知らせるところまでを自前で作る
+  - LP に最新版の情報 `site/version.json`（バージョン・ビルド番号・DMG の URL）を置き、アプリはそれを読んで今の版と比べる。バージョンは数字ごとに比べる（0.10.0 は 0.9.0 より新しい）。`version.json` は `scripts/release.sh --publish` が DMG と一緒に書き直す。古い情報を読まないようキャッシュさせない
+  - 起動時は、新しい版があるときだけ知らせる（失敗は黙る）。「ダウンロード」（ブラウザで DMG を開く）・「あとで」・「このバージョンをスキップ」を選べる。メニューの「アップデートを確認…」は、最新のとき・失敗したときも結果を出し、スキップした版も知らせる
+  - 起動時の確認は設定の「一般 › アップデート」でオフにできる。お使いのバージョンと「今すぐ確認」も置いた
+  - テストと自動操作の起動では確かめない。開発用に確かめる先を環境変数 `MACORN_UPDATE_URL` で差し替えられる
+  - 確認：ユニットテスト（バージョンの比べ方、新しい版・同じ版・読めない情報）と、自動操作で「新しい版あり」「最新」「失敗（404）」の3つのアラートを撮って確かめた
+  - すでに配った 0.2.0 にはこの仕組みがないので、0.2.0 の利用者には知らせられない。この仕組みが働くのは、これを入れた版から
+- 追加 `Macorn/App/UpdateChecker.swift`、`MacornTests/UpdateCheckerTests.swift`、`site/version.json`
+- 変更 `Macorn/App/AppDelegate.swift`、`Macorn/App/MainMenu.swift`、`Macorn/Model/Preferences.swift`、`Macorn/Settings/SettingsView.swift` — 起動時の確認、メニュー、設定
+- 変更 `Macorn/App/DebugAutomation.swift` — 手順 `updatecheck:<URL>` を追加
+- 変更 `scripts/release.sh`、`site/vercel.json` — `version.json` を書き、キャッシュさせない
+- 変更 `README.md`、`AGENTS.md`、`docs/REQUIREMENTS.md` — 使い方と前提（テストは 129 件）
+
 ### Macorn：バージョン 0.2.0 を LP で公開する
 
 - **きっかけ**：konta の依頼「この機能（『Finder に表示』の切り替え）を入れた DMG を作り直して、LP に公開して。バージョンも上げて」

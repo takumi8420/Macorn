@@ -21,6 +21,8 @@ enum Preferences {
         static let filePreview = "markdownPreview"
         static let filePreviewFraction = "markdownPreviewFraction"
         static let previewZoom = "previewZoom"
+        static let checkForUpdates = "checkForUpdates"
+        static let skippedUpdateVersion = "skippedUpdateVersion"
     }
 
     private static var defaults: UserDefaults { AppDefaults.store }
@@ -54,6 +56,18 @@ enum Preferences {
     static var openTerminalInNewTab: Bool {
         get { defaults.bool(forKey: Key.terminalNewTab) }
         set { defaults.set(newValue, forKey: Key.terminalNewTab) }
+    }
+
+    /// 起動時に新しい版を確かめる（UpdateChecker）
+    static var checkForUpdates: Bool {
+        get { defaults.object(forKey: Key.checkForUpdates) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: Key.checkForUpdates) }
+    }
+
+    /// 「このバージョンをスキップ」を選んだ版。起動時にはこの版を知らせない
+    static var skippedUpdateVersion: String? {
+        get { defaults.string(forKey: Key.skippedUpdateVersion) }
+        set { defaults.set(newValue, forKey: Key.skippedUpdateVersion) }
     }
 
     /// フォルダの合計サイズを計算して表示する（要件 V-09）

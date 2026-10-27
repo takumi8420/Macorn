@@ -84,6 +84,7 @@ private struct GeneralSettingsView: View {
     @AppStorage("calculateFolderSizes") private var calculateFolderSizes = true
     @AppStorage("vimKeyBindings") private var vimKeyBindings = false
     @AppStorage("colorFoldersByTag") private var colorFoldersByTag = true
+    @AppStorage("checkForUpdates") private var checkForUpdates = true
 
     @Bindable private var theme = Theme.shared
 
@@ -135,6 +136,18 @@ private struct GeneralSettingsView: View {
                 }
             Toggle("F5 / F6 で反対側の画面へコピー・移動する前に確認する", isOn: $confirmPaneTransfer)
             Toggle("Vim 風のキー操作を使う（j / k で移動、gg / G で先頭・末尾）", isOn: $vimKeyBindings)
+            Section("アップデート") {
+                Toggle("起動時に新しいバージョンを確認する", isOn: $checkForUpdates)
+                LabeledContent("お使いのバージョン") {
+                    HStack {
+                        Text(UpdateChecker.currentVersion)
+                        Button("今すぐ確認") { UpdateChecker.checkManually() }
+                    }
+                }
+                Text("新しいバージョンがあると知らせます。入れ替えは、ダウンロードした DMG から手動で行います。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
     }

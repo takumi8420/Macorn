@@ -127,6 +127,14 @@ enum DebugAutomation {
             print("[debug] clip=\(FileClipboard.fileURLs.map(\.lastPathComponent)) cut=\(FileClipboard.isCut)")
         case "panel":
             print("[debug] panel visible=\(OperationsPanelController.shared.isPanelVisible) running=\(OperationsPanelController.shared.store.operations.count)")
+        case "updatecheck":
+            // 新しい版の確認（引数は確かめる先の URL）。結果を書き出し、アラートをシートで出す（snapsheet で撮る）
+            let url = URL(string: argument) ?? UpdateChecker.feedURL
+            Task {
+                let result = await UpdateChecker.fetch(from: url)
+                print("[debug] updatecheck current=\(UpdateChecker.currentVersion) result=\(result)")
+                UpdateChecker.present(result, manual: false, in: controller.window)
+            }
         case "settings":
             // 設定ウィンドウを開く（キーにしない）。引数はタブ（general / integration など）
             let tabs: [String: SettingsTab] = ["general": .general, "integration": .integration, "sidebar": .sidebar,
