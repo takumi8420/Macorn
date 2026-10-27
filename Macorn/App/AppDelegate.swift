@@ -22,6 +22,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if DebugFlags.isAutomating || !restoreSession() {
             openWindow(at: homeURL)
         }
+        // DMG の中などから開いたら「アプリケーション」へ移すかを尋ねる（移すなら開き直すので、ほかは何もしない）
+        if AppMover.offerIfNeeded() { return }
         if !DebugFlags.isAutomating {
             NSApp.activate()
             UpdateChecker.checkOnLaunch()

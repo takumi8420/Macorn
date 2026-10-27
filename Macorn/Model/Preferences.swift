@@ -23,6 +23,7 @@ enum Preferences {
         static let previewZoom = "previewZoom"
         static let checkForUpdates = "checkForUpdates"
         static let skippedUpdateVersion = "skippedUpdateVersion"
+        static let suppressMoveToApplications = "suppressMoveToApplications"
     }
 
     private static var defaults: UserDefaults { AppDefaults.store }
@@ -68,6 +69,12 @@ enum Preferences {
     static var skippedUpdateVersion: String? {
         get { defaults.string(forKey: Key.skippedUpdateVersion) }
         set { defaults.set(newValue, forKey: Key.skippedUpdateVersion) }
+    }
+
+    /// 「アプリケーションへ移動しますか？」で「今後確認しない」を選んだ（AppMover）
+    static var suppressMoveToApplications: Bool {
+        get { defaults.bool(forKey: Key.suppressMoveToApplications) }
+        set { defaults.set(newValue, forKey: Key.suppressMoveToApplications) }
     }
 
     /// フォルダの合計サイズを計算して表示する（要件 V-09）

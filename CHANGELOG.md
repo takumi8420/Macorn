@@ -6,6 +6,24 @@
 
 ## 2026-10-27
 
+### Macorn：DMG にドラッグの案内を付け、「アプリケーション」への移動を尋ねる（0.3.1 を公開）
+
+- **きっかけ**：konta の指摘「インストール時にアプリケーションフォルダに入らない上、ドラッグアンドドロップを促しもしない」→ 依頼「DMG のウィンドウにドラッグを促す背景と配置を付け、アプリにも『アプリケーション』フォルダへ移すかを尋ねる仕組みを入れて。できたら 0.3.1 として LP に公開して」
+- **意図・方針**
+  - これまでの DMG はフォルダをそのまま固めただけで、ウィンドウの見た目を決めていなかった。konta は DMG の中から直接 Macorn を開いていた
+  - DMG：ブランドのクリームの背景に「Macorn を『アプリケーション』へドラッグ」と矢印を描き（Swift で描く。外部ツールなし）、矢印の左右に Macorn と「アプリケーション」を 128px で並べる。見た目は書き込みできる DMG を Finder に設定させてから圧縮する（`.DS_Store` に残る）
+  - macOS 26 の Finder はツールバーを隠せないので、その分ウィンドウを高くした。Finder のアイコンの位置は中心より少し上を指すので、矢印の高さに合うよう 45 上にずらした（実際に開いて撮って合わせた）。同じ名前の DMG がほかに開いていても取り違えないよう、Finder にはマウントした場所で指す
+  - 隠しファイルを表示する設定の人にも余計なものが見えにくいよう、`.fseventsd` は消し、背景のフォルダは下の見えない所へ置く（その人にはスクロールバーが出る）
+  - アプリ：「アプリケーション」（/Applications・~/Applications）の外から起動したら、移動するかを尋ねる。移すと /Applications にコピー（DMG 以外からなら移動）し、同じ名前の古いものはゴミ箱へ移し、自分が終わったあとに新しい場所で開き直して DMG を取り出す。「今後確認しない」も選べる。開発用の Debug ビルドでは尋ねない
+  - 確認：試験用の DMG で、移す先を一時フォルダに差し替えて自動で「移動」を選ばせ、コピー・署名の有効さ・開き直し・DMG の取り出しを確かめた。尋ねる画面と DMG のウィンドウも撮って確かめた。ユニットテストは 135 件
+  - 0.3.0 → 0.3.1（ビルド番号は 3 → 4）として、署名・公証した DMG を LP に公開した
+- 追加 `scripts/dmg/make-background.swift`、`scripts/dmg/background.png`、`scripts/dmg/background@2x.png`、`scripts/dmg/layout.applescript` — DMG の背景と配置
+- 変更 `scripts/release.sh` — DMG を背景と配置つきで作る
+- 追加 `Macorn/App/AppMover.swift`、`MacornTests/AppMoverTests.swift`、変更 `Macorn/App/AppDelegate.swift`、`Macorn/Model/Preferences.swift` — 「アプリケーション」への移動
+- 変更 `Macorn.xcodeproj/project.pbxproj` — 0.3.1（ビルド 4）
+- 変更 `site/download/Macorn.dmg`、`site/index.html`、`site/version.json` — 0.3.1 の DMG・表記・最新版の情報
+- 変更 `README.md`、`AGENTS.md`、`docs/REQUIREMENTS.md` — 手順と前提
+
 ### Macorn：バージョン 0.3.0 を LP で公開する
 
 - **きっかけ**：konta の依頼「アップデートの確認をコミットし、バージョンを 0.3.0 に上げて DMG を作り直し、LP に公開して」

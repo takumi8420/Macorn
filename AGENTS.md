@@ -35,7 +35,7 @@
 | `Macorn.entitlements` | 署名の権限（iTerm2 連携用の Apple Events） |
 | `Macorn-Info.plist` | Xcode が作る Info.plist に足す項目（フォルダを開けるアプリとしての申告） |
 | `Branding/` | Macorn のアイコン・ロゴ・カラー（[Branding/README.md](Branding/README.md)） |
-| `scripts/release.sh` | 配布用の DMG を作る（Developer ID 署名・公証。出力は `build/release/`） |
+| `scripts/release.sh` | 配布用の DMG を作る（Developer ID 署名・公証。出力は `build/release/`）。DMG の背景と配置は `scripts/dmg/` |
 | `promo/` | 紹介動画（Remotion）と、その撮影・LP 用の画像づくり（[promo/video/README.md](promo/video/README.md)） |
 | `site/` | LP（静的な HTML）。Vercel の `kontas-projects/macorn` に公開（https://macorn.vercel.app）。main に `site/` の変更を push すると GitHub Actions が本番に公開する。配布用の DMG も `site/download/` に置く |
 | `build/` | ビルドの出力（git 管理外。読まない） |
@@ -76,6 +76,8 @@
 - **設定で、ほかのアプリの「Finder に表示」を Macorn で開ける。フォルダ・ファイルの種類の既定のアプリにはしない**（根拠：ユーザーの依頼 2026-10-27「フォルダの既定のアプリと Finder に表示の行き先を Macorn にできるよう、設定に切り替えを。ファイルの種類は対象外」）
   - 「Finder に表示」は macOS 全体の設定 `NSFileViewer` で切り替える（設定の「連携」）。届くのはふつうの「開く」要求（`application(_:open:)`）
   - フォルダの既定のアプリは、macOS（26.7 で確認）が `public.folder` の変更を受け付けないため作れなかった。Info.plist（`Macorn-Info.plist`）ではフォルダを開けるアプリとして申告だけしている
+- **DMG はドラッグを促す見た目にし、アプリは「アプリケーション」の外から起動したら移動を尋ねる**（根拠：ユーザーの依頼 2026-10-27「インストール時にアプリケーションフォルダに入らず、ドラッグも促さない」）
+  - 背景は `scripts/dmg/make-background.swift`、配置は `scripts/dmg/layout.applescript`（release.sh から呼ぶ）。移動は `Macorn/App/AppMover.swift`（配布用の Release ビルドだけで尋ねる）
 - **新しい版の通知は自前（外部ライブラリなし）。入れ替えは手動**（根拠：ユーザーの選択 2026-10-27「外部ライブラリなしで、起動時とメニューの『アップデートを確認…』で新しい版を知らせる仕組みを。入れ替えは手動で構わない」）
   - アプリは LP の `site/version.json` を読んで今の版と比べる（`Macorn/App/UpdateChecker.swift`）。`version.json` は `scripts/release.sh --publish` が書く。Sparkle は使わない
 - **配布は Mac App Store ではなく、Developer ID 署名で直接配布する**（根拠：`docs/REQUIREMENTS.md` 9.4）

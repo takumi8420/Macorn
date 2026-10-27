@@ -59,12 +59,25 @@ echo "== 2. 署名を確かめる"
 codesign --verify --deep --strict --verbose=2 "$APP"
 codesign -d --verbose=2 "$APP" 2>&1 | grep -E "Authority=Developer ID Application|TeamIdentifier|Runtime"
 
-echo "== 3. DMG を作る（Macorn.app と「アプリケーション」への近道を入れる）"
+echo "== 3. DMG を作る（Macorn.app と「アプリケーション」への近道を、ドラッグを促す背景の上に並べる）"
+# 背景は scripts/dmg/make-background.swift で描いたもの。ウィンドウの見た目（背景・アイコンの位置と大きさ）は
+# Finder に設定させて DMG の中（.DS_Store）に保存する。初回は「Finder を操作する」許可を求められることがある。
 STAGE="$OUT/dmg"
-mkdir -p "$STAGE"
+mkdir -p "$STAGE/.background"
 ditto "$APP" "$STAGE/Macorn.app"
 ln -s /Applications "$STAGE/Applications"
-hdiutil create -volname "Macorn" -srcfolder "$STAGE" -ov -format UDZO "$DMG" -quiet
+tiffutil -cathidpicheck scripts/dmg/background.png scripts/dmg/background@2x.png -out "$STAGE/.background/background.tiff" 2>/dev/null
+RW="$OUT/Macorn-rw.dmg"
+SIZE_MB=$(( $(du -sm "$STAGE" | cut -f1) + 20 ))
+hdiutil create -volname "Macorn" -srcfolder "$STAGE" -ov -format UDRW -fs HFS+ -size "${SIZE_MB}m" "$RW" -quiet
+MOUNT=$(hdiutil attach -readwrite -noverify -noautoopen "$RW" | awk -F'\t' '/\/Volumes\//{print $NF}')
+osascript scripts/dmg/layout.applescript "$MOUNT"
+# Finder の変更の記録は DMG に要らない（隠しファイルを表示する設定の人に見えてしまう）
+rm -rf "$MOUNT/.fseventsd"
+sync
+hdiutil detach "$MOUNT" -quiet || { sleep 3; hdiutil detach "$MOUNT" -force -quiet; }
+hdiutil convert "$RW" -format UDZO -imagekey zlib-level=9 -ov -o "$DMG" -quiet
+rm -f "$RW"
 codesign --sign "$IDENTITY" --timestamp "$DMG"
 
 if [[ $NOTARIZE == 1 ]]; then
