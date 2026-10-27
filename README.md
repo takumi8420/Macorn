@@ -110,13 +110,14 @@ MACORN_DEBUG_OUT=/tmp/shots MACORN_HISTORY_PATH=/tmp/history.sqlite MACORN_DEBUG
 | `promo/capture/` | Debug ビルドを自動操作して画面を撮る（`capture.py` と手順の `steps.txt`） |
 | `promo/video/` | 紹介動画（Remotion）。場面は `src/Flow.tsx` |
 | `promo/build-site-assets.sh` | LP 用の画像・動画を `site/assets/` に作る |
-| `site/` | LP（静的な HTML。Vercel ではルートを `site` にして置く） |
+| `site/` | LP（静的な HTML）。https://macorn.vercel.app に公開している |
 
 ```bash
 bash promo/sample/make-sample.sh
 python3 promo/capture/capture.py promo/capture/steps.txt promo/video/public/flow
 (cd promo/video && npm install && npm run render)
 bash promo/build-site-assets.sh
+(cd site && vercel deploy --prod)   # LP を公開し直す（Vercel の kontas-projects/macorn）
 ```
 
 画面のロック中・ディスプレイのスリープ中はウィンドウを撮れない。

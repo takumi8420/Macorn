@@ -35,7 +35,7 @@
 | `Macorn.entitlements` | 署名の権限（iTerm2 連携用の Apple Events） |
 | `Branding/` | Macorn のアイコン・ロゴ・カラー（[Branding/README.md](Branding/README.md)） |
 | `promo/` | 紹介動画（Remotion）と、その撮影・LP 用の画像づくり（[promo/video/README.md](promo/video/README.md)） |
-| `site/` | LP（静的な HTML。Vercel ではルートを `site` にして置く想定。まだ公開していない） |
+| `site/` | LP（静的な HTML）。Vercel の `kontas-projects/macorn` に公開（https://macorn.vercel.app）。`site/` で `vercel deploy --prod` |
 | `build/` | ビルドの出力（git 管理外。読まない） |
 
 - 2026-10-26 に noxy から Macorn へ改名した。コード・プロジェクト名・バンドル ID（`dev.macorn.Macorn`）も Macorn にそろえてある
@@ -90,6 +90,7 @@
 ## 関連リンク
 
 - リモートリポジトリはまだない（ローカルの git のみ）
+- LP：https://macorn.vercel.app（Vercel のチーム「konta's projects」のプロジェクト `macorn`。Git とはつないでおらず、CLI で直接デプロイする）
 
 ---
 
