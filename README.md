@@ -79,6 +79,13 @@ bash scripts/release.sh
 - 公証は数分〜数十分かかる（初回は約35分だった）。`--no-notarize` を付けると公証を省く（手元での確認用）
 - 公証の結果は DMG に添付する。DMG から取り出したアプリは、初めて開くときに macOS がネットで公証を確かめる
 
+LP から配る DMG を新しくするときは `--publish` を付ける。`site/download/Macorn.dmg` を差し替え、LP のバージョンとサイズの表記（`data-release` の箇所）も書き換える。そのあと main に push すると、GitHub Actions が LP ごと公開する。
+
+```bash
+bash scripts/release.sh --publish
+git add site && git commit -m "Macorn <バージョン> を公開する" && git push
+```
+
 ## フォルダ構成
 
 | 場所 | 内容 |

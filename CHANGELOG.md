@@ -6,6 +6,21 @@
 
 ## 2026-10-27
 
+### Macorn：LP から DMG をダウンロードできるようにする
+
+- **きっかけ**：konta の判断「一旦申請は不要なので、LP から公開する方針でお願いします」（App Store への申請状況を聞かれ、前提どおり直接配布だと答えたあと）
+- **意図・方針**
+  - リポジトリが非公開なので、GitHub Releases に置いても外の人はダウンロードできない。DMG は LP と同じ Vercel の `site/download/Macorn.dmg` に置く（約 3MB なので git に入れてよいと判断）
+  - URL はバージョンによらず `/download/Macorn.dmg` に固定し、差し替えても LP のリンクを変えずに済むようにした。ブラウザが古い DMG を使い回さないよう、キャッシュはさせず、ダウンロードとして保存させる
+  - LP の「近日公開」の表記をやめ、ヒーローの主ボタンを「ダウンロード」にした（「機能を見る」は外し、「動画で見る」を2番目に）。末尾の入手の欄は、ダウンロードのボタン・バージョンとサイズ・対応環境・入れ方の3手順にした
+  - 新しい版を出すときは `scripts/release.sh --publish` で DMG と LP のバージョン・サイズの表記をまとめて差し替え、main に push すれば GitHub Actions が公開する。公証していない DMG は載せられないようにした
+  - 手元の LP で、PC とスマホの幅の表示と、DMG が取れること（2,868,856 バイト）を確かめた
+- 追加 `site/download/Macorn.dmg` — 配布する DMG（0.1.0）
+- 変更 `site/index.html`、`site/style.css` — ダウンロードのボタンと入手の欄
+- 変更 `site/vercel.json` — `/download/` をダウンロードとして返し、キャッシュさせない
+- 変更 `scripts/release.sh` — `--publish` で LP の DMG と表記を差し替える
+- 変更 `README.md`、`AGENTS.md`、`docs/REQUIREMENTS.md` — LP から配る方針と手順（前提：GitHub Releases ではなく LP から配る）
+
 ### Macorn：配布用の DMG を Developer ID 署名・公証つきで作る
 
 - **きっかけ**：konta の質問「App Store に申請できるという理解で合っているか」。前提（9.4）どおり App Store ではなく直接配布だと答えたところ、「Developer の登録は済んでいるので確認してほしい」。konta が Developer ID の証明書を作り、公証の資格情報（`macorn-notary`）を登録した

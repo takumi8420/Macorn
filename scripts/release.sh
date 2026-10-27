@@ -9,15 +9,29 @@
 # 使い方（リポジトリのルートで）
 #   bash scripts/release.sh            # 署名・公証まで行う
 #   bash scripts/release.sh --no-notarize   # 公証を省く（手元での確認用。他の Mac では警告が出る）
+#   bash scripts/release.sh --publish       # 公証まで行い、LP（site/download/Macorn.dmg）も差し替える
 #
 # 出力：build/release/Macorn-<バージョン>.dmg
+# --publish のときは、site/index.html のバージョンとサイズ（data-release の箇所）も書き換える。
+# LP への公開は、そのあと main に push すると GitHub Actions が行う。
 set -euo pipefail
 
 TEAM_ID="${MACORN_TEAM_ID:-Q9Q29NW29B}"
 IDENTITY="${MACORN_SIGN_IDENTITY:-Developer ID Application: TAKUMI KON ($TEAM_ID)}"
 NOTARY_PROFILE="${MACORN_NOTARY_PROFILE:-macorn-notary}"
 NOTARIZE=1
-[[ "${1:-}" == "--no-notarize" ]] && NOTARIZE=0
+PUBLISH=0
+for arg in "$@"; do
+  case "$arg" in
+    --no-notarize) NOTARIZE=0 ;;
+    --publish) PUBLISH=1 ;;
+    *) echo "知らない指定です: $arg" >&2; exit 1 ;;
+  esac
+done
+if [[ $PUBLISH == 1 && $NOTARIZE == 0 ]]; then
+  echo "公証していない DMG は LP に載せられません（--publish と --no-notarize は同時に使えない）" >&2
+  exit 1
+fi
 
 cd "$(dirname "$0")/.."
 OUT="build/release"
@@ -63,3 +77,20 @@ fi
 
 shasum -a 256 "$DMG"
 echo "できました: $DMG"
+
+if [[ $PUBLISH == 1 ]]; then
+  echo "== 7. LP の DMG とバージョンの表記を差し替える"
+  mkdir -p site/download
+  cp "$DMG" site/download/Macorn.dmg
+  SIZE=$(python3 -c "import os,sys; print(f'{os.path.getsize(sys.argv[1])/1000/1000:.1f} MB')" "$DMG")
+  python3 - "$VERSION" "$SIZE" <<'PY'
+import re, sys
+version, size = sys.argv[1], sys.argv[2]
+path = "site/index.html"
+html = open(path, encoding="utf-8").read()
+html = re.sub(r'(<span[^>]*data-release="version"[^>]*>)[^<]*(</span>)', rf"\g<1>{version}\g<2>", html)
+html = re.sub(r'(<span[^>]*data-release="size"[^>]*>)[^<]*(</span>)', rf"\g<1>{size}\g<2>", html)
+open(path, "w", encoding="utf-8").write(html)
+PY
+  echo "LP を更新しました（バージョン $VERSION・$SIZE）。main に push すると公開されます"
+fi

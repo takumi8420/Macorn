@@ -36,7 +36,7 @@
 | `Branding/` | Macorn のアイコン・ロゴ・カラー（[Branding/README.md](Branding/README.md)） |
 | `scripts/release.sh` | 配布用の DMG を作る（Developer ID 署名・公証。出力は `build/release/`） |
 | `promo/` | 紹介動画（Remotion）と、その撮影・LP 用の画像づくり（[promo/video/README.md](promo/video/README.md)） |
-| `site/` | LP（静的な HTML）。Vercel の `kontas-projects/macorn` に公開（https://macorn.vercel.app）。main に `site/` の変更を push すると GitHub Actions が本番に公開する |
+| `site/` | LP（静的な HTML）。Vercel の `kontas-projects/macorn` に公開（https://macorn.vercel.app）。main に `site/` の変更を push すると GitHub Actions が本番に公開する。配布用の DMG も `site/download/` に置く |
 | `build/` | ビルドの出力（git 管理外。読まない） |
 
 - 2026-10-26 に noxy から Macorn へ改名した。コード・プロジェクト名・バンドル ID（`dev.macorn.Macorn`）も Macorn にそろえてある
@@ -75,6 +75,7 @@
 - **配布は Mac App Store ではなく、Developer ID 署名で直接配布する**（根拠：`docs/REQUIREMENTS.md` 9.4）
   - サンドボックスではフォルダに自由にアクセスできないため
   - 普段の開発ビルドは簡易署名（`-`）のまま。配布用の DMG は `scripts/release.sh` が Developer ID（チーム TAKUMI KON・`Q9Q29NW29B`）で署名し、公証（キーチェーンのプロファイル `macorn-notary`）を通して作る（根拠：ユーザーの依頼 2026-10-27）
+  - App Store への申請はしない。DMG は LP から配る（`site/download/Macorn.dmg`。`bash scripts/release.sh --publish` で差し替えて main に push する）（根拠：ユーザーの判断 2026-10-27「一旦申請は不要なので LP から公開する方針で」）
 - **macOS 15 以降、Swift 6（MainActor を既定）、外部ライブラリなし**（根拠：`docs/REQUIREMENTS.md` 0章 D4、10章、`Macorn.xcodeproj` の設定）
 - **実装は最後まで自走し、確認は要件に関わるときだけ**（根拠：ユーザーの指示 2026-10-26）
   - 実装 → ビルド → テスト → アプリを動かして確認 → 直す、を繰り返してから次へ進む
