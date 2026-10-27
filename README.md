@@ -39,6 +39,7 @@ v1.x 以降（内蔵ターミナル、カスタムコマンド、ワークスペ
 | 名前を変更（複数選択なら一括） | Return |
 | クイックルック | スペース |
 | パスを入力（Tab で補完） | ⌘L |
+| ほかのアプリの「Finder に表示」を Macorn で開く（フォルダの既定のアプリは macOS の制限で変えられない） | 設定（⌘,）› 連携 ›「Finder の代わりに使う」 |
 | 設定 | ⌘, |
 
 ショートカットは設定の「ショートカット」タブで変更できる。
@@ -57,7 +58,7 @@ xcodebuild -project Macorn.xcodeproj -scheme Macorn -derivedDataPath build/Deriv
 open build/DerivedData/Build/Products/Debug/Macorn.app
 ```
 
-テスト（77 件）:
+テスト（124 件）:
 
 ```bash
 xcodebuild -project Macorn.xcodeproj -scheme Macorn -derivedDataPath build/DerivedData test

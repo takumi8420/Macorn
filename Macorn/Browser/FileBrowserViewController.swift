@@ -297,6 +297,12 @@ final class FileBrowserViewController: NSViewController {
 
     // MARK: - 移動
 
+    /// フォルダを開いて、読み込めたら複数の項目を選ぶ（ほかのアプリから複数のファイルを渡されたとき）
+    func navigate(to url: URL, selectingAll selection: [URL]) {
+        navigate(to: url, selecting: selection.first)
+        pendingSelection = selection
+    }
+
     func navigate(to url: URL, selecting selection: URL? = nil, recordHistory: Bool = true) {
         let url = url.standardizedFileURL
         if recordHistory { state.history.visit(url) }

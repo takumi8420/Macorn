@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Xcode が作る Info.plist に足す項目（INFOPLIST_KEY_ では書けないものだけ）。 -->
+<plist version="1.0">
+<dict>
+	<!-- フォルダを開けるアプリとして macOS に申告する（Dock のアイコンにフォルダを落として開ける）。
+	     既定のアプリにはできない（macOS がフォルダの既定のアプリの変更を受け付けないため）。ファイルの種類は対象外 -->
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Folder</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.folder</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

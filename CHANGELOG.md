@@ -6,6 +6,23 @@
 
 ## 2026-10-27
 
+### Macorn：ほかのアプリの「Finder に表示」を Macorn で開けるようにする
+
+- **きっかけ**：konta の質問「ファイルを開くときなどのデフォルトのアプリとして指定できないのか」→ 依頼「フォルダの既定のアプリと『Finder に表示』の行き先を Macorn にできるよう、設定に切り替えを追加して。ファイルの種類は対象外で」
+- **意図・方針**
+  - 「Finder に表示」：macOS 全体の設定 `NSFileViewer` に Macorn のバンドル ID を書く切り替えを、設定の「連携」に置いた。オフで設定を消して Finder に戻す。値は Macorn に保存せず、毎回 macOS から読み直す
+  - 試したところ、この設定でほかのアプリから届くのは Finder 用の「項目を表示」ではなく、ふつうの「開く」要求だった。そのため専用の受け口は作らず、既存の `application(_:open:)` で受ける。同じフォルダのファイルは1つのタブにまとめて全部を選ぶよう直した（これまでは1つずつタブが開いていた）。フォルダはその中を開く
+  - ほかのアプリから開いたとき、Macorn が裏にいると新しいタブがすぐキーにならず、選択が別のウィンドウに付くことがあった。開いたタブを直接使うようにした
+  - フォルダの既定のアプリ：macOS 26.7 では `public.folder` の既定のアプリを変えられなかった（`NSWorkspace.setDefaultApplication` も `LSSetDefaultRoleHandlerForContentType` も paramErr。Finder に書き戻すのも同じで、テキストなどふつうの種類は変えられる）。切り替えは作らず、設定に「macOS が Finder 以外に変えられないようにしている」と書いた
+  - Info.plist にはフォルダを開けるアプリとしての申告（`CFBundleDocumentTypes`、`public.folder`）だけ残した。`GENERATE_INFOPLIST_FILE` のまま、足りない項目だけを `Macorn-Info.plist` に書いて合わせる
+  - 確認：別のバンドル ID の試験用のコピーで、「Finder に表示」（`NSWorkspace.activateFileViewerSelecting`）がファイルを選び、同じフォルダの2つを1つのタブにまとめることを確かめた。設定の切り替えで `NSFileViewer` が書かれ、オフで消えることも確かめ、最後に消えていることを確認した。利用者の環境の設定は元のまま
+- 追加 `Macorn/Integration/SystemFileViewer.swift` — 「Finder に表示」の行き先の読み書き
+- 追加 `Macorn-Info.plist`、変更 `Macorn.xcodeproj/project.pbxproj` — フォルダを開けるアプリとしての申告
+- 変更 `Macorn/Settings/SettingsView.swift` — 「連携」に「Finder の代わりに使う」
+- 変更 `Macorn/App/AppDelegate.swift`、`Macorn/Browser/FileBrowserViewController.swift` — ほかのアプリから開いたときのまとめ方と選択
+- 変更 `Macorn/App/DebugAutomation.swift` — 手順 `windows`（全ウィンドウのフォルダと選択）、`settings` / `snapsettings` / `closesettings`、`fileviewer:on|off` を追加
+- 変更 `README.md`、`AGENTS.md`、`docs/REQUIREMENTS.md` — 使い方と前提（テストの件数も 124 件に直した）
+
 ### Macorn：LP から DMG をダウンロードできるようにする
 
 - **きっかけ**：konta の判断「一旦申請は不要なので、LP から公開する方針でお願いします」（App Store への申請状況を聞かれ、前提どおり直接配布だと答えたあと）

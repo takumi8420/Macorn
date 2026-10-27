@@ -147,6 +147,7 @@ private struct IntegrationSettingsView: View {
     @State private var editor = EditorLauncher.selected?.bundleIdentifier ?? ""
     @State private var newTab = Preferences.openTerminalInNewTab
     @State private var customEditors: [ExternalApp] = []
+    @State private var revealsFiles = SystemFileViewer.revealsFiles
 
     var body: some View {
         Form {
@@ -175,13 +176,35 @@ private struct IntegrationSettingsView: View {
                 .onChange(of: editor) { _, value in Preferences.editorBundleIdentifier = value }
                 Button("その他のアプリを選ぶ…", action: chooseEditor)
             }
+            Section("Finder の代わりに使う") {
+                Toggle("「Finder に表示」を Macorn で開く", isOn: Binding(get: { revealsFiles }, set: { setRevealsFiles($0) }))
+                Text("ほかのアプリの「Finder に表示」で、その項目を Macorn で選んで表示します。すでに起動しているアプリは、開き直すと反映されます。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text("フォルダを開く既定のアプリは、macOS が Finder 以外に変えられないようにしています。Finder の中やデスクトップのフォルダは Finder で開きます。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             Section("コマンドラインツール") {
                 Text("ターミナルで `macorn .` と入力すると、今いるフォルダを Macorn で開けます。")
                 Button("インストール…") { CommandLineTool.install() }
             }
         }
         .formStyle(.grouped)
-        .onAppear(perform: loadCustomEditor)
+        .onAppear {
+            loadCustomEditor()
+            refreshFileViewer()
+        }
+    }
+
+    /// macOS 側の設定なので、ほかで変えられていることもある。開くたびに読み直す
+    private func refreshFileViewer() {
+        revealsFiles = SystemFileViewer.revealsFiles
+    }
+
+    private func setRevealsFiles(_ enabled: Bool) {
+        SystemFileViewer.setRevealsFiles(enabled)
+        refreshFileViewer()
     }
 
     private func loadCustomEditor() {

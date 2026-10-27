@@ -70,11 +70,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return controller
     }
 
-    private func openTab(at url: URL, besides host: BrowserWindowController) {
+    @discardableResult
+    private func openTab(at url: URL, besides host: BrowserWindowController) -> BrowserWindowController {
         let controller = makeController(url: url)
-        guard let hostWindow = host.window, let window = controller.window else { return }
+        guard let hostWindow = host.window, let window = controller.window else { return controller }
         hostWindow.addTabbedWindow(window, ordered: .above)
         window.makeKeyAndOrderFront(nil)
+        return controller
+    }
+
+    /// ほかのアプリから渡されたフォルダを、今のウィンドウの新しいタブ（ウィンドウがなければ新しいウィンドウ）で開く
+    private func openFromOutside(_ folder: URL) -> BrowserWindowController {
+        if let host = keyController ?? controllers.last {
+            return openTab(at: folder, besides: host)
+        }
+        return openWindow(at: folder)
     }
 
     private func makeController(url: URL) -> BrowserWindowController {
@@ -129,18 +139,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - ほかのアプリやコマンドラインから開く（要件 K-04: `macorn .`）
 
+    /// フォルダはその中を開き、ファイルは入っているフォルダを開いて選ぶ。
+    /// 設定で Macorn をフォルダの既定のアプリ・「Finder に表示」の行き先にしたときも、この経路で届く。
+    /// 同じフォルダのファイルは1つのタブにまとめて、全部を選ぶ。
     func application(_ application: NSApplication, open urls: [URL]) {
+        var folders: [URL] = []
+        var filesByFolder: [URL: [URL]] = [:]
         for url in urls where url.isFileURL {
-            let isFolder = FileTransfer.isDirectory(url) && url.pathExtension != "app"
-            let folder = isFolder ? url : url.deletingLastPathComponent()
-            if let host = keyController ?? controllers.last {
-                openTab(at: folder, besides: host)
+            if FileTransfer.isDirectory(url) && url.pathExtension != "app" {
+                folders.append(url)
             } else {
-                openWindow(at: folder)
+                let folder = url.deletingLastPathComponent().standardizedFileURL
+                if filesByFolder[folder] == nil { folders.append(folder) }
+                filesByFolder[folder, default: []].append(url)
             }
-            if !isFolder { keyController?.browser.navigate(to: folder, selecting: url) }
         }
-        NSApp.activate()
+        for folder in folders {
+            let controller = openFromOutside(folder)
+            if let files = filesByFolder[folder] {
+                controller.browser.navigate(to: folder, selectingAll: files)
+            }
+        }
+        // 自動操作ではほかのアプリでの入力を奪わない
+        if !DebugFlags.isAutomating { NSApp.activate() }
     }
 
     @objc func installCommandLineTool(_ sender: Any?) {

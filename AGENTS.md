@@ -33,6 +33,7 @@
 | `MacornTests/` | ユニットテスト（Swift Testing） |
 | `Macorn.xcodeproj/` | Xcode プロジェクト（フォルダ同期形式。`Macorn/` に置いたファイルは自動でビルド対象になる） |
 | `Macorn.entitlements` | 署名の権限（iTerm2 連携用の Apple Events） |
+| `Macorn-Info.plist` | Xcode が作る Info.plist に足す項目（フォルダを開けるアプリとしての申告） |
 | `Branding/` | Macorn のアイコン・ロゴ・カラー（[Branding/README.md](Branding/README.md)） |
 | `scripts/release.sh` | 配布用の DMG を作る（Developer ID 署名・公証。出力は `build/release/`） |
 | `promo/` | 紹介動画（Remotion）と、その撮影・LP 用の画像づくり（[promo/video/README.md](promo/video/README.md)） |
@@ -72,6 +73,9 @@
 - **サイドバーの構成は利用者が変えられる。セクション（お気に入り・タグ・場所・タグ1つ分・自分で作ったもの）の順番と表示を変えられる**（根拠：ユーザーの依頼 2026-10-26「お気に入りとあるタグを並列に置いたり順番を変えたり」）
 - **ユニットテストは普段のタグ・履歴・サイドバーの設定を書き換えない**（スキームのテストの設定で `MACORN_TAGS_PATH` / `MACORN_HISTORY_PATH` を一時ファイルにしている。サイドバーの設定は、テストでは別の保存先（`dev.macorn.Macorn.tests`）を使い、各テストは専用の保存先を渡す）
   - 自動操作でサイドバーを触るときは `MACORN_DEFAULTS_SUITE` で別の保存先を指定する
+- **設定で、ほかのアプリの「Finder に表示」を Macorn で開ける。フォルダ・ファイルの種類の既定のアプリにはしない**（根拠：ユーザーの依頼 2026-10-27「フォルダの既定のアプリと Finder に表示の行き先を Macorn にできるよう、設定に切り替えを。ファイルの種類は対象外」）
+  - 「Finder に表示」は macOS 全体の設定 `NSFileViewer` で切り替える（設定の「連携」）。届くのはふつうの「開く」要求（`application(_:open:)`）
+  - フォルダの既定のアプリは、macOS（26.7 で確認）が `public.folder` の変更を受け付けないため作れなかった。Info.plist（`Macorn-Info.plist`）ではフォルダを開けるアプリとして申告だけしている
 - **配布は Mac App Store ではなく、Developer ID 署名で直接配布する**（根拠：`docs/REQUIREMENTS.md` 9.4）
   - サンドボックスではフォルダに自由にアクセスできないため
   - 普段の開発ビルドは簡易署名（`-`）のまま。配布用の DMG は `scripts/release.sh` が Developer ID（チーム TAKUMI KON・`Q9Q29NW29B`）で署名し、公証（キーチェーンのプロファイル `macorn-notary`）を通して作る（根拠：ユーザーの依頼 2026-10-27）

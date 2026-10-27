@@ -95,6 +95,12 @@ enum DebugAutomation {
                let sidebar = split.splitViewItems.first?.viewController as? SidebarViewController {
                 print("[debug] sbrows \(sidebar.debugRows())")
             }
+        case "windows":
+            // 開いている全ウィンドウ・タブのフォルダと選択（ほかのアプリから開いたときの確認用）
+            for (index, other) in controllers().enumerated() {
+                let names = other.browser.selectedURLs.map(\.lastPathComponent).joined(separator: ",")
+                print("[debug] window \(index) path=\(other.browser.state.currentURL.path) selected=\(names)")
+            }
         case "state":
             let s = browser.state
             print("[debug] state path=\(s.currentURL.path) items=\(s.itemCount) selected=\(s.selectedCount) back=\(s.history.canGoBack) forward=\(s.history.canGoForward) editing=\(s.isEditingPath) error=\(s.error?.message ?? "-") key=\(controller.window?.isKeyWindow == true) active=\(NSApp.isActive) windows=\(controllers().count) title=\(controller.window?.title ?? "")")
@@ -121,6 +127,20 @@ enum DebugAutomation {
             print("[debug] clip=\(FileClipboard.fileURLs.map(\.lastPathComponent)) cut=\(FileClipboard.isCut)")
         case "panel":
             print("[debug] panel visible=\(OperationsPanelController.shared.isPanelVisible) running=\(OperationsPanelController.shared.store.operations.count)")
+        case "settings":
+            // 設定ウィンドウを開く（キーにしない）。引数はタブ（general / integration など）
+            let tabs: [String: SettingsTab] = ["general": .general, "integration": .integration, "sidebar": .sidebar,
+                                               "tags": .tags, "shortcuts": .shortcuts, "history": .history]
+            SettingsNavigation.shared.tab = tabs[argument] ?? .general
+            SettingsWindowController.shared.window?.orderFront(nil)
+        case "snapsettings":
+            snapshot(SettingsWindowController.shared.window, to: outDir.appendingPathComponent("\(argument).png"))
+        case "closesettings":
+            SettingsWindowController.shared.window?.orderOut(nil)
+        case "fileviewer":
+            // 「Finder に表示」の行き先の切り替え（設定の切り替えと同じ処理）
+            SystemFileViewer.setRevealsFiles(argument == "on")
+            print("[debug] fileviewer revealsFiles=\(SystemFileViewer.revealsFiles)")
         case "snappanel":
             if let panel = NSApp.windows.first(where: { $0.title == "ファイル操作" && $0.isVisible }) {
                 snapshot(panel, to: outDir.appendingPathComponent("\(argument).png"))
