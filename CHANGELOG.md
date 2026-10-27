@@ -18,6 +18,7 @@
   - Vercel のトークン・チームの ID・プロジェクトの ID は、記事どおり GitHub の Secrets（`VERCEL_TOKEN`・`VERCEL_ORG_ID`・`VERCEL_PROJECT_ID`）に置く。konta が登録した（Claude はトークンの値を扱わない）
   - 記事と違う点：`actions/checkout`・`actions/setup-node` は最新の v7 にし（v4 は Node.js 20 の廃止の警告が出た）、Node.js 22 を明示した。デプロイした URL を実行結果の概要に出す
   - 初回の実行で本番が 404 になった。原因は2つ。(1) Git 連携をつないだ時点で、Vercel がリポジトリの直下（`index.html` がない）を本番にデプロイしていた。(2) GitHub Actions のビルド結果（`--prebuilt`）では、`cleanUrls` の指定があるとトップページが見つからなくなる。手元の CLI でつくった正常なデプロイを本番に戻してから、`site/vercel.json` の `cleanUrls` を外した（LP は1ページなので不要）。手元で同じ手順のプレビューをつくり、トップページ・CSS・画像が出ることを確かめた
+  - 動作の確認（konta の依頼「その確認もそちらで試してほしい」）：使い捨てのブランチ `test/cd-check` で、`site/` を変えない push ではワークフローが動かないこと、`site/` を変える push ではプレビューが作られ（本番は変わらない）中身も反映されることを確かめ、ブランチは消した。main への push で本番に公開されることは前の push で確かめた。`site/` を変えない main への push で本番が動かないことは、この記録の push で確かめる
 - 追加 `.github/workflows/vercel-production.yml`、`.github/workflows/vercel-preview.yml` — 本番とプレビューのデプロイ
 - 追加 `vercel.json`、変更 `site/vercel.json` — Vercel の Git 連携による自動デプロイを止める。`cleanUrls` を外す
 - 変更 `AGENTS.md`、`README.md` — 公開のしかた
