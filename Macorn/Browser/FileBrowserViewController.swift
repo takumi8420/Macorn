@@ -35,6 +35,8 @@ final class FileBrowserViewController: NSViewController {
     private var loadingFolders = Set<ObjectIdentifier>()
     /// 次に読み込みが終わったときに選択する項目と、名前の変更を始める項目
     var pendingSelection: [URL] = []
+    /// ほかのアプリから開いたファイル。プレビューを切っていても、これを選んでいる間は出す
+    var pinnedPreviewURL: URL?
     var pendingRename: URL?
     /// 名前の変更中は、外部の変更による再読み込みを後回しにする（入力欄が消えないように）
     var renamingNode: FileNode?
@@ -429,7 +431,13 @@ final class FileBrowserViewController: NSViewController {
         for folder in folders {
             delegate?.browser(self, openInNewTab: folder.url)
         }
-        for file in files {
+        // 既定のアプリが Macorn のファイル（PDF など）は、外に出さずにその場でプレビューする（新しいタブを開かない）
+        let insideMacorn = files.filter { DefaultFileApps.isMacornDefault(for: $0.url) }
+        if insideMacorn.count == 1, FilePreviewController.kind(for: insideMacorn[0].url) != nil {
+            pinnedPreviewURL = insideMacorn[0].url
+            updateFilePreview()
+        }
+        for file in files where !insideMacorn.contains(where: { $0 === file }) {
             NSWorkspace.shared.open(file.url)
         }
     }

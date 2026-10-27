@@ -24,6 +24,7 @@ enum Preferences {
         static let checkForUpdates = "checkForUpdates"
         static let skippedUpdateVersion = "skippedUpdateVersion"
         static let suppressMoveToApplications = "suppressMoveToApplications"
+        static let previousFileHandlers = "previousFileHandlers"
     }
 
     private static var defaults: UserDefaults { AppDefaults.store }
@@ -75,6 +76,12 @@ enum Preferences {
     static var suppressMoveToApplications: Bool {
         get { defaults.bool(forKey: Key.suppressMoveToApplications) }
         set { defaults.set(newValue, forKey: Key.suppressMoveToApplications) }
+    }
+
+    /// ファイルの種類の既定のアプリを Macorn にする前のアプリ（種類の ID → アプリの場所）。オフにしたら戻す
+    static var previousFileHandlers: [String: String] {
+        get { defaults.dictionary(forKey: Key.previousFileHandlers) as? [String: String] ?? [:] }
+        set { defaults.set(newValue, forKey: Key.previousFileHandlers) }
     }
 
     /// フォルダの合計サイズを計算して表示する（要件 V-09）

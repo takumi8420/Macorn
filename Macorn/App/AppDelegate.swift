@@ -84,8 +84,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return controller
     }
 
-    /// ほかのアプリから渡されたフォルダを、今のウィンドウの新しいタブ（ウィンドウがなければ新しいウィンドウ）で開く
+    /// ほかのアプリから渡されたフォルダを、今のウィンドウの新しいタブ（ウィンドウがなければ新しいウィンドウ）で開く。
+    /// そのフォルダをすでに表示しているタブがあれば、新しいタブは作らずにそれを前に出す
     private func openFromOutside(_ folder: URL) -> BrowserWindowController {
+        let wanted = FileBrowserViewController.comparablePath(folder)
+        if let existing = controllers.first(where: { FileBrowserViewController.comparablePath($0.browser.state.currentURL) == wanted }) {
+            existing.window?.makeKeyAndOrderFront(nil)
+            return existing
+        }
         if let host = keyController ?? controllers.last {
             return openTab(at: folder, besides: host)
         }
@@ -166,6 +172,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         for folder in folders {
             let controller = openFromOutside(folder)
             if let files = filesByFolder[folder] {
+                // 1つのプレビューできるファイルなら、プレビューを切っていても出す（Macorn で「開いた」ので）
+                if files.count == 1, FilePreviewController.kind(for: files[0]) != nil {
+                    controller.browser.pinnedPreviewURL = files[0]
+                }
                 controller.browser.navigate(to: folder, selectingAll: files)
             }
         }

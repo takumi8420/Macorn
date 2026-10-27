@@ -477,7 +477,8 @@ final class FilePreviewController: NSViewController {
 
     @objc private func openInBrowser(_ sender: Any?) {
         guard let fileURL else { return }
-        NSWorkspace.shared.open(fileURL)
+        // HTML の既定のアプリを Macorn にしていても、ブラウザなどほかのアプリで開く
+        DefaultFileApps.openOutside(fileURL)
     }
 
     #if DEBUG

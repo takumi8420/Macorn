@@ -99,7 +99,7 @@ enum DebugAutomation {
             // 開いている全ウィンドウ・タブのフォルダと選択（ほかのアプリから開いたときの確認用）
             for (index, other) in controllers().enumerated() {
                 let names = other.browser.selectedURLs.map(\.lastPathComponent).joined(separator: ",")
-                print("[debug] window \(index) path=\(other.browser.state.currentURL.path) selected=\(names)")
+                print("[debug] window \(index) path=\(other.browser.state.currentURL.path) selected=\(names) preview=\(other.browser.isFilePreviewVisible)")
             }
         case "state":
             let s = browser.state
@@ -145,6 +145,15 @@ enum DebugAutomation {
             snapshot(SettingsWindowController.shared.window, to: outDir.appendingPathComponent("\(argument).png"))
         case "closesettings":
             SettingsWindowController.shared.window?.orderOut(nil)
+        case "fileapp":
+            // 種類ごとの既定のアプリの切り替え（設定と同じ処理）。引数は <種類>:on|off（例 pdf:on）
+            let parts = argument.split(separator: ":").map(String.init)
+            if parts.count == 2, let kind = PreviewFileKind(rawValue: parts[0]) {
+                Task {
+                    do { try await DefaultFileApps.setOpensFiles(parts[1] == "on", kind: kind) } catch { print("[debug] fileapp error \(error)") }
+                    print("[debug] fileapp \(kind.rawValue) opens=\(DefaultFileApps.opensFiles(of: kind))")
+                }
+            }
         case "fileviewer":
             // 「Finder に表示」の行き先の切り替え（設定の切り替えと同じ処理）
             SystemFileViewer.setRevealsFiles(argument == "on")

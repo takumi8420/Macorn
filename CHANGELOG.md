@@ -6,6 +6,24 @@
 
 ## 2026-10-27
 
+### Macorn：PDF・Markdown・画像などを Macorn で開けるようにする
+
+- **きっかけ**：konta の質問「Claude などから PDF を開くとき Finder は候補に出るが Macorn が出ない。既定で Macorn で開く設定はできないか」→ 依頼「PDF・Markdown・画像などプレビューできる種類を Macorn で開けるようにして（『このアプリケーションで開く』に出す）、設定から既定のアプリにもできるようにして」。途中で konta の指摘「アプリ内で PDF を選択したらプレビュー表示がされるようにしてほしい。今は新規でタブが表示されてしまう」
+- **意図・方針**
+  - 前提の変更：「ファイルの種類は対象外」をやめ、プレビューできる種類（PDF・Markdown・HTML・画像・動画・音声）を開けるアプリとして Info.plist に申告した。書類（Word など）はクイックルックでしか見られないので入れない。Alternate なので、入れただけでは既定にならない
+  - 設定の「連携 › ファイルを Macorn で開く」で種類ごとに既定のアプリにできる。macOS の既定は具体的な種類ごとなので、画像なら PNG・JPEG・GIF・HEIC・WebP などをまとめて切り替える。オンにする前のアプリを覚えておき、オフでそれに戻す
+  - 試すと、macOS 26 では既定のアプリの変更に利用者の確認が要った。`NSWorkspace.setDefaultApplication` は確認を出し（画面のないコマンドからは「取り消し」になる）、`LSSetDefaultRoleHandlerForContentType` は成功を返しても変わらない。設定の切り替えはアプリの中から呼ぶので、確認が出てそこで決める
+  - ほかのアプリから開いたファイルは、フォルダの中で選んでプレビューを出す（プレビューを切っていても、そのファイルを選んでいる間は出す）。そのフォルダをすでに表示しているタブがあれば、新しいタブは作らずそれを使う
+  - konta の指摘への対応：PDF の既定を Macorn にすると、Macorn の中で PDF を開いたとき自分に戻ってきて新しいタブが開いていた。既定が Macorn のファイルは外に出さず、その場でプレビューするようにした。HTML のプレビューの「ブラウザで開く」も、既定が Macorn ならほかのアプリで開く
+  - 確認：「このアプリケーションで開く」の候補に Macorn が入ること（テキストには入らないこと）、PDF の既定が Macorn のときに Macorn の中で開くと同じタブでプレビューが出ること（プレビューを切った状態で）を確かめた。ユニットテストは 138 件
+  - 試験の途中で konta の PDF の既定が Macorn になった（確認の画面で承認されたため）。konta の判断で、そのまま Macorn にしておく。戻すには設定の切り替えをオフにする（macOS の確認が出る）
+- 追加 `Macorn/Integration/DefaultFileApps.swift`、`MacornTests/DefaultFileAppsTests.swift`
+- 変更 `Macorn-Info.plist` — 開ける種類の申告と Markdown の種類の宣言
+- 変更 `Macorn/Settings/SettingsView.swift`、`Macorn/Model/Preferences.swift` — 設定の切り替えと、前のアプリの記憶
+- 変更 `Macorn/App/AppDelegate.swift`、`Macorn/Browser/FileBrowserViewController.swift`、`Macorn/Browser/FileBrowserViewController+Preview.swift`、`Macorn/Preview/FilePreviewController.swift` — 開いたファイルのプレビュー、その場でのプレビュー、既存のタブの再利用
+- 変更 `Macorn/App/DebugAutomation.swift` — 手順 `fileapp:<種類>:on|off`、`windows` にプレビューの表示を追加
+- 変更 `README.md`、`AGENTS.md`、`docs/REQUIREMENTS.md` — 使い方と前提
+
 ### Macorn：DMG にドラッグの案内を付け、「アプリケーション」への移動を尋ねる（0.3.1 を公開）
 
 - **きっかけ**：konta の指摘「インストール時にアプリケーションフォルダに入らない上、ドラッグアンドドロップを促しもしない」→ 依頼「DMG のウィンドウにドラッグを促す背景と配置を付け、アプリにも『アプリケーション』フォルダへ移すかを尋ねる仕組みを入れて。できたら 0.3.1 として LP に公開して」

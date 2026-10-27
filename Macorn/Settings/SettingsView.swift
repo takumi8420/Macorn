@@ -161,6 +161,8 @@ private struct IntegrationSettingsView: View {
     @State private var newTab = Preferences.openTerminalInNewTab
     @State private var customEditors: [ExternalApp] = []
     @State private var revealsFiles = SystemFileViewer.revealsFiles
+    @State private var opensKinds: Set<PreviewFileKind> = []
+    @State private var fileAppError: String?
 
     var body: some View {
         Form {
@@ -198,6 +200,19 @@ private struct IntegrationSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            Section("ファイルを Macorn で開く") {
+                ForEach(PreviewFileKind.allCases) { kind in
+                    Toggle(kind.title, isOn: Binding(get: { opensKinds.contains(kind) }, set: { setOpens($0, kind: kind) }))
+                }
+                Text("オンにすると、その種類のファイルをダブルクリックしたときに Macorn で開き、フォルダの中で選んでプレビューを出します。オフにすると前のアプリに戻します。オフのままでも「このアプリケーションで開く」から Macorn を選べます。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if let fileAppError {
+                    Text(fileAppError)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+            }
             Section("コマンドラインツール") {
                 Text("ターミナルで `macorn .` と入力すると、今いるフォルダを Macorn で開けます。")
                 Button("インストール…") { CommandLineTool.install() }
@@ -213,6 +228,20 @@ private struct IntegrationSettingsView: View {
     /// macOS 側の設定なので、ほかで変えられていることもある。開くたびに読み直す
     private func refreshFileViewer() {
         revealsFiles = SystemFileViewer.revealsFiles
+        opensKinds = Set(PreviewFileKind.allCases.filter(DefaultFileApps.opensFiles(of:)))
+    }
+
+    private func setOpens(_ enabled: Bool, kind: PreviewFileKind) {
+        if enabled { opensKinds.insert(kind) } else { opensKinds.remove(kind) }
+        fileAppError = nil
+        Task {
+            do {
+                try await DefaultFileApps.setOpensFiles(enabled, kind: kind)
+            } catch {
+                fileAppError = "既定のアプリを変えられませんでした（\(error.localizedDescription)）"
+            }
+            refreshFileViewer()
+        }
     }
 
     private func setRevealsFiles(_ enabled: Bool) {

@@ -19,7 +19,9 @@ extension FileBrowserViewController: NSSplitViewDelegate {
     /// 選択が1つのプレビューできるファイル（Markdown・HTML・画像・PDF・動画など）ならプレビューを出し、それ以外なら閉じる
     func updateFilePreview() {
         let nodes = selectedNodes
-        guard Preferences.filePreview, nodes.count == 1, let node = nodes.first,
+        let pinned = nodes.count == 1 && pinnedPreviewURL.map { Self.comparablePath($0) == Self.comparablePath(nodes[0].url) } == true
+        if !pinned && !nodes.isEmpty { pinnedPreviewURL = nil }
+        guard Preferences.filePreview || pinned, nodes.count == 1, let node = nodes.first,
               !node.entry.isFolder, FilePreviewController.kind(for: node.url) != nil else {
             if isFilePreviewVisible { hideFilePreview() }
             return
