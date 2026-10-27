@@ -111,13 +111,16 @@ MACORN_DEBUG_OUT=/tmp/shots MACORN_HISTORY_PATH=/tmp/history.sqlite MACORN_DEBUG
 | `promo/video/` | 紹介動画（Remotion）。場面は `src/Flow.tsx` |
 | `promo/build-site-assets.sh` | LP 用の画像・動画を `site/assets/` に作る |
 | `site/` | LP（静的な HTML）。https://macorn.vercel.app に公開している |
+| `.github/workflows/vercel-*.yml` | LP の公開（main への push で本番、ほかのブランチでプレビュー。`site/` に変更があるときだけ） |
 
 ```bash
 bash promo/sample/make-sample.sh
 python3 promo/capture/capture.py promo/capture/steps.txt promo/video/public/flow
 (cd promo/video && npm install && npm run render)
 bash promo/build-site-assets.sh
-(cd site && vercel deploy --prod)   # LP を公開し直す（Vercel の kontas-projects/macorn）
+git push   # main に site/ の変更を push すると、GitHub Actions が LP を本番に公開する
 ```
 
 画面のロック中・ディスプレイのスリープ中はウィンドウを撮れない。
+
+GitHub Actions での公開には、リポジトリの Secrets に `VERCEL_TOKEN`（Vercel の Account Settings › Tokens で作る）・`VERCEL_ORG_ID`・`VERCEL_PROJECT_ID`（`site/.vercel/project.json` の値）が必要。手元から直接公開するときは `cd site && vercel deploy --prod`。

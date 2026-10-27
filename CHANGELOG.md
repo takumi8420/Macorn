@@ -6,6 +6,21 @@
 
 ## 2026-10-27
 
+### Macorn：LP の自動デプロイ（CD）を GitHub Actions で行う
+
+- **きっかけ**：konta の依頼「Vercel との連携も確認してほしい。CD 含めて」。確認の途中で「これを元にして、GitHub Actions に設定してほしい」（Qiita「Vercel × GitHub Actions」の記事）
+- **意図・方針**
+  - 確認すると、Vercel のプロジェクト `macorn` は GitHub とつながっておらず、CLI から直接デプロイしていた。konta が `vercel git connect` で `takumi8420/Macorn` とつないだ
+  - 記事のやり方に合わせ、デプロイは GitHub Actions から Vercel の CLI で行う（`vercel pull` → `vercel build` → `vercel deploy --prebuilt`）。main への push は本番、ほかのブランチはプレビュー
+  - CLI は `site/` の中で動かすので、Vercel のルートディレクトリは `.` のままでよい（変更しない）
+  - `site/` に変更があるときだけ動かす（paths の指定）。アプリのコードだけの push では LP を作り直さない。本番は手動でも動かせる
+  - Vercel 側の Git 連携による自動デプロイは、`vercel.json`（リポジトリ直下と `site/`）の `git.deploymentEnabled: false` で止め、二重に公開しない
+  - Vercel のトークン・チームの ID・プロジェクトの ID は、記事どおり GitHub の Secrets（`VERCEL_TOKEN`・`VERCEL_ORG_ID`・`VERCEL_PROJECT_ID`）に置く。konta が登録した（Claude はトークンの値を扱わない）
+  - 記事と違う点：`actions/checkout` は v4 にし、Node.js 22 を明示した。デプロイした URL を実行結果の概要に出す
+- 追加 `.github/workflows/vercel-production.yml`、`.github/workflows/vercel-preview.yml` — 本番とプレビューのデプロイ
+- 追加 `vercel.json`、変更 `site/vercel.json` — Vercel の Git 連携による自動デプロイを止める
+- 変更 `AGENTS.md`、`README.md` — 公開のしかた
+
 ### Macorn：GitHub のリモートを追加して push する
 
 - **きっかけ**：konta の依頼（`git remote add origin git@github.com:takumi8420/Macorn.git` → `git branch -M main` → `git push -u origin main`）
