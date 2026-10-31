@@ -43,7 +43,7 @@ v1.x 以降（内蔵ターミナル、カスタムコマンド、ワークスペ
 | 新規フォルダ / 新規ファイル | ⇧⌘N / ⌥⌘N、ツールバーのボタン |
 | PDF・Markdown・HTML・画像・動画・音声を Macorn で開く（「このアプリケーションで開く」に出る。種類ごとに既定のアプリにもできる） | 設定（⌘,）› 連携 ›「ファイルを Macorn で開く」 |
 | ほかのアプリの「Finder に表示」を Macorn で開く（フォルダの既定のアプリは macOS の制限で変えられない） | 設定（⌘,）› 連携 ›「Finder の代わりに使う」 |
-| 新しいバージョンを確認（起動時にも確認。設定でオフにできる） | Macorn ›「アップデートを確認…」、設定（⌘,）› 一般 › アップデート |
+| 新しいバージョンを確認し、「今すぐ更新」で入れ替えて開き直す（起動時にも確認。設定でオフにできる） | Macorn ›「アップデートを確認…」、設定（⌘,）› 一般 › アップデート |
 | 設定 | ⌘, |
 
 ショートカットは設定の「ショートカット」タブで変更できる。
@@ -129,6 +129,7 @@ MACORN_DEBUG_OUT=/tmp/shots MACORN_HISTORY_PATH=/tmp/history.sqlite MACORN_DEBUG
 | `MACORN_DEBUG_LAUNCH_LOG` | ターミナル・エディタを実際には起動せず、起動しようとした内容をこのファイルに書く |
 | `MACORN_MOVE_DEST` / `MACORN_MOVE_ANSWER` | 「アプリケーションへ移動」の確認用。移す先を差し替え（Debug でもこれがあれば尋ねる）、`move` / `skip` で尋ねずに答える |
 | `MACORN_UPDATE_URL` | 新しい版を確かめる先（既定は https://macorn.vercel.app/version.json。`file://` も可） |
+| `MACORN_UPDATE_TEAM` | 自動更新で受け入れる署名のチーム（開発用ビルドは簡易署名でチームがないため、確認のときに渡す。例 `Q9Q29NW29B`）。Debug ビルドだけで効く |
 | `MACORN_DEBUG_COPY_DELAY_US` | コピーをわざと遅くする（進み具合の表示と中止の確認用） |
 
 ## 紹介動画と LP

@@ -10,7 +10,8 @@ struct ReleaseInfo: Decodable, Equatable {
     var page: URL?
 }
 
-/// 新しい版が出ていないかを確かめて知らせる（外部ライブラリなし。入れ替えは利用者が手動で行う）。
+/// 新しい版が出ていないかを確かめて知らせる（外部ライブラリなし）。
+/// 「今すぐ更新」で UpdateInstaller が入れ替えて開き直す。自動でできないときはブラウザでのダウンロードに戻す。
 /// 起動時（設定でオフにできる）と、メニューの「アップデートを確認…」で確かめる。
 enum UpdateChecker {
     enum Result: Equatable {
@@ -90,7 +91,11 @@ enum UpdateChecker {
             guard case .available(let info) = result else { return }
             switch response {
             case .alertFirstButtonReturn:
-                NSWorkspace.shared.open(info.download)
+                if UpdateInstaller.canInstall {
+                    UpdateInstaller.start(info)
+                } else {
+                    NSWorkspace.shared.open(info.download)
+                }
             case .alertThirdButtonReturn:
                 Preferences.skippedUpdateVersion = info.version
             default:
@@ -109,11 +114,19 @@ enum UpdateChecker {
         switch result {
         case .available(let info):
             alert.messageText = "新しいバージョンの Macorn があります"
-            alert.informativeText = """
-            Macorn \(info.version) を公開しました（お使いの版は \(currentVersion)）。
-            ダウンロードした DMG を開き、Macorn を「アプリケーション」へドラッグして入れ替えてください。設定・タグ・履歴はそのまま残ります。
-            """
-            alert.addButton(withTitle: "ダウンロード")
+            if UpdateInstaller.canInstall {
+                alert.informativeText = """
+                Macorn \(info.version) を公開しました（お使いの版は \(currentVersion)）。
+                「今すぐ更新」で新しい版をダウンロードして入れ替え、Macorn を開き直します。設定・タグ・履歴はそのまま残ります。
+                """
+                alert.addButton(withTitle: "今すぐ更新")
+            } else {
+                alert.informativeText = """
+                Macorn \(info.version) を公開しました（お使いの版は \(currentVersion)）。
+                ダウンロードした DMG を開き、Macorn を「アプリケーション」へドラッグして入れ替えてください。設定・タグ・履歴はそのまま残ります。
+                """
+                alert.addButton(withTitle: "ダウンロード")
+            }
             alert.addButton(withTitle: "あとで")
             if !manual { alert.addButton(withTitle: "このバージョンをスキップ") }
         case .upToDate:

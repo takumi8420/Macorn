@@ -147,6 +147,21 @@ enum DebugAutomation {
                 print("[debug] updatecheck current=\(UpdateChecker.currentVersion) result=\(result)")
                 UpdateChecker.present(result, manual: false, in: controller.window)
             }
+        case "updateinstall":
+            // 自動更新の入れ替え（引数は version.json の URL。版の比較は飛ばす）。用意できたら Macorn を終えて入れ替え、開き直す
+            Task {
+                do {
+                    let url = URL(string: argument) ?? UpdateChecker.feedURL
+                    let data = url.isFileURL ? try Data(contentsOf: url) : try await URLSession.shared.data(from: url).0
+                    let info = try JSONDecoder().decode(ReleaseInfo.self, from: data)
+                    print("[debug] updateinstall team=\(UpdateInstaller.ownTeamIdentifier ?? "nil") canInstall=\(UpdateInstaller.canInstall) to=\(UpdateInstaller.destination.path)")
+                    let staged = try await UpdateInstaller.prepare(info) { print("[debug] updateinstall progress=\($0)") }
+                    print("[debug] updateinstall staged=\(staged.path)")
+                    UpdateInstaller.relaunch(replacing: UpdateInstaller.destination, with: staged)
+                } catch {
+                    print("[debug] updateinstall error=\(error.localizedDescription)")
+                }
+            }
         case "settings":
             // 設定ウィンドウを開く（キーにしない）。引数はタブ（general / integration など）
             let tabs: [String: SettingsTab] = ["general": .general, "integration": .integration, "sidebar": .sidebar,
