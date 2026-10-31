@@ -127,6 +127,18 @@ enum DebugAutomation {
             print("[debug] clip=\(FileClipboard.fileURLs.map(\.lastPathComponent)) cut=\(FileClipboard.isCut)")
         case "panel":
             print("[debug] panel visible=\(OperationsPanelController.shared.isPanelVisible) running=\(OperationsPanelController.shared.store.operations.count)")
+        case "clickpath":
+            // パスバーを1回クリックする。引数は横の位置（0〜1。1 に近いほど右）
+            if let bar = browser.pathBarHost, let window = bar.window {
+                let fraction = CGFloat(Double(argument) ?? 0.9)
+                let point = bar.convert(NSPoint(x: bar.bounds.width * fraction, y: bar.bounds.midY), to: nil)
+                for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+                    if let event = NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                                      windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1) {
+                        window.sendEvent(event)
+                    }
+                }
+            }
         case "updatecheck":
             // 新しい版の確認（引数は確かめる先の URL）。結果を書き出し、アラートをシートで出す（snapsheet で撮る）
             let url = URL(string: argument) ?? UpdateChecker.feedURL
@@ -297,6 +309,15 @@ enum DebugAutomation {
             let parts = argument.split(separator: "=", maxSplits: 1).map(String.init)
             if parts.count == 2, let item = SidebarStore.shared.favorites.first(where: { $0.url.lastPathComponent == parts[0] }) {
                 SidebarStore.shared.renameFavorite(item.url, to: parts[1])
+            }
+        case "toolbarclick":
+            // ツールバーのボタンを押す。引数は識別子（macorn.newFolder など）
+            if let item = controller.window?.toolbar?.items.first(where: { $0.itemIdentifier.rawValue == argument }) {
+                controller.window?.toolbar?.validateVisibleItems()
+                print("[debug] toolbarclick \(argument) enabled=\(item.isEnabled)")
+                if item.isEnabled, let action = item.action { NSApp.sendAction(action, to: item.target, from: item) }
+            } else {
+                print("[debug] toolbarclick \(argument) not found")
             }
         case "toolbar":
             controller.window?.toolbar?.validateVisibleItems()

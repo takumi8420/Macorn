@@ -12,6 +12,8 @@ extension NSToolbarItem.Identifier {
     static let parent = NSToolbarItem.Identifier("macorn.parent")
     static let split = NSToolbarItem.Identifier("macorn.split")
     static let favorite = NSToolbarItem.Identifier("macorn.favorite")
+    static let newFolder = NSToolbarItem.Identifier("macorn.newFolder")
+    static let newFile = NSToolbarItem.Identifier("macorn.newFile")
 }
 
 /// 1つのウィンドウ（= 1つのタブ）。サイドバーと、1つまたは2つの画面を並べる。
@@ -104,6 +106,9 @@ final class BrowserWindowController: NSWindowController {
     @objc func goToParent(_ sender: Any?) { browser.goToParent() }
     @objc func openSelection(_ sender: Any?) { browser.openSelection() }
     @objc func editPath(_ sender: Any?) { browser.beginEditingPath() }
+    /// ツールバーのボタン：操作対象の画面の、表示中のフォルダに作る（メニューの「新規フォルダ」「新規ファイル」と同じ）
+    @objc func createFolderFromToolbar(_ sender: Any?) { browser.newFolder(sender) }
+    @objc func createFileFromToolbar(_ sender: Any?) { browser.newFile(sender) }
 
     @objc func goToHome(_ sender: Any?) { go(to: FileManager.default.homeDirectoryForCurrentUser) }
     @objc func goToDesktop(_ sender: Any?) { go(toDirectory: .desktopDirectory) }
@@ -209,7 +214,8 @@ final class BrowserWindowController: NSWindowController {
         case #selector(openSelection(_:)): browser.state.selectedCount > 0
         case #selector(addToSidebar(_:)):
             !favoriteTargets.isEmpty
-        case #selector(toggleFavoriteFolder(_:)):
+        case #selector(toggleFavoriteFolder(_:)), #selector(createFolderFromToolbar(_:)), #selector(createFileFromToolbar(_:)):
+            // タグの一覧は実際のフォルダではないので、作れない
             browser.state.currentURL.isFileURL
         case #selector(copyToOtherPane(_:)), #selector(moveToOtherPane(_:)):
             panes.isSplit && !browser.selectedNodes.isEmpty && !(window?.firstResponder is NSText)
@@ -283,7 +289,7 @@ extension BrowserWindowController: NSWindowDelegate {
 
 extension BrowserWindowController: NSToolbarDelegate {
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.toggleSidebar, .sidebarTrackingSeparator, .back, .forward, .parent, .flexibleSpace, .favorite, .split]
+        [.toggleSidebar, .sidebarTrackingSeparator, .back, .forward, .parent, .flexibleSpace, .newFolder, .newFile, .favorite, .split]
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
@@ -302,6 +308,10 @@ extension BrowserWindowController: NSToolbarDelegate {
             makeItem(itemIdentifier, label: "進む", symbol: "chevron.right", action: #selector(goForward(_:)))
         case .parent:
             makeItem(itemIdentifier, label: "親フォルダ", symbol: "arrow.up", action: #selector(goToParent(_:)))
+        case .newFolder:
+            makeItem(itemIdentifier, label: "新規フォルダ（⇧⌘N）", symbol: "folder.badge.plus", action: #selector(createFolderFromToolbar(_:)))
+        case .newFile:
+            makeItem(itemIdentifier, label: "新規ファイル（⌥⌘N）", symbol: "doc.badge.plus", action: #selector(createFileFromToolbar(_:)))
         case .favorite:
             makeItem(itemIdentifier, label: "お気に入り", symbol: "star", action: #selector(toggleFavoriteFolder(_:)))
         case .split:

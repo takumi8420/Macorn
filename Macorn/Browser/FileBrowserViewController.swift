@@ -37,6 +37,8 @@ final class FileBrowserViewController: NSViewController {
     var pendingSelection: [URL] = []
     /// ほかのアプリから開いたファイル。プレビューを切っていても、これを選んでいる間は出す
     var pinnedPreviewURL: URL?
+    /// パスバー（自動操作でクリックするため）
+    var pathBarHost: NSView?
     var pendingRename: URL?
     /// 名前の変更中は、外部の変更による再読み込みを後回しにする（入力欄が消えないように）
     var renamingNode: FileNode?
@@ -78,6 +80,7 @@ final class FileBrowserViewController: NSViewController {
 
         let pathBar = NSHostingView(rootView: PathBarView(state: state, actions: pathBarActions))
         pathBar.sizingOptions = []
+        pathBarHost = pathBar
         let statusBar = NSHostingView(rootView: StatusBarView(state: state))
         statusBar.sizingOptions = []
         let messageHost = NSHostingView(rootView: PaneMessageView(state: state, onOpenSettings: Self.openPrivacySettings))
@@ -293,7 +296,8 @@ final class FileBrowserViewController: NSViewController {
                 guard let self else { return text }
                 return PathCompletion.complete(text, relativeTo: folderForRelativePaths)
             },
-            endEditing: { [weak self] in self?.focusList() }
+            endEditing: { [weak self] in self?.focusList() },
+            beginEditing: { [weak self] in self?.beginEditingPath() }
         )
     }
 

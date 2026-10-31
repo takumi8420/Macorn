@@ -7,6 +7,8 @@ struct PathBarActions {
     var commitPath: (String) -> Bool
     var complete: (String) -> String
     var endEditing: () -> Void
+    /// パスの直接入力を始める（1回のクリック・⌘L）
+    var beginEditing: () -> Void
 }
 
 /// パンくずリスト（要件 N-06）と、パスの直接入力欄（要件 N-07）。
@@ -40,7 +42,8 @@ struct PathBarView: View {
         .opacity(isDimmed ? 0.55 : 1)
         .background(isHighlighted ? Theme.shared.accent.opacity(0.10) : .clear)
         .contentShape(Rectangle())
-        .onTapGesture(count: 2) { state.isEditingPath = true }
+        // 空いている所を1回クリックすると、パスを直接入力できる（⌘L と同じ）
+        .onTapGesture { startEditing() }
         .overlay(alignment: .bottom) {
             // 2画面のときは、操作対象の画面の下に色付きの線を引いて区別する（要件 P-03）
             if isHighlighted {
@@ -75,6 +78,11 @@ struct PathBarView: View {
         return path.hasSuffix("/") ? path : path + "/"
     }
 
+    private func startEditing() {
+        guard !state.isEditingPath else { return }
+        actions.beginEditing()
+    }
+
     private func finishEditing() {
         state.isEditingPath = false
         actions.endEditing()
@@ -103,7 +111,8 @@ struct PathBarView: View {
                     BreadcrumbButton(
                         url: url,
                         isCurrent: index == components.count - 1,
-                        navigate: actions.navigate
+                        navigate: actions.navigate,
+                        beginEditing: startEditing
                     )
                 }
             }
@@ -127,12 +136,14 @@ private struct BreadcrumbButton: View {
     let url: URL
     let isCurrent: Bool
     let navigate: (URL) -> Void
+    /// 今いるフォルダ（いちばん右）をクリックしたら、移動の代わりにパスの入力にする
+    let beginEditing: () -> Void
 
     @State private var isHovering = false
 
     var body: some View {
         Button {
-            navigate(url)
+            if isCurrent { beginEditing() } else { navigate(url) }
         } label: {
             HStack(spacing: 4) {
                 Image(nsImage: Self.icon(for: url))
@@ -154,7 +165,7 @@ private struct BreadcrumbButton: View {
         .contextMenu {
             SiblingFolderMenu(url: url, navigate: navigate)
         }
-        .help(url.path)
+        .help(isCurrent ? "クリックでパスを入力" : url.path)
     }
 
     static func name(for url: URL) -> String {
