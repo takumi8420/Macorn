@@ -6,6 +6,13 @@
 
 ## 2026-10-31
 
+### Macorn：バージョン 0.3.4 を LP で公開する
+
+- **きっかけ**：konta の依頼「0.3.4 で公開」（パスのコピーのボタンと、右クリックの「セクションに置く」を受けて）
+- **意図・方針**：0.3.3 → 0.3.4（ビルド番号は 6 → 7）。`scripts/release.sh --publish` で署名・公証した DMG・LP の表記・`version.json` をまとめて差し替えた。0.3.0 以降の利用者には起動時に知らせが出る
+- 変更 `Macorn.xcodeproj/project.pbxproj` — `MARKETING_VERSION` を 0.3.4、`CURRENT_PROJECT_VERSION` を 7 に
+- 変更 `site/download/Macorn.dmg`、`site/index.html`、`site/version.json` — 0.3.4 の DMG・表記・最新版の情報
+
 ### Macorn：パスをすぐコピーできるようにし、一覧の右クリックからセクションに置けるようにする
 
 - **きっかけ**：konta の依頼「パスのコピーもすぐにできるようにしてほしい」「フォルダのメニューにおいてもセクションを指定できるようにしたい」
