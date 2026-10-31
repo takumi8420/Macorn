@@ -38,7 +38,8 @@ v1.x 以降（内蔵ターミナル、カスタムコマンド、ワークスペ
 | お気に入り・セクションの項目をほかのタグへ移す | 項目をタグへドラッグ（⌥ を押しながらで元の場所にも残す） |
 | 名前を変更（複数選択なら一括） | Return |
 | クイックルック | スペース |
-| パスを入力（Tab で補完） | ⌘L |
+| パスを入力（Tab で補完） | ⌘L、パスバーの空いている所か今いるフォルダの名前を1回クリック |
+| 新規フォルダ / 新規ファイル | ⇧⌘N / ⌥⌘N、ツールバーのボタン |
 | PDF・Markdown・HTML・画像・動画・音声を Macorn で開く（「このアプリケーションで開く」に出る。種類ごとに既定のアプリにもできる） | 設定（⌘,）› 連携 ›「ファイルを Macorn で開く」 |
 | ほかのアプリの「Finder に表示」を Macorn で開く（フォルダの既定のアプリは macOS の制限で変えられない） | 設定（⌘,）› 連携 ›「Finder の代わりに使う」 |
 | 新しいバージョンを確認（起動時にも確認。設定でオフにできる） | Macorn ›「アップデートを確認…」、設定（⌘,）› 一般 › アップデート |
@@ -137,7 +138,7 @@ MACORN_DEBUG_OUT=/tmp/shots MACORN_HISTORY_PATH=/tmp/history.sqlite MACORN_DEBUG
 | `promo/capture/` | Debug ビルドを自動操作して画面を撮る（`capture.py` と手順の `steps.txt`） |
 | `promo/video/` | 紹介動画（Remotion）。場面は `src/Flow.tsx` |
 | `promo/build-site-assets.sh` | LP 用の画像・動画を `site/assets/` に作る |
-| `site/` | LP（静的な HTML）。https://macorn.vercel.app に公開している |
+| `site/` | LP（静的な HTML）。https://macorn.vercel.app に公開している。ヒーローの立体図（実際のフォルダと整理の次元。ドラッグで回せる）は `site/dims.js` が描く |
 | `.github/workflows/vercel-*.yml` | LP の公開（main への push で本番、ほかのブランチでプレビュー。`site/` に変更があるときだけ） |
 
 ```bash
