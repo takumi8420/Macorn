@@ -138,7 +138,7 @@ MACORN_DEBUG_OUT=/tmp/shots MACORN_HISTORY_PATH=/tmp/history.sqlite MACORN_DEBUG
 | `promo/capture/` | Debug ビルドを自動操作して画面を撮る（`capture.py` と手順の `steps.txt`） |
 | `promo/video/` | 紹介動画（Remotion）。場面は `src/Flow.tsx` |
 | `promo/build-site-assets.sh` | LP 用の画像・動画を `site/assets/` に作る |
-| `site/` | LP（静的な HTML）。https://macorn.vercel.app に公開している。ヒーローの立体図（実際のフォルダと整理の次元。ドラッグで回せる）は `site/dims.js` が描く |
+| `site/` | LP（静的な HTML）。https://macorn.vercel.app に公開している。ヒーローの立体図（実際のフォルダの上に整理の次元を重ねる。ドラッグで回せる）と、コンセプトの節の3段階の図は `site/dims.js` が描く |
 | `.github/workflows/vercel-*.yml` | LP の公開（main への push で本番、ほかのブランチでプレビュー。`site/` に変更があるときだけ） |
 
 ```bash
