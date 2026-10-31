@@ -6,6 +6,27 @@
 
 ## 2026-11-01
 
+### Macorn：バージョン 0.3.6 を LP で公開する
+
+- **きっかけ**：konta の依頼「0.3.6 で公開」（CSV・TSV のプレビューと、Macorn で開けるようにしたことを受けて）
+- **意図・方針**：0.3.5 → 0.3.6（ビルド番号は 8 → 9）。`scripts/release.sh --publish` で署名・公証した DMG・LP の表記・`version.json` をまとめて差し替えた。0.3.5 の利用者は「今すぐ更新」で自動で入れ替えられる初めての版になる
+- 変更 `Macorn.xcodeproj/project.pbxproj` — `MARKETING_VERSION` を 0.3.6、`CURRENT_PROJECT_VERSION` を 9 に
+- 変更 `site/download/Macorn.dmg`、`site/index.html`、`site/version.json` — 0.3.6 の DMG・表記・最新版の情報
+
+### Macorn：CSV・TSV を表でプレビューし、Macorn で開けるようにする
+
+- **きっかけ**：konta の依頼「csv も開けるようにしたい」
+- **意図・方針**
+  - これまで CSV はプレビューできなかった。Markdown と同じく自前で HTML にして、プレビューの Web の領域に表で出す（外部ライブラリなし）
+  - 読み込みは RFC 4180 に沿い、引用符で囲んだ値（中のカンマ・改行・`""`）に対応。日本の Excel が書く Shift_JIS も読む（BOM → UTF-8 → Shift_JIS → UTF-16 の順に試す）。区切りは .tsv ならタブ、それ以外は1行目に多いもの（カンマ・タブ・セミコロン）
+  - 1行目を見出しにし、見出しと行番号はスクロールしても残す。数値は右寄せ。列が詰まって1文字ずつ折り返さないよう、値は折り返さず横にスクロールし、長い値は省略してマウスを乗せると全文を出す。重くならないよう先頭の 2000 行まで
+  - ほかのプレビューできる種類と同じく、「このアプリケーションで開く」に出し、設定の「ファイルを Macorn で開く」で既定のアプリにもできる。プレビューの上部のボタンで表計算などほかのアプリでも開ける
+- 追加 `Macorn/Preview/CSVRenderer.swift` — CSV・TSV の読み込みと表の HTML
+- 変更 `Macorn/Preview/FilePreviewController.swift` — プレビューの種類に CSV を足す
+- 変更 `Macorn/Integration/DefaultFileApps.swift`、`Macorn-Info.plist` — CSV・TSV を Macorn で開ける種類に足す
+- 追加 `MacornTests/CSVRendererTests.swift` — 引用符・改行・区切りの判定・Shift_JIS・表の HTML・行数の上限
+- 変更 `AGENTS.md`、`docs/REQUIREMENTS.md`、`README.md` — プレビューと開ける種類に CSV を足す
+
 ### Macorn：バージョン 0.3.5 を LP で公開する
 
 - **きっかけ**：konta の依頼「0.3.5 で公開」（「今すぐ更新」での自動の入れ替えを受けて）

@@ -6,11 +6,13 @@ import UniformTypeIdentifiers
 import WebKit
 
 /// ファイルのプレビュー（VS Code のプレビューのように、一覧の右に表示する）。
-/// Markdown は整形して、HTML はそのページを、画像・PDF・動画・書類などはクイックルックで表示する。
+/// Markdown は整形して、CSV・TSV は表にして、HTML はそのページを、画像・PDF・動画・書類などはクイックルックで表示する。
 /// ファイルが保存されたら自動で表示し直し、読んでいた位置も保つ。
 final class FilePreviewController: NSViewController {
     enum Kind: Equatable {
         case markdown, html
+        /// CSV・TSV（表にして見せる）
+        case csv
         /// 画像・PDF・動画・音声・書類など、目で見て確認するもの
         case visual
     }
@@ -39,6 +41,7 @@ final class FilePreviewController: NSViewController {
 
     static let markdownExtensions: Set<String> = ["md", "markdown", "mdown", "mkd", "mkdn"]
     static let htmlExtensions: Set<String> = ["html", "htm", "xhtml"]
+    static let csvExtensions: Set<String> = ["csv", "tsv", "tab"]
 
     /// プレビューできるファイルの種類。できなければ nil
     /// 拡張子がほかの種類（動画など）と重なるソースコード
@@ -50,6 +53,7 @@ final class FilePreviewController: NSViewController {
         if sourceCodeExtensions.contains(ext) { return nil }
         if markdownExtensions.contains(ext) { return .markdown }
         if htmlExtensions.contains(ext) { return .html }
+        if csvExtensions.contains(ext) { return .csv }
         if let type = UTType(filenameExtension: ext), visualTypes.contains(where: { type.conforms(to: $0) }) {
             return .visual
         }
@@ -372,16 +376,18 @@ final class FilePreviewController: NSViewController {
     private func updateHeader() {
         let isHTML = kind == .html
         let isVisual = kind == .visual
-        let symbol = isVisual ? "eye" : (isHTML ? "globe" : "doc.richtext")
-        iconView.image = NSImage(systemSymbolName: symbol, accessibilityDescription: isVisual ? "プレビュー" : (isHTML ? "HTML" : "Markdown"))
+        let isCSV = kind == .csv
+        let symbol = isVisual ? "eye" : isHTML ? "globe" : isCSV ? "tablecells" : "doc.richtext"
+        iconView.image = NSImage(systemSymbolName: symbol,
+                                 accessibilityDescription: isVisual ? "プレビュー" : isHTML ? "HTML" : isCSV ? "CSV" : "Markdown")
         scriptButton?.isHidden = !isHTML
         // 拡大・縮小は、Markdown・HTML・PDF で使える
         zoomControls?.isHidden = !canZoom
         updateZoomLabel()
-        // HTML は「ブラウザで開く」、画像・PDF・動画などは「既定のアプリで開く」
-        browserButton?.isHidden = !(isHTML || isVisual)
-        browserButton?.image = NSImage(systemSymbolName: isVisual ? "arrow.up.forward.app" : "safari", accessibilityDescription: nil)
-        browserButton?.toolTip = isVisual ? "既定のアプリで開く" : "ブラウザで開く"
+        // HTML は「ブラウザで開く」、画像・PDF・動画などは「既定のアプリで開く」、CSV は表計算などの「ほかのアプリで開く」
+        browserButton?.isHidden = !(isHTML || isVisual || isCSV)
+        browserButton?.image = NSImage(systemSymbolName: isHTML ? "safari" : "arrow.up.forward.app", accessibilityDescription: nil)
+        browserButton?.toolTip = isHTML ? "ブラウザで開く" : isCSV ? "ほかのアプリで開く" : "既定のアプリで開く"
         editButton?.isHidden = isVisual
         webView.isHidden = isVisual
         quickLookView?.isHidden = !(isVisual && viewer == .quickLook)
@@ -411,13 +417,21 @@ final class FilePreviewController: NSViewController {
             webView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
             return
         }
-        let text: String
-        if let data = try? Data(contentsOf: url) {
-            text = String(data: data, encoding: .utf8) ?? String(decoding: data, as: UTF8.self)
+        let html: String
+        if kind == .csv {
+            let body = (try? Data(contentsOf: url)).map {
+                CSVRenderer.render(CSVRenderer.table(from: $0, fileExtension: url.pathExtension))
+            } ?? "<p>「\(MarkdownRenderer.escape(url.lastPathComponent))」を読めませんでした。</p>"
+            html = Self.page(body: body, baseURL: url.deletingLastPathComponent(), title: url.lastPathComponent, extraStyle: CSVRenderer.style)
         } else {
-            text = "*「\(url.lastPathComponent)」を読めませんでした。*"
+            let text: String
+            if let data = try? Data(contentsOf: url) {
+                text = String(data: data, encoding: .utf8) ?? String(decoding: data, as: UTF8.self)
+            } else {
+                text = "*「\(url.lastPathComponent)」を読めませんでした。*"
+            }
+            html = Self.page(body: MarkdownRenderer.render(text), baseURL: url.deletingLastPathComponent(), title: url.lastPathComponent)
         }
-        let html = Self.page(body: MarkdownRenderer.render(text), baseURL: url.deletingLastPathComponent(), title: url.lastPathComponent)
         lastHTMLLength = html.count
         do {
             try FileManager.default.createDirectory(at: htmlFile.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -507,7 +521,7 @@ final class FilePreviewController: NSViewController {
 
     // MARK: - HTML
 
-    static func page(body: String, baseURL: URL, title: String) -> String {
+    static func page(body: String, baseURL: URL, title: String, extraStyle: String = "") -> String {
         let base = baseURL.absoluteString.hasSuffix("/") ? baseURL.absoluteString : baseURL.absoluteString + "/"
         let accent = Theme.accentHex
         return """
@@ -540,6 +554,7 @@ final class FilePreviewController: NSViewController {
         th, td { border: 1px solid var(--border); padding: 6px 12px; } th { font-weight: 600; background: var(--code-bg); }
         table.front-matter { font-size: 0.9em; color: var(--muted); } table.front-matter th { text-align: left; }
         img { max-width: 100%; border-radius: 4px; }
+        \(extraStyle)
         </style>
         </head>
         <body>

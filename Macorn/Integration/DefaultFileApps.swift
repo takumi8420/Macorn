@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 /// Macorn で開けるファイルの種類（プレビューできるもの）。設定から種類ごとに既定のアプリにできる。
 /// 「このアプリケーションで開く」に出すための申告は Macorn-Info.plist（CFBundleDocumentTypes）にある。
 enum PreviewFileKind: String, CaseIterable, Identifiable {
-    case pdf, markdown, html, image, video, audio
+    case pdf, markdown, html, csv, image, video, audio
 
     var id: String { rawValue }
 
@@ -13,6 +13,7 @@ enum PreviewFileKind: String, CaseIterable, Identifiable {
         case .pdf: "PDF"
         case .markdown: "Markdown（.md）"
         case .html: "HTML"
+        case .csv: "CSV・TSV"
         case .image: "画像（PNG・JPEG・GIF・HEIC・WebP など）"
         case .video: "動画（MP4・MOV など）"
         case .audio: "音声（MP3・M4A・WAV など）"
@@ -25,6 +26,7 @@ enum PreviewFileKind: String, CaseIterable, Identifiable {
         case .pdf: ["com.adobe.pdf"]
         case .markdown: ["net.daringfireball.markdown"]
         case .html: ["public.html"]
+        case .csv: ["public.comma-separated-values-text", "public.tab-separated-values-text"]
         case .image: ["public.png", "public.jpeg", "com.compuserve.gif", "public.heic", "org.webmproject.webp",
                       "public.tiff", "com.microsoft.bmp", "public.svg-image"]
         case .video: ["public.mpeg-4", "com.apple.quicktime-movie", "com.apple.m4v-video"]
