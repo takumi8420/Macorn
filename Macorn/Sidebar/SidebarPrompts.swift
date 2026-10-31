@@ -58,6 +58,16 @@ enum SidebarPrompts {
         store.createSection(named: name, before: target)
     }
 
+    /// 新しいセクションを作り、フォルダ・ファイルをそこに置く（一覧の右クリック「セクションに置く」から）
+    static func createSection(placing urls: [URL], in store: SidebarStore) {
+        guard let name = ask(
+            title: "セクションを作って置く",
+            message: "サイドバーに新しい見出しを作り、選んだ項目をそこに置きます。項目には何も付きません。",
+            value: "", placeholder: "セクションの名前", button: "作成"
+        ), let section = store.createSection(named: name) else { return }
+        for url in urls { store.placeURL(url, in: section) }
+    }
+
     static func renameSection(_ id: UUID, in store: SidebarStore) {
         guard let section = store.customSection(id), let name = ask(
             title: "セクションの名前を変更", message: "", value: section.name, placeholder: "セクションの名前", button: "変更"

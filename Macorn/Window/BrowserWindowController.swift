@@ -14,6 +14,7 @@ extension NSToolbarItem.Identifier {
     static let favorite = NSToolbarItem.Identifier("macorn.favorite")
     static let newFolder = NSToolbarItem.Identifier("macorn.newFolder")
     static let newFile = NSToolbarItem.Identifier("macorn.newFile")
+    static let copyPath = NSToolbarItem.Identifier("macorn.copyPath")
 }
 
 /// 1つのウィンドウ（= 1つのタブ）。サイドバーと、1つまたは2つの画面を並べる。
@@ -108,6 +109,8 @@ final class BrowserWindowController: NSWindowController {
     @objc func editPath(_ sender: Any?) { browser.beginEditingPath() }
     /// ツールバーのボタン：操作対象の画面の、表示中のフォルダに作る（メニューの「新規フォルダ」「新規ファイル」と同じ）
     @objc func createFolderFromToolbar(_ sender: Any?) { browser.newFolder(sender) }
+    /// ツールバーのボタン：選択中の項目（なければ表示中のフォルダ）のパスをコピー（⌥⌘C と同じ）
+    @objc func copyPathFromToolbar(_ sender: Any?) { browser.copyPath(sender) }
     @objc func createFileFromToolbar(_ sender: Any?) { browser.newFile(sender) }
 
     @objc func goToHome(_ sender: Any?) { go(to: FileManager.default.homeDirectoryForCurrentUser) }
@@ -289,7 +292,7 @@ extension BrowserWindowController: NSWindowDelegate {
 
 extension BrowserWindowController: NSToolbarDelegate {
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.toggleSidebar, .sidebarTrackingSeparator, .back, .forward, .parent, .flexibleSpace, .newFolder, .newFile, .favorite, .split]
+        [.toggleSidebar, .sidebarTrackingSeparator, .back, .forward, .parent, .flexibleSpace, .copyPath, .newFolder, .newFile, .favorite, .split]
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
@@ -308,6 +311,8 @@ extension BrowserWindowController: NSToolbarDelegate {
             makeItem(itemIdentifier, label: "進む", symbol: "chevron.right", action: #selector(goForward(_:)))
         case .parent:
             makeItem(itemIdentifier, label: "親フォルダ", symbol: "arrow.up", action: #selector(goToParent(_:)))
+        case .copyPath:
+            makeItem(itemIdentifier, label: "パスをコピー（⌥⌘C）", symbol: "doc.on.doc", action: #selector(copyPathFromToolbar(_:)))
         case .newFolder:
             makeItem(itemIdentifier, label: "新規フォルダ（⇧⌘N）", symbol: "folder.badge.plus", action: #selector(createFolderFromToolbar(_:)))
         case .newFile:

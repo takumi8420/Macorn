@@ -21,6 +21,28 @@ final class SidebarStoreTests {
         try? FileManager.default.removeItem(at: tagsURL)
     }
 
+    /// 一覧の右クリック「セクションに置く」：置いていなければ置き、すべて置いてあれば外す
+    @Test func togglesPlacementFromListMenu() throws {
+        let store = SidebarStore(defaults: defaults, tags: tags, createsDefaultSection: false)
+        let section = try #require(store.createSection(named: "案件"))
+        guard case .custom(let id) = section else { Issue.record("自分で作ったセクションではない"); return }
+        let a = URL(fileURLWithPath: "/tmp/macorn-a"), b = URL(fileURLWithPath: "/tmp/macorn-b/")
+
+        FileBrowserViewController.togglePlacement([a], in: id, store: store)
+        #expect(FileBrowserViewController.isPlaced(a, in: try #require(store.customSection(id))))
+
+        // 一部だけ置いてあるときは、足りないものを置く（重ねて置かない）
+        FileBrowserViewController.togglePlacement([a, b], in: id, store: store)
+        var placed = try #require(store.customSection(id))
+        #expect(placed.items.count == 2)
+        #expect(FileBrowserViewController.isPlaced(b, in: placed))
+
+        // すべて置いてあれば外す
+        FileBrowserViewController.togglePlacement([a, b], in: id, store: store)
+        placed = try #require(store.customSection(id))
+        #expect(placed.items.isEmpty)
+    }
+
     @Test func sectionIDsRoundTrip() {
         let id = UUID()
         for section in [SidebarSection.favorites, .tags, .locations, .tag(id), .custom(id)] {

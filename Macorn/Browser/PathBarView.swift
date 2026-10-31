@@ -9,6 +9,8 @@ struct PathBarActions {
     var endEditing: () -> Void
     /// パスの直接入力を始める（1回のクリック・⌘L）
     var beginEditing: () -> Void
+    /// 表示中のフォルダのパスをコピーする（右端のボタン）。コピーできたら true
+    var copyCurrentPath: () -> Bool
 }
 
 /// パンくずリスト（要件 N-06）と、パスの直接入力欄（要件 N-07）。
@@ -33,7 +35,10 @@ struct PathBarView: View {
                 if let id = TagLocation.tagID(from: state.currentURL) {
                     tagChip(id)
                 } else {
-                    breadcrumbs
+                    HStack(spacing: 6) {
+                        breadcrumbs
+                        CopyPathButton(copy: actions.copyCurrentPath)
+                    }
                 }
             }
         }
@@ -129,6 +134,34 @@ struct PathBarView: View {
             current = current.deletingLastPathComponent()
         }
         return result
+    }
+}
+
+/// パスバーの右端のボタン：表示中のフォルダのパスをコピーし、しばらくチェックの印を出す
+private struct CopyPathButton: View {
+    let copy: () -> Bool
+    @State private var copied = false
+    @State private var isHovering = false
+
+    var body: some View {
+        Button {
+            guard copy() else { NSSound.beep(); return }
+            copied = true
+            Task {
+                try? await Task.sleep(for: .seconds(1.4))
+                copied = false
+            }
+        } label: {
+            Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(copied ? Color.accentColor : .secondary)
+                .frame(width: 24, height: 22)
+                .background(RoundedRectangle(cornerRadius: 5).fill(isHovering ? Color.primary.opacity(0.08) : .clear))
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+        .help(copied ? "コピーしました" : "このフォルダのパスをコピー（⌥⌘C）")
     }
 }
 

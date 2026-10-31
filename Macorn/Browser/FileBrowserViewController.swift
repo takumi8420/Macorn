@@ -297,7 +297,11 @@ final class FileBrowserViewController: NSViewController {
                 return PathCompletion.complete(text, relativeTo: folderForRelativePaths)
             },
             endEditing: { [weak self] in self?.focusList() },
-            beginEditing: { [weak self] in self?.beginEditingPath() }
+            beginEditing: { [weak self] in self?.beginEditingPath() },
+            copyCurrentPath: { [weak self] in
+                guard let self, state.currentURL.isFileURL else { return false }
+                return PathCopier.copy([state.currentURL], style: .full)
+            }
         )
     }
 
@@ -840,9 +844,13 @@ extension FileBrowserViewController: NSMenuDelegate {
         menu.addItem(NSMenuItem(title: "カット", action: #selector(cut(_:)), keyEquivalent: ""))
 
         menu.addItem(.separator())
+        menu.addItem(pathCopyMenuItem())
+        menu.addItem(pathCopyFormatsMenuItem())
+        menu.addItem(.separator())
         menu.addItem(menuItem("Finder で表示", #selector(revealInFinder(_:)), urls))
         let allFavorite = urls.allSatisfy(SidebarStore.shared.containsFavorite)
         menu.addItem(menuItem(allFavorite ? "お気に入りから外す" : "お気に入りに追加", #selector(addToSidebarFromMenu(_:)), urls))
+        menu.addItem(sectionMenuItem(for: urls))
         for item in menu.items where item.target == nil && item.action != nil {
             item.target = self
         }
@@ -863,10 +871,14 @@ extension FileBrowserViewController: NSMenuDelegate {
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "ペースト", action: #selector(paste(_:)), keyEquivalent: ""))
         menu.addItem(.separator())
+        menu.addItem(pathCopyMenuItem())
+        menu.addItem(pathCopyFormatsMenuItem())
+        menu.addItem(.separator())
         menu.addItem(menuItem("Finder で表示", #selector(revealInFinder(_:)), [state.currentURL]))
         menu.addItem(tagMenuItem(for: [state.currentURL]))
         let isFavorite = SidebarStore.shared.containsFavorite(state.currentURL)
         menu.addItem(menuItem(isFavorite ? "お気に入りから外す" : "お気に入りに追加", #selector(addToSidebarFromMenu(_:)), [state.currentURL]))
+        menu.addItem(sectionMenuItem(for: [state.currentURL]))
         for item in menu.items where item.target == nil && item.action != nil {
             item.target = self
         }
