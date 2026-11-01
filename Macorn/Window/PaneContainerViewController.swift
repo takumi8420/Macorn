@@ -200,6 +200,13 @@ final class PaneContainerViewController: NSViewController {
             activate(pane, focus: false)
         }
         pane.onSwitchPane = { [weak self] in self?.switchActivePane() }
+        pane.onClosePane = { [weak self, weak pane] in
+            // ボタンを押した処理が終わってから閉じる（押したボタンを含む画面ごと外すため）
+            DispatchQueue.main.async {
+                guard let self, let pane else { return }
+                self.close(pane)
+            }
+        }
     }
 
     func setPaneDelegate(_ delegate: FileBrowserDelegate) {

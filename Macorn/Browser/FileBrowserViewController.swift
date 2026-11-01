@@ -14,6 +14,8 @@ final class FileBrowserViewController: NSViewController {
     /// この画面がクリック・フォーカスされたとき（2画面表示で操作対象を切り替える）
     var onActivate: (() -> Void)?
     var onSwitchPane: (() -> Void)?
+    /// 画面を分けているとき、パスの右端の「×」でこの画面を閉じる
+    var onClosePane: (() -> Void)?
 
     private(set) var root: FileNode
     let outlineView = FileOutlineView()
@@ -301,7 +303,8 @@ final class FileBrowserViewController: NSViewController {
             copyCurrentPath: { [weak self] in
                 guard let self, state.currentURL.isFileURL else { return false }
                 return PathCopier.copy([state.currentURL], style: .full)
-            }
+            },
+            closePane: { [weak self] in self?.onClosePane?() }
         )
     }
 

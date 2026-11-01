@@ -2,14 +2,15 @@ import AppKit
 
 /// サイドバーから出す入力・確認のダイアログ。
 enum SidebarPrompts {
-    static func createTag(parent: Tag?, in store: TagStore) {
+    /// タグを作る。placing を渡すと、作ったタグをそのセクションにも置く（「…」のメニューの「タグを作ってここに置く」）
+    static func createTag(parent: Tag?, in store: TagStore, placing section: SidebarSection? = nil, sidebar: SidebarStore = .shared) {
         let prefix = parent.map { $0.name + "/" } ?? ""
         guard let name = ask(
-            title: parent.map { "「\($0.name)」の下にタグを作る" } ?? "タグを作る",
+            title: parent.map { "「\($0.name)」の下にタグを作る" } ?? (section == nil ? "タグを作る" : "タグを作ってここに置く"),
             message: "/ で区切ると階層になります（例: 仕事/案件A）。",
             value: "", placeholder: "タグの名前", button: "作成"
-        ) else { return }
-        store.createTag(named: prefix + name)
+        ), let tag = store.createTag(named: prefix + name) else { return }
+        if let section { sidebar.placeTag(tag.id, in: section) }
     }
 
     static func renameTag(_ tag: Tag, in store: TagStore) {

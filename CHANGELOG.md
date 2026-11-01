@@ -6,6 +6,24 @@
 
 ## 2026-11-01
 
+### Macorn：バージョン 0.3.10 を LP で公開する
+
+- **きっかけ**：konta の依頼「0.3.10 で公開」（セクションの「…」・サイドバーのホバー・分けた画面の「×」を受けて）
+- **意図・方針**：0.3.9 → 0.3.10（ビルド番号は 12 → 13）。版の比較は数値で行う（`UpdateChecker.isNewer`）ので、0.3.9 の利用者にも新しい版として届く。`scripts/release.sh --publish` で署名・公証した DMG・LP の表記・`version.json` をまとめて差し替えた
+- 変更 `Macorn.xcodeproj/project.pbxproj` — `MARKETING_VERSION` を 0.3.10、`CURRENT_PROJECT_VERSION` を 13 に
+- 変更 `site/download/Macorn.dmg`、`site/index.html`、`site/version.json` — 0.3.10 の DMG・表記・最新版の情報
+
+### Macorn：セクションの右に「…」を付け、サイドバーの行をホバーで光らせ、分けた画面に「×」を付ける
+
+- **きっかけ**：konta の依頼「各セクションの右にも3点リーダーなどを設けて編集とセクションやタグの追加をできるようにして欲しい」「サイドバーのコンテンツに関してはホバー時に反応するように」「タブを閉じるためのバツボタンが現状ないので足して欲しい」
+- **意図・方針**：右クリックを知らなくても、セクションごとに足す・直すができるよう、見出しとサブセクションの右に「…」を常に出し、右クリックと同じメニューにした。メニューは上に「追加」（お気に入り＝表示中のフォルダを追加、タグ＝タグを作る、タグのセクション＝下にタグを作る、自分のセクション＝タグを作ってここに置く・表示中のフォルダを置く・サブセクションを作る、どれも＝この上・この下にセクションを作る）、下に「編集」（移動・名前の変更・隠す・削除など）。サイドバーの行はマウスが乗るとうすく塗る（見出しとヒントの行は除く）。「×」はウィンドウのタブにはすでに付いているため、分けた画面（ペイン）を閉じる手段がショートカットとメニューしかないことへの依頼と受け取り、分けているときだけ各画面のパスバーの右端に出した
+- 変更 `Macorn/Sidebar/SidebarViewController.swift` — 見出し・サブセクションの「…」（`SidebarMoreButton`）、追加・編集に組み直したメニュー、ホバーで塗る行（`SidebarRowView`）
+- 変更 `Macorn/Sidebar/SidebarPrompts.swift` — タグを作ってそのままセクションに置けるようにする
+- 変更 `Macorn/Settings/Theme.swift` — `ThemedRowView` を継承できるようにする
+- 変更 `Macorn/Browser/PathBarView.swift`、`Macorn/Browser/FileBrowserViewController.swift`、`Macorn/Window/PaneContainerViewController.swift` — 分けているとき、パスバーの右端にその画面を閉じる「×」を出す
+- 変更 `Macorn/App/DebugAutomation.swift` — 自動操作に `sectionmenu`・`sectionmenudo`・`sbhoverrow`・`closepanebutton` を足す
+- 変更 `AGENTS.md`、`docs/REQUIREMENTS.md`（P-09・N-04） — 「…」・ホバー・画面の「×」を書く
+
 ### Macorn：LP を独自ドメイン macorn.app に移し、バージョン 0.3.9 を公開する
 
 - **きっかけ**：konta が macorn.app を買い（Vercel のプロジェクト `macorn` に付けた）、「macorn.app で切り替える」と依頼

@@ -203,6 +203,34 @@ enum DebugAutomation {
                     }
                 }
             }
+        case "sectionmenu", "sectionmenudo":
+            // 「sectionmenu:名前」でセクションの「…」のメニューを書き出す。「sectionmenudo:名前>項目」でその項目を選ぶ
+            if let split = controller.contentViewController as? NSSplitViewController,
+               let sidebar = split.splitViewItems.first?.viewController as? SidebarViewController {
+                let parts = argument.split(separator: ">", maxSplits: 1).map(String.init)
+                guard let (menu, hasButton) = sidebar.debugSectionMenu(named: parts[0]) else {
+                    print("[debug] sectionmenu 見つからない: \(parts[0])"); break
+                }
+                if command == "sectionmenu" {
+                    print("[debug] sectionmenu \(parts[0]) button=\(hasButton)")
+                    for entry in menu.items {
+                        print("[debug] sectionmenu   " + (entry.isSeparatorItem ? "---" : entry.title + (entry.isEnabled ? "" : " (無効)")))
+                    }
+                } else if parts.count > 1, let index = menu.items.firstIndex(where: { $0.title == parts[1] }) {
+                    menu.performActionForItem(at: index)
+                } else {
+                    print("[debug] sectionmenu 項目が見つからない: \(argument)")
+                }
+            }
+        case "sbhoverrow":
+            if let split = controller.contentViewController as? NSSplitViewController,
+               let sidebar = split.splitViewItems.first?.viewController as? SidebarViewController {
+                print("[debug] sbhover " + sidebar.debugHover(row: Int(argument) ?? 0))
+            }
+        case "closepanebutton":
+            // N 番目の画面のパスバーの「×」を押したのと同じ
+            let all = controller.panes.panes
+            if let index = Int(argument), all.indices.contains(index) { all[index].onClosePane?() }
         case "clickwindow":
             // ウィンドウの中身の決まった位置を1回クリックする（アプリ全体の経路で送るので、クリックの見張りにも届く）。
             // 引数は「横,縦」の割合（0〜1。左下が 0,0）か「pathbar,横」。実際のマウスは動かさない

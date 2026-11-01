@@ -97,7 +97,7 @@ extension Notification.Name {
 }
 
 /// 一覧の選択中の行を、テーマのアクセントカラーで塗る
-final class ThemedRowView: NSTableRowView {
+class ThemedRowView: NSTableRowView {
     override func drawSelection(in dirtyRect: NSRect) {
         guard selectionHighlightStyle != .none else { return }
         let color = isEmphasized ? Theme.shared.accentColor : Theme.shared.accentColor.withAlphaComponent(0.22)

@@ -11,6 +11,8 @@ struct PathBarActions {
     var beginEditing: () -> Void
     /// 表示中のフォルダのパスをコピーする（パスのすぐ右のボタン）。コピーできたら true
     var copyCurrentPath: () -> Bool
+    /// 画面を分けているとき、この画面を閉じる（パスバーの右端の「×」）
+    var closePane: () -> Void
 }
 
 /// パンくずリスト（要件 N-06）と、パスの直接入力欄（要件 N-07）。
@@ -39,13 +41,22 @@ struct PathBarView: View {
                 }
             }
         }
-        .padding(.horizontal, 14)
+        .padding(.leading, 14)
+        // 分けているときは、右端の「×」と重ならないよう空けておく
+        .padding(.trailing, state.isInSplit ? 40 : 14)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .opacity(isDimmed ? 0.55 : 1)
         .background(isHighlighted ? Theme.shared.accent.opacity(0.10) : .clear)
         .contentShape(Rectangle())
         // 空いている所を1回クリックすると、パスを直接入力できる（⌘L と同じ）
         .onTapGesture { startEditing() }
+        // 画面を分けているときだけ、右端にこの画面を閉じる「×」を出す
+        .overlay(alignment: .trailing) {
+            if state.isInSplit && !state.isEditingPath {
+                ClosePaneButton(close: actions.closePane)
+                    .padding(.trailing, 8)
+            }
+        }
         .overlay(alignment: .bottom) {
             // 2画面のときは、操作対象の画面の下に色付きの線を引いて区別する（要件 P-03）
             if isHighlighted {
@@ -165,6 +176,26 @@ private struct CopyPathButton: View {
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
         .help(copied ? "コピーしました" : "表示中のフォルダのパスをコピー\n\(path)")
+    }
+}
+
+/// 画面を分けているときに、パスバーの右端に出す「×」。押すとこの画面を閉じる
+private struct ClosePaneButton: View {
+    let close: () -> Void
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: close) {
+            Image(systemName: "xmark")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(isHovering ? Color.primary : .secondary)
+                .frame(width: 22, height: 22)
+                .background(RoundedRectangle(cornerRadius: 5).fill(isHovering ? Color.primary.opacity(0.08) : .clear))
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+        .help("この画面を閉じる（⌥⌘W）")
+        .accessibilityLabel("この画面を閉じる")
     }
 }
 
