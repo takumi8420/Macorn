@@ -20,7 +20,7 @@ struct UpdateCheckerTests {
         return url
     }
 
-    private let sample = #"{"version": "0.3.0", "build": 3, "download": "https://macorn.vercel.app/download/Macorn.dmg", "page": "https://macorn.vercel.app/#get"}"#
+    private let sample = #"{"version": "0.3.0", "build": 3, "download": "https://macorn.app/download/Macorn.dmg", "page": "https://macorn.app/#get"}"#
 
     @Test func reportsNewerVersion() async throws {
         let url = try feed(sample)
@@ -31,7 +31,7 @@ struct UpdateCheckerTests {
             return
         }
         #expect(info.version == "0.3.0")
-        #expect(info.download.absoluteString == "https://macorn.vercel.app/download/Macorn.dmg")
+        #expect(info.download.absoluteString == "https://macorn.app/download/Macorn.dmg")
     }
 
     @Test func sameVersionIsUpToDate() async throws {

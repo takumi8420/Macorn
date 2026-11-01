@@ -116,8 +116,8 @@ open(path, "w", encoding="utf-8").write(html)
 info = {
     "version": version,
     "build": build,
-    "download": "https://macorn.vercel.app/download/Macorn.dmg",
-    "page": "https://macorn.vercel.app/#get",
+    "download": "https://macorn.app/download/Macorn.dmg",
+    "page": "https://macorn.app/#get",
 }
 with open("site/version.json", "w", encoding="utf-8") as f:
     json.dump(info, f, ensure_ascii=False, indent=2)

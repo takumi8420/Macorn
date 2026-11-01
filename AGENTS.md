@@ -37,7 +37,7 @@
 | `Branding/` | Macorn のアイコン・ロゴ・カラー（[Branding/README.md](Branding/README.md)） |
 | `scripts/release.sh` | 配布用の DMG を作る（Developer ID 署名・公証。出力は `build/release/`）。DMG の背景と配置は `scripts/dmg/` |
 | `promo/` | 紹介動画（Remotion）と、その撮影・LP 用の画像づくり（[promo/video/README.md](promo/video/README.md)） |
-| `site/` | LP（静的な HTML）。Vercel の `kontas-projects/macorn` に公開（https://macorn.vercel.app）。main に `site/` の変更を push すると GitHub Actions が本番に公開する。配布用の DMG も `site/download/` に置く |
+| `site/` | LP（静的な HTML）。Vercel の `kontas-projects/macorn` に公開（https://macorn.app）。main に `site/` の変更を push すると GitHub Actions が本番に公開する。配布用の DMG も `site/download/` に置く |
 | `build/` | ビルドの出力（git 管理外。読まない） |
 
 - 2026-10-26 に noxy から Macorn へ改名した。コード・プロジェクト名・バンドル ID（`dev.macorn.Macorn`）も Macorn にそろえてある
@@ -90,7 +90,7 @@
 - **DMG はドラッグを促す見た目にし、アプリは「アプリケーション」の外から起動したら移動を尋ねる**（根拠：ユーザーの依頼 2026-10-27「インストール時にアプリケーションフォルダに入らず、ドラッグも促さない」）
   - 背景は `scripts/dmg/make-background.swift`、配置は `scripts/dmg/layout.applescript`（release.sh から呼ぶ）。移動は `Macorn/App/AppMover.swift`（配布用の Release ビルドだけで尋ねる）
 - **新しい版の通知と入れ替えは自前（外部ライブラリなし）。「今すぐ更新」で自動で入れ替えて開き直す**（前提の変更。根拠：ユーザーの依頼 2026-10-31「更新を押したら勝手に更新されてアプリが再起動するようにできないのか」→「作る」。それまでは「入れ替えは手動」（2026-10-27））
-  - アプリは LP の `site/version.json` を読んで今の版と比べる（`Macorn/App/UpdateChecker.swift`）。`version.json` は `scripts/release.sh --publish` が書く。Sparkle は使わない
+  - アプリは LP の `site/version.json` を読んで今の版と比べる（`Macorn/App/UpdateChecker.swift`）。確かめる先は 0.3.9 から https://macorn.app。0.3.8 までは https://macorn.vercel.app を見に行くので、旧ドメインは消さない（根拠：ユーザーの依頼 2026-11-01「macorn.app で切り替える」）。`version.json` は `scripts/release.sh --publish` が書く。Sparkle は使わない
   - 入れ替えは `Macorn/App/UpdateInstaller.swift`。DMG をダウンロードし、中の Macorn が「Apple が認めた Developer ID で、今の Macorn と同じチーム・同じアプリ ID・知らされた版」かを確かめてから、Macorn を終えて今の場所の Macorn と入れ替え、開き直す
   - 配布用の署名がない（開発用ビルド）・今の場所に書き込めない・確かめられないときは入れ替えず、これまでどおりブラウザでのダウンロードに戻す
 - **配布は Mac App Store ではなく、Developer ID 署名で直接配布する**（根拠：`docs/REQUIREMENTS.md` 9.4）
@@ -114,7 +114,7 @@
 ## 関連リンク
 
 - リモートリポジトリ：https://github.com/takumi8420/Macorn （`origin`、ブランチは `main`）
-- LP：https://macorn.vercel.app（Vercel のチーム「konta's projects」のプロジェクト `macorn`。デプロイは GitHub Actions（`.github/workflows/vercel-*.yml`）が Vercel の CLI で行う。Vercel 側の Git 連携による自動デプロイは止めている）
+- LP：https://macorn.app（2026-11-01 から。旧 https://macorn.vercel.app も残している。Vercel のチーム「konta's projects」のプロジェクト `macorn`。デプロイは GitHub Actions（`.github/workflows/vercel-*.yml`）が Vercel の CLI で行う。Vercel 側の Git 連携による自動デプロイは止めている）
 
 ---
 

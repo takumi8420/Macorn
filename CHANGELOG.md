@@ -6,6 +6,19 @@
 
 ## 2026-11-01
 
+### Macorn：LP を独自ドメイン macorn.app に移し、バージョン 0.3.9 を公開する
+
+- **きっかけ**：konta が macorn.app を買い（Vercel のプロジェクト `macorn` に付けた）、「macorn.app で切り替える」と依頼
+- **意図・方針**：アプリの版の確認先・`version.json` のダウンロード先・LP の正規の URL などを https://macorn.app にそろえた。0.3.8 までのアプリは https://macorn.vercel.app/version.json を見に行くため、旧ドメインは消さずに残す（消すと今の利用者に更新が届かない）。Vercel の設定で macorn.app が www.macorn.app へ転送されていても、アプリの確認とダウンロードは転送をたどるので動く。0.3.8 → 0.3.9（ビルド番号は 11 → 12）
+- 変更 `Macorn/App/UpdateChecker.swift`、`MacornTests/UpdateCheckerTests.swift` — 版の確認先を https://macorn.app/version.json に
+- 変更 `scripts/release.sh` — `version.json` に書くダウンロード先・ページを macorn.app に
+- 変更 `site/index.html`、`site/robots.txt`、`site/sitemap.xml` — 正規の URL・OGP・構造化データ・サイトマップを macorn.app に
+- 変更 `.github/workflows/vercel-production.yml` — 公開後の表示の URL を macorn.app に
+- 変更 `promo/zenn/macorn-intro.md` — LP へのリンクと画像の URL を macorn.app に
+- 変更 `AGENTS.md`、`docs/REQUIREMENTS.md`、`README.md` — LP の URL を macorn.app にし、旧ドメインを残す理由を書く
+- 変更 `Macorn.xcodeproj/project.pbxproj` — `MARKETING_VERSION` を 0.3.9、`CURRENT_PROJECT_VERSION` を 12 に
+- 変更 `site/download/Macorn.dmg`、`site/index.html`、`site/version.json` — 0.3.9 の DMG・表記・最新版の情報
+
 ### Macorn：バージョン 0.3.8 を LP で公開する
 
 - **きっかけ**：konta の依頼「お願いします」（サイドバーの「＋ 追加」を上部へ移した変更を利用者に届けるため）

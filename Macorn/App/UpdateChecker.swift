@@ -25,7 +25,7 @@ enum UpdateChecker {
         if let value = ProcessInfo.processInfo.environment["MACORN_UPDATE_URL"], let url = URL(string: value) {
             return url
         }
-        return URL(string: "https://macorn.vercel.app/version.json")!
+        return URL(string: "https://macorn.app/version.json")!
     }
 
     static var currentVersion: String {

@@ -128,7 +128,7 @@ MACORN_DEBUG_OUT=/tmp/shots MACORN_HISTORY_PATH=/tmp/history.sqlite MACORN_DEBUG
 | `MACORN_DEFAULTS_SUITE` | 設定の保存先（UserDefaults のスイート名。お気に入りの並び・表示の設定など、普段の設定を汚さないため） |
 | `MACORN_DEBUG_LAUNCH_LOG` | ターミナル・エディタを実際には起動せず、起動しようとした内容をこのファイルに書く |
 | `MACORN_MOVE_DEST` / `MACORN_MOVE_ANSWER` | 「アプリケーションへ移動」の確認用。移す先を差し替え（Debug でもこれがあれば尋ねる）、`move` / `skip` で尋ねずに答える |
-| `MACORN_UPDATE_URL` | 新しい版を確かめる先（既定は https://macorn.vercel.app/version.json。`file://` も可） |
+| `MACORN_UPDATE_URL` | 新しい版を確かめる先（既定は https://macorn.app/version.json。`file://` も可） |
 | `MACORN_UPDATE_TEAM` | 自動更新で受け入れる署名のチーム（開発用ビルドは簡易署名でチームがないため、確認のときに渡す。例 `Q9Q29NW29B`）。Debug ビルドだけで効く |
 | `MACORN_DEBUG_COPY_DELAY_US` | コピーをわざと遅くする（進み具合の表示と中止の確認用） |
 
@@ -140,7 +140,7 @@ MACORN_DEBUG_OUT=/tmp/shots MACORN_HISTORY_PATH=/tmp/history.sqlite MACORN_DEBUG
 | `promo/capture/` | Debug ビルドを自動操作して画面を撮る（`capture.py` と手順の `steps.txt`） |
 | `promo/video/` | 紹介動画（Remotion）。場面は `src/Flow.tsx` |
 | `promo/build-site-assets.sh` | LP 用の画像・動画を `site/assets/` に作る |
-| `site/` | LP（静的な HTML）。https://macorn.vercel.app に公開している。ヒーローの立体図（実際のフォルダの上に整理の次元を重ねる。ドラッグで回せる）と、コンセプトの節の3段階の図は `site/dims.js` が描く |
+| `site/` | LP（静的な HTML）。https://macorn.app に公開している。ヒーローの立体図（実際のフォルダの上に整理の次元を重ねる。ドラッグで回せる）と、コンセプトの節の3段階の図は `site/dims.js` が描く |
 | `.github/workflows/vercel-*.yml` | LP の公開（main への push で本番、ほかのブランチでプレビュー。`site/` に変更があるときだけ） |
 
 ```bash
