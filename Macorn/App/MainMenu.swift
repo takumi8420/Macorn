@@ -92,6 +92,7 @@ enum MainMenu {
         menu.addItem(item("ターミナルで開く", #selector(FileBrowserViewController.openInTerminal(_:)), "t", [.command, .option]))
         menu.addItem(item("エディタで開く", #selector(FileBrowserViewController.openInEditor(_:)), "e", [.command, .option]))
         menu.addItem(item("リポジトリのルートをエディタで開く", #selector(FileBrowserViewController.openRepositoryInEditor(_:))))
+        menu.addItem(item("変更を見る（差分）…", #selector(FileBrowserViewController.showChanges(_:))))
         menu.addItem(.separator())
         menu.addItem(item("反対側の画面へコピー", #selector(BrowserWindowController.copyToOtherPane(_:)), key(NSF5FunctionKey), []))
         menu.addItem(item("反対側の画面へ移動", #selector(BrowserWindowController.moveToOtherPane(_:)), key(NSF6FunctionKey), []))

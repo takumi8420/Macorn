@@ -165,7 +165,7 @@ extension FileBrowserViewController {
                 root.resort(Preferences.sort)
                 if state.isFiltering { filteredRootChildren = nil; applyFilter() }
                 outlineView.reloadItem(nil, reloadChildren: true)
-                select(selected)
+                select(selected, scroll: false)
             }
         }
     }

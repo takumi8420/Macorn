@@ -97,12 +97,12 @@ git add site && git commit -m "Macorn <バージョン> を公開する" && git 
 | 場所 | 内容 |
 |---|---|
 | `Macorn/App` | 起動処理・メニューバー・ウィンドウとタブの管理・開発用の自動操作 |
-| `Macorn/Window` | 1つのウィンドウ（サイドバー＋1〜2画面＋ツールバー）と2画面表示 |
+| `Macorn/Window` | 1つのウィンドウ（サイドバー＋1〜2画面＋ツールバー）と2画面表示、Git の変更（差分）のウィンドウ |
 | `Macorn/Browser` | 1つの画面（ファイル一覧・パスバー・絞り込み・ステータスバー）と、その操作 |
 | `Macorn/Operations` | コピー・移動・ゴミ箱・名前変更などの実行と取り消し、進み具合の表示、クリップボード |
 | `Macorn/Preview` | ファイルのプレビュー（Markdown → HTML の変換、CSV → 表の変換と、Markdown・HTML・CSV・画像・PDF・動画・書類の表示） |
 | `Macorn/Palette` | コマンドパレット（あいまい検索・ローマ字・フォルダ履歴） |
-| `Macorn/Integration` | ターミナル・エディタ連携、パスのコピー、Git の状態 |
+| `Macorn/Integration` | ターミナル・エディタ連携、パスのコピー、Git の状態と差分の読み取り |
 | `Macorn/Settings` | 設定ウィンドウ、ショートカットの変更、コマンドラインツール |
 | `Macorn/Sidebar` | サイドバー |
 | `Macorn/Model` | フォルダの読み込み・並べ替え・履歴・パス補完・変更監視・名前の規則・フォルダサイズ |

@@ -42,7 +42,7 @@ final class FileBrowserViewController: NSViewController {
     /// パスバー（自動操作でクリックするため）
     var pathBarHost: NSView?
     var pendingRename: URL?
-    /// 名前の変更中は、外部の変更による再読み込みを後回しにする（入力欄が消えないように）
+    /// 名前の変更中・ドラッグ中は、外部の変更による再読み込みを後回しにする（入力欄や置き先の行が消えないように）
     var renamingNode: FileNode?
     var renameCancelled = false
     var needsRefreshAfterRename = false
@@ -50,6 +50,8 @@ final class FileBrowserViewController: NSViewController {
     var pendingSelectionDeadline = Date.distantPast
     /// ドラッグ中の項目（Dock のゴミ箱へのドロップ用）
     var draggedURLs: [URL] = []
+    /// この一覧からドラッグを始めて、まだ終わっていない
+    var isDragSourceActive = false
     var gitSnapshot: GitSnapshot?
     var tagPopover: NSPopover?
     var bulkRenameSheet: NSWindow?
@@ -83,7 +85,7 @@ final class FileBrowserViewController: NSViewController {
         let pathBar = NSHostingView(rootView: PathBarView(state: state, actions: pathBarActions))
         pathBar.sizingOptions = []
         pathBarHost = pathBar
-        let statusBar = NSHostingView(rootView: StatusBarView(state: state))
+        let statusBar = NSHostingView(rootView: StatusBarView(state: state, onShowChanges: { [weak self] in self?.showChanges(nil) }))
         statusBar.sizingOptions = []
         let messageHost = NSHostingView(rootView: PaneMessageView(state: state, onOpenSettings: Self.openPrivacySettings))
         messageHost.sizingOptions = []
@@ -263,6 +265,7 @@ final class FileBrowserViewController: NSViewController {
         outlineView.onFocus = { [weak self] in self?.onActivate?() }
         outlineView.onTab = { [weak self] in self?.onSwitchPane?() }
         outlineView.onKeyDown = { [weak self] event in self?.handleListKey(event) ?? false }
+        outlineView.onDragTargetEnded = { [weak self] in self?.dragDidFinish() }
     }
 
     @objc private func listFrameChanged(_ notification: Notification) {
@@ -563,7 +566,8 @@ final class FileBrowserViewController: NSViewController {
 
     // MARK: - 選択
 
-    func select(_ urls: [URL]) {
+    /// scroll が false のときは、今の表示位置のまま選び直す（読み直しで一覧が勝手に動かないように）
+    func select(_ urls: [URL], scroll: Bool = true) {
         // /tmp と /private/tmp のような表記の違いがあっても同じ場所として扱う
         let paths = Set(urls.map(Self.comparablePath))
         let rows = IndexSet((0..<outlineView.numberOfRows).filter { row in
@@ -571,7 +575,7 @@ final class FileBrowserViewController: NSViewController {
             return paths.contains(Self.comparablePath(node.url))
         })
         outlineView.selectRowIndexes(rows, byExtendingSelection: false)
-        if let first = rows.first { outlineView.scrollRowToVisible(first) }
+        if scroll, let first = rows.first { outlineView.scrollRowToVisible(first) }
     }
 
     static func comparablePath(_ url: URL) -> String {
@@ -590,7 +594,7 @@ final class FileBrowserViewController: NSViewController {
     private func preservingSelection(_ body: () -> Void) {
         let selected = selectedNodes.map(\.url)
         body()
-        if !selected.isEmpty { select(selected) }
+        if !selected.isEmpty { select(selected, scroll: false) }
     }
 
     // MARK: - 外部の変更・設定の変更
@@ -610,7 +614,8 @@ final class FileBrowserViewController: NSViewController {
     }
 
     private func handleFileSystemEvents(_ paths: [String]) {
-        if renamingNode != nil {
+        // 名前の変更中とドラッグ中は、読み直しを後回しにする（入力欄や置き先の行が消えないように）
+        if renamingNode != nil || isDragging {
             needsRefreshAfterRename = true
             return
         }
@@ -745,6 +750,18 @@ extension FileBrowserViewController: NSOutlineViewDelegate {
             showsLocation: isTagView && node.parent === root
         )
         return cell
+    }
+
+    /// ドラッグ中にフォルダの上で止まると開く。まだ読んでいないフォルダはその場で読んでから開き、
+    /// 中身が後から入って行がずれないようにする
+    func outlineView(_ outlineView: NSOutlineView, shouldExpandItem item: Any) -> Bool {
+        if self.outlineView.isDragTargeted, let node = item as? FileNode, node.children == nil,
+           TagLocation.tagID(from: node.url) == nil,
+           let entries = try? DirectoryReader.read(node.url, includeHidden: Preferences.showHiddenFiles) {
+            node.setChildren(entries, sort: Preferences.sort)
+            requestFolderSizes(in: node)
+        }
+        return true
     }
 
     func outlineViewSelectionDidChange(_ notification: Notification) {

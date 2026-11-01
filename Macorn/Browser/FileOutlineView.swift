@@ -34,6 +34,37 @@ final class FileOutlineView: NSOutlineView {
         super.keyDown(with: event)
     }
 
+    /// ほかの場所からのドラッグが、いまこの一覧の上にある
+    private(set) var isDragTargeted = false
+    /// 一覧の上でのドラッグが終わった（外へ出た・落とした・取りやめた）
+    var onDragTargetEnded: (() -> Void)?
+
+    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        isDragTargeted = true
+        return super.draggingEntered(sender)
+    }
+
+    override func draggingExited(_ sender: (any NSDraggingInfo)?) {
+        super.draggingExited(sender)
+        endDragTarget()
+    }
+
+    override func draggingEnded(_ sender: any NSDraggingInfo) {
+        super.draggingEnded(sender)
+        endDragTarget()
+    }
+
+    override func concludeDragOperation(_ sender: (any NSDraggingInfo)?) {
+        super.concludeDragOperation(sender)
+        endDragTarget()
+    }
+
+    private func endDragTarget() {
+        guard isDragTargeted else { return }
+        isDragTargeted = false
+        onDragTargetEnded?()
+    }
+
     override func becomeFirstResponder() -> Bool {
         let result = super.becomeFirstResponder()
         if result { onFocus?() }

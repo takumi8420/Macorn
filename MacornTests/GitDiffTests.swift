@@ -1,0 +1,102 @@
+import Foundation
+import Testing
+@testable import Macorn
+
+struct GitDiffTests {
+    @Test func parsesHunksWithLineNumbers() {
+        let output = """
+        diff --git a/src/app.swift b/src/app.swift
+        index 1111111..2222222 100644
+        --- a/src/app.swift
+        +++ b/src/app.swift
+        @@ -3,4 +3,5 @@ import Foundation
+         func greet() {
+        -    print("a")
+        +    print("b")
+        +    print("c")
+         }
+        \\ No newline at end of file
+
+        """
+        let diff = FileDiff.parse(output)
+        #expect(diff.hunks.count == 1)
+        #expect(diff.addedCount == 2)
+        #expect(diff.removedCount == 1)
+        let lines = diff.hunks[0].lines
+        #expect(lines.map(\.kind) == [.context, .removed, .added, .added, .context, .note])
+        #expect(lines[0].oldNumber == 3 && lines[0].newNumber == 3)
+        #expect(lines[1].oldNumber == 4 && lines[1].newNumber == nil)
+        #expect(lines[2].newNumber == 4 && lines[3].newNumber == 5)
+        #expect(lines[4].oldNumber == 5 && lines[4].newNumber == 6)
+        #expect(lines[2].text == "    print(\"b\")")
+    }
+
+    @Test func readsHunkStarts() {
+        #expect(FileDiff.hunkStart("@@ -12,7 +14,8 @@ func a()")! == (12, 14))
+        #expect(FileDiff.hunkStart("@@ -1 +1 @@")! == (1, 1))
+        // 空のファイルからの追加
+        #expect(FileDiff.hunkStart("@@ -0,0 +1,3 @@")! == (1, 1))
+        #expect(FileDiff.hunkStart("not a hunk") == nil)
+    }
+
+    @Test func detectsBinary() {
+        let diff = FileDiff.parse("diff --git a/i.png b/i.png\nindex 1..2 100644\nBinary files a/i.png and b/i.png differ\n")
+        #expect(diff.isBinary)
+        #expect(diff.hunks.isEmpty)
+    }
+
+    @Test func truncatesLongDiffs() {
+        let body = (0..<(FileDiff.maxLines + 10)).map { "+line \($0)" }.joined(separator: "\n")
+        let diff = FileDiff.parse("@@ -0,0 +1,\(FileDiff.maxLines + 10) @@\n" + body)
+        #expect(diff.isTruncated)
+        #expect(diff.addedCount == FileDiff.maxLines)
+    }
+
+    @Test func parsesChangesWithRenames() {
+        let output = [
+            " M src/b.swift",
+            "R  new.txt", "old.txt",
+            "?? docs/readme.txt",
+            "!! build/",
+            " D a.txt",
+        ].joined(separator: "\0") + "\0"
+        let changes = GitRepository.parseChanges(output)
+        #expect(changes.map(\.path) == ["a.txt", "docs/readme.txt", "new.txt", "src/b.swift"])
+        #expect(changes.map(\.status) == [.deleted, .untracked, .renamed, .modified])
+        #expect(changes[2].originalPath == "old.txt")
+        #expect(changes[1].fileName == "readme.txt" && changes[1].folder == "docs")
+    }
+
+    @Test func readsRealRepositoryDiff() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("macorn-diff-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: folder) }
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        func git(_ arguments: String...) throws {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+            process.arguments = ["-C", folder.path, "-c", "user.name=t", "-c", "user.email=t@example.com"] + arguments
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = FileHandle.nullDevice
+            try process.run()
+            process.waitUntilExit()
+        }
+        try git("init", "-q", "-b", "main")
+        // コミットがまだないときも、未追跡・追加のファイルの差分を出せる
+        try Data("one\ntwo\n".utf8).write(to: folder.appendingPathComponent("a.txt"))
+        var changes = try #require(GitRepository.changes(root: folder))
+        #expect(changes.map(\.path) == ["a.txt"])
+        #expect(GitRepository.diff(root: folder, change: changes[0]).addedCount == 2)
+        try git("add", "a.txt")
+        changes = try #require(GitRepository.changes(root: folder))
+        #expect(changes.first?.status == .added)
+        #expect(GitRepository.diff(root: folder, change: changes[0]).addedCount == 2)
+
+        try git("commit", "-q", "-m", "init")
+        try Data("one\nTWO\nthree\n".utf8).write(to: folder.appendingPathComponent("a.txt"))
+        changes = try #require(GitRepository.changes(root: folder))
+        let diff = GitRepository.diff(root: folder, change: changes[0])
+        #expect(changes[0].status == .modified)
+        #expect(diff.addedCount == 2)
+        #expect(diff.removedCount == 1)
+    }
+}

@@ -2,6 +2,8 @@ import SwiftUI
 
 struct StatusBarView: View {
     var state: PaneState
+    /// 「n 件の変更」を押したとき（変更のウィンドウを開く）
+    var onShowChanges: () -> Void = {}
 
     var body: some View {
         HStack(spacing: 6) {
@@ -13,7 +15,10 @@ struct StatusBarView: View {
                     Image(systemName: "arrow.triangle.branch")
                     Text(branch)
                     if state.gitChangeCount > 0 {
-                        Text("・\(state.gitChangeCount) 件の変更")
+                        Text("・")
+                        Button("\(state.gitChangeCount) 件の変更", action: onShowChanges)
+                            .buttonStyle(.link)
+                            .help("変更の差分を見る")
                     }
                 }
                 .help("Git のブランチと、コミットしていない変更の数")

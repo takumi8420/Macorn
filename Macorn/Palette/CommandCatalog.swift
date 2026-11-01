@@ -119,6 +119,7 @@ enum CommandCatalog {
         "showInfo:": "Get Info Inspector Properties",
         "copyTildePath:": "Copy Path with Tilde",
         "copyRelativePath:": "Copy Relative Path from Git Root",
+        "showChanges:": "Show Changes Git Diff",
         "copyShellQuotedPath:": "Copy Shell Quoted Path",
         "showSettings:": "Settings Preferences",
         "terminate:": "Quit",

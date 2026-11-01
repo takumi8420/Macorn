@@ -117,7 +117,9 @@ nonisolated enum GitRepository {
         return GitSnapshot.parse(output, root: root)
     }
 
-    private static func run(_ arguments: [String]) -> String? {
+    /// git を実行して標準出力を返す。終了コードが allowedStatuses にないときは nil。
+    /// lossy のときは UTF-8 でない部分を置き換えて読む（差分の中身用）
+    static func run(_ arguments: [String], allowedStatuses: Set<Int32> = [0], lossy: Bool = false) -> String? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
         process.arguments = arguments
@@ -135,7 +137,8 @@ nonisolated enum GitRepository {
         }
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
-        guard process.terminationStatus == 0 else { return nil }
+        guard allowedStatuses.contains(process.terminationStatus) else { return nil }
+        if lossy { return String(decoding: data, as: UTF8.self) }
         return String(data: data, encoding: .utf8)
     }
 }

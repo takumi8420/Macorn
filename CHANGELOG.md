@@ -6,6 +6,35 @@
 
 ## 2026-11-01
 
+### Macorn：バージョン 0.3.11 を LP で公開する
+
+- **きっかけ**：konta の依頼「0.3.11 で公開」（ドラッグでの移動の不具合の修正と、変更の差分を見るウィンドウを受けて）
+- **意図・方針**：0.3.10 → 0.3.11（ビルド番号は 13 → 14）。`scripts/release.sh --publish` で署名・公証した DMG・LP の表記・`version.json` をまとめて差し替えた
+- 変更 `Macorn.xcodeproj/project.pbxproj` — `MARKETING_VERSION` を 0.3.11、`CURRENT_PROJECT_VERSION` を 14 に
+- 変更 `site/download/Macorn.dmg`、`site/index.html`、`site/version.json` — 0.3.11 の DMG・表記・最新版の情報
+
+### Macorn：GitHub Desktop のような、変更の差分を見るウィンドウを足す
+
+- **きっかけ**：konta の依頼（2026-11-01）「github desktop のような差分の確認機能も実装して欲しい」。範囲と出す場所はユーザーの選択で「見るだけ」「専用のウィンドウ」
+- **意図・方針**：Git の状態はステータスバーと一覧の印で分かるが、中身の違いはターミナルで見るしかなかった。GitHub Desktop の「Changes」と同じく、左に変更のあるファイル、右に行ごとの差分（追加は緑・削除は赤・前後の行番号）を並べる。比べるのは最後のコミットと今の中身で、ステージしたかどうかは分けない（見るだけなので）。未追跡のファイルは全体を追加として見せ、まだコミットがないリポジトリは空と比べる。git の出力は自前で読む（外部ライブラリなし）。大きな差分で固まらないよう、バイナリは出さず 5000 行で打ち切り、読み込みは裏で行う
+- 追加 `Macorn/Integration/GitDiff.swift` — 変更の一覧（`git status -uall`）と、1ファイル分の差分（`git diff HEAD`・未追跡は `--no-index`）を読む
+- 追加 `Macorn/Window/ChangesWindow.swift` — 変更のウィンドウ（リポジトリごとに1つ。前に出るたびと ⌘R で読み直す）
+- 変更 `Macorn/Integration/GitRepository.swift` — git の実行で、0 以外の終了コードと UTF-8 でない出力を受け付けられるようにする
+- 変更 `Macorn/Browser/StatusBarView.swift`・`Macorn/Browser/FileBrowserViewController.swift`・`Macorn/Browser/FileBrowserViewController+Integration.swift`・`Macorn/App/MainMenu.swift`・`Macorn/Palette/CommandCatalog.swift` — ステータスバーの「n 件の変更」、ファイル › 変更を見る（差分）…、パレットから開く
+- 変更 `Macorn/App/DebugAutomation.swift` — 確認用の手順 `changes`・`changeselect:パス`・`changesinfo`・`snapchanges:名前`・`closechanges` を足す
+- 追加 `MacornTests/GitDiffTests.swift` — 差分と変更の一覧の読み取り、実際のリポジトリでの差分
+- 変更 `docs/REQUIREMENTS.md`（T-23）・`AGENTS.md`（確定している前提）・`README.md`（フォルダの役割）
+
+### Macorn：ドラッグで移動するときに一覧が引き戻され、スクロールできなくなるのを直す
+
+- **きっかけ**：konta の指摘（2026-11-01）「フォルダなどをドラッグして別のフォルダに移動するときに変な挙動になりページをスクロールできなくなったりして著しくUX が悪い」
+- **意図・方針**：一覧を読み直すたびに選択を戻す処理が、選んだ行まで一覧をスクロールしていた。ドラッグ中は動かしている項目が選ばれているため、フォルダの自動展開や中身の変化のたびに一覧が引き戻されていた（自動操作で、下までスクロールした一覧が変化1回で先頭へ戻るのを確認）。読み直しでは表示位置を動かさないようにし、あわせてドラッグ中のずれの元を断った。ドラッグ中にフォルダの上で止まると開くのはそのままにし（konta の依頼「ドラッグ中のフォルダの展開がされなくなった」。いったん止めたのを戻した）、まだ読んでいないフォルダはその場で読んでから開いて、中身が後から入って行がずれないようにした
+- 変更 `Macorn/Browser/FileBrowserViewController.swift` — 読み直しのあとの選択の戻しでスクロールしない（`select(_:scroll:)`）。ドラッグ中はフォルダの変化による読み直しを後回しにし、ドラッグ中に自動で開くフォルダは中身を読んでから開く
+- 変更 `Macorn/Browser/FileBrowserViewController+Files.swift` — この一覧から始めたドラッグの状態を持ち、終わったら後回しにした読み直しを行う
+- 変更 `Macorn/Browser/FileBrowserViewController+Keyboard.swift` — サイズ順の並べ直しでも表示位置を動かさない
+- 変更 `Macorn/Browser/FileOutlineView.swift` — ほかの場所からのドラッグが一覧の上にあるかを持つ
+- 変更 `Macorn/App/DebugAutomation.swift` — 確認用の手順 `dragstate:begin|end`・`listinfo`・`scrollbottom` を足す
+
 ### Macorn：バージョン 0.3.10 を LP で公開する
 
 - **きっかけ**：konta の依頼「0.3.10 で公開」（セクションの「…」・サイドバーのホバー・分けた画面の「×」を受けて）

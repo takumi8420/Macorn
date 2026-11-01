@@ -185,9 +185,9 @@ extension FileBrowserViewController {
         }
     }
 
-    /// 名前の変更中に後回しにした再読み込みを行う。
-    private func flushDeferredRefresh() {
-        guard needsRefreshAfterRename else { return }
+    /// 名前の変更中・ドラッグ中に後回しにした再読み込みを行う。
+    func flushDeferredRefresh() {
+        guard needsRefreshAfterRename, renamingNode == nil, !isDragging else { return }
         needsRefreshAfterRename = false
         for folder in root.loadedFolders() where folder === root || outlineView.isItemExpanded(folder) {
             load(folder)
@@ -335,6 +335,14 @@ extension FileBrowserViewController {
 
     func outlineView(_ outlineView: NSOutlineView, draggingSession session: NSDraggingSession, willBeginAt screenPoint: NSPoint, forItems draggedItems: [Any]) {
         draggedURLs = draggedItems.compactMap { ($0 as? FileNode)?.url }
+        isDragSourceActive = true
+    }
+
+    /// ドラッグの途中は一覧を読み直さない（行が入れ替わると、置き先やスクロールの位置がずれる）
+    var isDragging: Bool { isDragSourceActive || outlineView.isDragTargeted }
+
+    func dragDidFinish() {
+        flushDeferredRefresh()
     }
 
     /// Dock のゴミ箱へドロップされたら、ゴミ箱へ入れる。
@@ -344,6 +352,8 @@ extension FileBrowserViewController {
             Task { await FileOperationManager.shared.moveToTrash(urls, window: view.window) }
         }
         draggedURLs = []
+        isDragSourceActive = false
+        dragDidFinish()
     }
 
     func outlineView(

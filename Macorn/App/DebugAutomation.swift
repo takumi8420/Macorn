@@ -406,6 +406,26 @@ enum DebugAutomation {
             let views = menu?.items.compactMap { $0.view as? TagCheckboxMenuView } ?? []
             views.forEach { $0.debugToggle() }
             print("[debug] tagmenu rows=\(views.count) states=\(views.map(\.debugState.rawValue))")
+        case "changes":
+            // 表示中のリポジトリの変更のウィンドウを、キーにせずに開く
+            if let root = browser.gitSnapshot?.root ?? GitRepository.root(containing: browser.state.currentURL) {
+                ChangesWindowController.show(root: root, activate: false)
+            }
+        case "changeselect":
+            ChangesWindowController.open.first?.model.select(argument)
+        case "changesinfo":
+            if let model = ChangesWindowController.open.first?.model {
+                print("[debug] changes branch=\(model.branch ?? "-") files=\(model.changes.map { "\($0.status.badge):\($0.path)" }) selected=\(model.selectedPath ?? "-") hunks=\(model.diff?.hunks.count ?? -1) +\(model.diff?.addedCount ?? 0) -\(model.diff?.removedCount ?? 0) binary=\(model.diff?.isBinary ?? false)")
+            }
+        case "snapchanges":
+            if let window = ChangesWindowController.open.first?.window {
+                snapshot(window, to: outDir.appendingPathComponent("\(argument).png"))
+            }
+        case "closechanges":
+            ChangesWindowController.open.forEach { $0.close() }
+        case "dragstate": browser.debugDragState(argument)
+        case "listinfo": print("[debug] list \(browser.debugListInfo())")
+        case "scrollbottom": browser.debugScrollToBottom()
         case "splitinfo":
             let split = browser.contentSplit
             print("[debug] split bounds=\(split.bounds) subviews=\(split.subviews.map { "\(type(of: $0)) \($0.frame) hidden=\($0.isHidden)" }) arranged=\(split.arrangedSubviews.count)")
@@ -661,6 +681,29 @@ extension FileBrowserViewController {
                 return
             }
         }
+    }
+}
+
+extension FileBrowserViewController {
+    /// dragstate:begin / end … この一覧からドラッグを始めた・終えたことにする
+    func debugDragState(_ argument: String) {
+        if argument == "begin" {
+            isDragSourceActive = true
+        } else {
+            isDragSourceActive = false
+            dragDidFinish()
+        }
+    }
+
+    /// listinfo … 行数・選択・スクロールの位置
+    func debugListInfo() -> String {
+        let selected = outlineView.selectedRowIndexes.map { $0 }
+        return "rows=\(outlineView.numberOfRows) selected=\(selected) scrollY=\(Int(scrollView.contentView.bounds.origin.y)) expandOK=\(outlineView.delegate?.outlineView?(outlineView, shouldExpandItem: outlineView.item(atRow: 0) as Any) ?? true)"
+    }
+
+    /// scrollbottom … 一覧のいちばん下までスクロールする
+    func debugScrollToBottom() {
+        outlineView.scrollRowToVisible(outlineView.numberOfRows - 1)
     }
 }
 

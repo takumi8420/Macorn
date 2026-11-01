@@ -32,6 +32,15 @@ extension FileBrowserViewController {
         EditorLauncher.open([root])
     }
 
+    /// コミットしていない変更の差分を、専用のウィンドウで見る
+    @objc func showChanges(_ sender: Any?) {
+        guard let root = gitSnapshot?.root ?? GitRepository.root(containing: state.currentURL) else {
+            NSSound.beep()
+            return
+        }
+        ChangesWindowController.show(root: root)
+    }
+
     @objc func copyPath(_ sender: Any?) { copyPaths(.full) }
     @objc func copyTildePath(_ sender: Any?) { copyPaths(.tilde) }
     @objc func copyRelativePath(_ sender: Any?) { copyPaths(.relativeToRepository) }
@@ -47,7 +56,7 @@ extension FileBrowserViewController {
             return TerminalLauncher.selected != nil && terminalFolder.isFileURL
         case #selector(openInEditor(_:)):
             return EditorLauncher.selected != nil && !targetURLs.isEmpty
-        case #selector(openRepositoryInEditor(_:)), #selector(copyRelativePath(_:)):
+        case #selector(openRepositoryInEditor(_:)), #selector(copyRelativePath(_:)), #selector(showChanges(_:)):
             return gitSnapshot != nil
         case #selector(copyPath(_:)), #selector(copyTildePath(_:)), #selector(copyShellQuotedPath(_:)):
             // 入力欄では普通のコピーを優先するため、パスのコピーは一覧のときだけ
