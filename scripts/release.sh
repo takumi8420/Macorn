@@ -12,7 +12,7 @@
 #   bash scripts/release.sh --publish       # 公証まで行い、LP（site/download/Macorn.dmg）も差し替える
 #
 # 出力：build/release/Macorn-<バージョン>.dmg
-# --publish のときは、site/index.html のバージョンとサイズ（data-release の箇所）と、
+# --publish のときは、site/index.html のバージョンとサイズ（data-release の箇所と構造化データ）、site/sitemap.xml の更新日と、
 # アプリが新しい版を確かめるための site/version.json も書き換える。
 # LP への公開は、そのあと main に push すると GitHub Actions が行う。
 set -euo pipefail
@@ -105,6 +105,12 @@ path = "site/index.html"
 html = open(path, encoding="utf-8").read()
 html = re.sub(r'(<span[^>]*data-release="version"[^>]*>)[^<]*(</span>)', rf"\g<1>{version}\g<2>", html)
 html = re.sub(r'(<span[^>]*data-release="size"[^>]*>)[^<]*(</span>)', rf"\g<1>{size}\g<2>", html)
+# 検索エンジン向けの構造化データ（JSON-LD）の版と、サイトマップの更新日
+html = re.sub(r'("softwareVersion": ")[^"]*(")', rf"\g<1>{version}\g<2>", html)
+import datetime
+today = datetime.date.today().isoformat()
+sitemap = open("site/sitemap.xml", encoding="utf-8").read()
+open("site/sitemap.xml", "w", encoding="utf-8").write(re.sub(r"<lastmod>[^<]*</lastmod>", f"<lastmod>{today}</lastmod>", sitemap))
 open(path, "w", encoding="utf-8").write(html)
 # アプリの「アップデートを確認…」が読む（Macorn/App/UpdateChecker.swift）
 info = {
