@@ -6,6 +6,13 @@
 
 ## 2026-11-01
 
+### Macorn：バージョン 0.3.8 を LP で公開する
+
+- **きっかけ**：konta の依頼「お願いします」（サイドバーの「＋ 追加」を上部へ移した変更を利用者に届けるため）
+- **意図・方針**：0.3.7 → 0.3.8（ビルド番号は 10 → 11）。`scripts/release.sh --publish` で署名・公証した DMG・LP の表記・`version.json` をまとめて差し替えた
+- 変更 `Macorn.xcodeproj/project.pbxproj` — `MARKETING_VERSION` を 0.3.8、`CURRENT_PROJECT_VERSION` を 11 に
+- 変更 `site/download/Macorn.dmg`、`site/index.html`、`site/version.json` — 0.3.8 の DMG・表記・最新版の情報
+
 ### Macorn：サイドバーの「＋ 追加」を上部へ移す
 
 - **きっかけ**：konta の依頼「サイドバーにおいて、セクションやタグの追加のプラスボタンを上部に設けて欲しい」（0.3.7 の公開のあと）
