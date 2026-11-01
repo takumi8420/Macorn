@@ -126,7 +126,7 @@ final class SidebarViewController: NSViewController {
         scrollView.autohidesScrollers = true
         scrollView.drawsBackground = false
 
-        // いちばん下の「＋ 追加」ボタン。押すと、タグ・セクションなど何を足すかを選ぶメニューを出す
+        // 上部の「＋ 追加」ボタン。押すと、タグ・セクションなど何を足すかを選ぶメニューを出す
         addSectionButton.title = "追加"
         addSectionButton.image = NSImage(systemSymbolName: "plus", accessibilityDescription: nil)
         addSectionButton.imagePosition = .imageLeading
@@ -146,16 +146,17 @@ final class SidebarViewController: NSViewController {
             container.addSubview(subview)
         }
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: container.topAnchor),
-            scrollView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            separator.topAnchor.constraint(equalTo: scrollView.bottomAnchor),
-            separator.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 10),
-            separator.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -10),
-            addSectionButton.topAnchor.constraint(equalTo: separator.bottomAnchor, constant: 6),
+            // 上部（タイトルバーのすぐ下）に「＋ 追加」、その下に区切り線と一覧
+            addSectionButton.topAnchor.constraint(equalTo: container.safeAreaLayoutGuide.topAnchor, constant: 6),
             addSectionButton.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 14),
             addSectionButton.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -10),
-            addSectionButton.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -8),
+            separator.topAnchor.constraint(equalTo: addSectionButton.bottomAnchor, constant: 6),
+            separator.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 10),
+            separator.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -10),
+            scrollView.topAnchor.constraint(equalTo: separator.bottomAnchor, constant: 2),
+            scrollView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
         ])
         view = container
     }
@@ -165,10 +166,12 @@ final class SidebarViewController: NSViewController {
         SidebarPrompts.createSection(in: store)
     }
 
-    /// 「＋ 追加」: 何を足すかを選ぶメニューを、ボタンの上に出す
+    /// 「＋ 追加」: 何を足すかを選ぶメニューを、ボタンのすぐ下に出す
     @objc func showAddMenu(_ sender: Any?) {
         let menu = makeAddMenu()
-        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: addSectionButton.bounds.height + 4), in: addSectionButton)
+        let button = addSectionButton
+        let below = button.isFlipped ? button.bounds.maxY + 4 : button.bounds.minY - 4
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: below), in: button)
     }
 
     /// 「＋ 追加」のメニュー。タグ・セクションを作るほか、表示中のフォルダをお気に入りやセクションに置く、
