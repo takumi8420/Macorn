@@ -37,8 +37,9 @@ extension FileBrowserViewController {
         let submenu = NSMenu()
         submenu.autoenablesItems = false
         let store = SidebarStore.shared
-        for section in store.customSections {
-            let entry = NSMenuItem(title: section.name, action: #selector(toggleSectionPlacement(_:)), keyEquivalent: "")
+        // サブセクションは「親 › 子」の名前で、親のすぐ後ろに出す
+        for section in store.customSectionsInOrder {
+            let entry = NSMenuItem(title: store.displayPath(ofSection: section.id), action: #selector(toggleSectionPlacement(_:)), keyEquivalent: "")
             entry.target = self
             entry.representedObject = SectionPlacement(urls: urls, sectionID: section.id)
             let placed = urls.filter { Self.isPlaced($0, in: section) }.count

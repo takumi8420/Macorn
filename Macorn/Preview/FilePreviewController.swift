@@ -134,16 +134,16 @@ final class FilePreviewController: NSViewController {
         titleLabel.lineBreakMode = .byTruncatingMiddle
         titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         let scriptButton = Self.headerButton(symbol: "curlybraces", tip: "", target: self, action: #selector(toggleScripts(_:)))
-        let browserButton = Self.headerButton(symbol: "safari", tip: "ブラウザで開く", target: self, action: #selector(openInBrowser(_:)))
+        let browserButton = Self.headerButton(symbol: "safari", tip: "このファイルをブラウザで開く", target: self, action: #selector(openInBrowser(_:)))
         self.scriptButton = scriptButton
         self.browserButton = browserButton
-        let editButton = Self.headerButton(symbol: "square.and.pencil", tip: "エディタで開く（⌥⌘E）", target: self, action: #selector(openInEditor(_:)))
+        let editButton = Self.headerButton(symbol: "square.and.pencil", tip: "このファイルをエディタで開く（⌥⌘E）", target: self, action: #selector(openInEditor(_:)))
         self.editButton = editButton
         let closeButton = Self.headerButton(symbol: "xmark", tip: "プレビューを閉じる（⌥⌘P で切り替え）", target: self, action: #selector(closePreview(_:)))
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let zoomOut = Self.headerButton(symbol: "minus.magnifyingglass", tip: "縮小（⌘−）", target: self, action: #selector(zoomOut(_:)))
-        let zoomIn = Self.headerButton(symbol: "plus.magnifyingglass", tip: "拡大（⌘+）", target: self, action: #selector(zoomIn(_:)))
+        let zoomOut = Self.headerButton(symbol: "minus.magnifyingglass", tip: "プレビューを縮小（⌘−）", target: self, action: #selector(zoomOut(_:)))
+        let zoomIn = Self.headerButton(symbol: "plus.magnifyingglass", tip: "プレビューを拡大（⌘+）", target: self, action: #selector(zoomIn(_:)))
         zoomLabel.isBordered = false
         zoomLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
         zoomLabel.contentTintColor = .secondaryLabelColor

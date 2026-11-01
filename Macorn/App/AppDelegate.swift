@@ -224,12 +224,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         var restoredAny = false
         for savedWindow in saved {
             // 消えたフォルダは除く。画面が1つも残らないタブは開かない
-            let layouts: [PaneLayout] = savedWindow.tabs.compactMap { layout in
-                let paths = layout.paths.filter(TagLocation.exists)
-                guard !paths.isEmpty else { return nil }
-                let active = paths.count == layout.paths.count ? layout.activeIndex : 0
-                return PaneLayout(paths: paths, activeIndex: active, dividerFraction: layout.dividerFraction)
-            }
+            let layouts: [PaneLayout] = savedWindow.tabs.compactMap { $0.pruned(keeping: TagLocation.exists) }
             guard let first = layouts.first else { continue }
 
             let host = openWindow(layout: first, frame: NSRectFromString(savedWindow.frame))

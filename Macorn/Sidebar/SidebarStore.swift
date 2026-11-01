@@ -12,8 +12,18 @@ struct SidebarItem: Identifiable, Hashable {
     var isMissing = false
     /// タグの行（項目ではなくタグの一覧を開く）
     var tagID: UUID?
+    /// サブセクション（セクションの中に入れたセクション）の行
+    var sectionID: UUID?
 
-    var id: String { tagID.map { "tag:" + $0.uuidString } ?? url.path }
+    var id: String {
+        if let sectionID { return "section:" + sectionID.uuidString }
+        return tagID.map { "tag:" + $0.uuidString } ?? url.path
+    }
+
+    /// サブセクションを指す項目
+    static func subsection(_ id: UUID) -> SidebarItem {
+        SidebarItem(url: URL(string: "macorn-section:" + id.uuidString)!, name: "", symbol: "rectangle.stack", sectionID: id)
+    }
 }
 
 /// サイドバーのセクション。順番と表示・非表示を変えられる。
@@ -77,6 +87,8 @@ struct CustomSidebarSection: Identifiable, Hashable {
     let id: UUID
     var name: String
     var items: [SidebarItem]
+    /// サブセクションなら、入れてあるセクション。いちばん上の階層なら nil
+    var parentID: UUID?
 }
 
 /// サイドバーの構成（お気に入り・自分で作ったセクション・場所・セクションの順番）。全ウィンドウで共有する。
@@ -360,8 +372,105 @@ final class SidebarStore {
         sections = sections
     }
 
+    // MARK: サブセクション（セクションの中に入れたセクション）
+
+    func isSubsection(_ id: UUID) -> Bool { customSection(id)?.parentID != nil }
+
+    /// 「親 › 子」の形の名前（メニューに出す用）
+    func displayPath(ofSection id: UUID) -> String {
+        guard let section = customSection(id) else { return "" }
+        guard let parentID = section.parentID else { return section.name }
+        return displayPath(ofSection: parentID) + " › " + section.name
+    }
+
+    /// 上の階層から順に並べたセクション（サブセクションは親のすぐ後ろ）
+    var customSectionsInOrder: [CustomSidebarSection] {
+        func walk(_ id: UUID) -> [CustomSidebarSection] {
+            guard let section = customSection(id) else { return [] }
+            return [section] + section.items.compactMap(\.sectionID).flatMap(walk)
+        }
+        return sections.compactMap { if case .custom(let id) = $0 { return id } else { return nil } }.flatMap(walk)
+    }
+
+    /// id のセクションが ancestor の中（入れ子のどこか）にあるか
+    func isSection(_ id: UUID, inside ancestor: UUID) -> Bool {
+        var current = customSection(id)?.parentID
+        while let parent = current {
+            if parent == ancestor { return true }
+            current = customSection(parent)?.parentID
+        }
+        return false
+    }
+
+    /// id のセクションを parent の中へ入れられるか（自分の中・自分のサブセクションの中へは入れない）
+    func canNestSection(_ id: UUID, in parent: UUID) -> Bool {
+        id != parent && customSection(id) != nil && customSection(parent) != nil && !isSection(parent, inside: id)
+    }
+
+    /// parent の中に、新しいサブセクションを作る。index を指定するとその位置、指定しなければ最後
+    @discardableResult
+    func createSubsection(named rawName: String, in parent: UUID, at index: Int? = nil) -> UUID? {
+        let name = rawName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty, customSection(parent) != nil else { return nil }
+        let section = CustomSidebarSection(id: UUID(), name: name, items: [], parentID: parent)
+        customSections.append(section)
+        mutateItems(.custom(parent)) { Self.insert(.subsection(section.id), into: &$0, at: index) }
+        return section.id
+    }
+
+    /// セクション（いちばん上の階層のものでも、サブセクションでも）を parent の index の位置へ入れる
+    func nestSection(_ id: UUID, in parent: UUID, at index: Int? = nil) {
+        guard canNestSection(id, in: parent), let position = customSections.firstIndex(where: { $0.id == id }) else { return }
+        if customSections[position].parentID == parent {
+            // 同じセクションの中での並べ替え
+            moveItem(id: SidebarItem.subsection(id).id, in: .custom(parent), to: index ?? (customSection(parent)?.items.count ?? 0))
+            return
+        }
+        detach(id)
+        hiddenSections.remove(SidebarSection.custom(id).id)
+        customSections[position].parentID = parent
+        mutateItems(.custom(parent)) { Self.insert(.subsection(id), into: &$0, at: index) }
+        saveSections()
+    }
+
+    /// サブセクションを、いちばん上の階層のセクションにする。target の前（nil なら最後）に置く
+    func unnestSection(_ id: UUID, before target: SidebarSection?) {
+        guard let position = customSections.firstIndex(where: { $0.id == id }), customSections[position].parentID != nil else { return }
+        detach(id)
+        customSections[position].parentID = nil
+        saveCustomSections()
+        let section = SidebarSection.custom(id)
+        if let target, let index = sections.firstIndex(of: target) {
+            sections.insert(section, at: index)
+        } else {
+            sections.append(section)
+        }
+        saveSections()
+    }
+
+    /// サブセクションを、親のセクションの中で1つ上（-1）・下（+1）へ動かす
+    func moveSubsection(_ id: UUID, by delta: Int) {
+        guard let parentID = customSection(id)?.parentID, let items = customSection(parentID)?.items,
+              let position = items.firstIndex(where: { $0.sectionID == id }) else { return }
+        let target = position + delta
+        guard items.indices.contains(target) else { return }
+        moveItem(id: SidebarItem.subsection(id).id, in: .custom(parentID), to: delta > 0 ? target + 1 : target)
+    }
+
+    /// 今の置き場所（いちばん上の階層の並び、または親のセクションの中）から外す
+    private func detach(_ id: UUID) {
+        if let parentID = customSection(id)?.parentID {
+            mutateItems(.custom(parentID)) { $0.removeAll { $0.sectionID == id } }
+        } else {
+            sections.removeAll { $0 == .custom(id) }
+        }
+    }
+
     /// セクションを削除する。中の項目はサイドバーから外れるだけで、項目やタグはそのまま
     func deleteSection(_ id: UUID) {
+        // 中のサブセクションもいっしょに消す
+        for child in customSection(id)?.items.compactMap(\.sectionID) ?? [] { deleteSection(child) }
+        detach(id)
         customSections.removeAll { $0.id == id }
         sections.removeAll { $0 == .custom(id) }
         hiddenSections.remove(SidebarSection.custom(id).id)
@@ -402,7 +511,9 @@ final class SidebarStore {
     }
 
     private func refreshMissing(_ item: inout SidebarItem) {
-        if let tagID = item.tagID {
+        if item.sectionID != nil {
+            item.isMissing = false
+        } else if let tagID = item.tagID {
             item.isMissing = tags.tag(id: tagID) == nil
         } else {
             item.isMissing = !FileManager.default.fileExists(atPath: item.url.path)
@@ -411,7 +522,9 @@ final class SidebarStore {
 
     private func saveCustomSections() {
         let records: [[String: Any]] = customSections.map {
-            ["id": $0.id.uuidString, "name": $0.name, "items": $0.items.map(Self.record(for:))]
+            var record: [String: Any] = ["id": $0.id.uuidString, "name": $0.name, "items": $0.items.map(Self.record(for:))]
+            if let parentID = $0.parentID { record["parent"] = parentID.uuidString }
+            return record
         }
         defaults.set(records, forKey: Self.customSectionsKey)
     }
@@ -420,12 +533,14 @@ final class SidebarStore {
         let records = defaults.array(forKey: Self.customSectionsKey) as? [[String: Any]] ?? []
         return records.compactMap { record in
             guard let idText = record["id"] as? String, let id = UUID(uuidString: idText), let name = record["name"] as? String else { return nil }
-            return CustomSidebarSection(id: id, name: name, items: loadItems(record["items"] as? [[String: String]] ?? []))
+            let parentID = (record["parent"] as? String).flatMap(UUID.init(uuidString:))
+            return CustomSidebarSection(id: id, name: name, items: loadItems(record["items"] as? [[String: String]] ?? []), parentID: parentID)
         }
     }
 
-    /// 保存の形: フォルダ・ファイルは {"path": …}、タグは {"tag": ID}。表示名を変えたときだけ "name" も
+    /// 保存の形: フォルダ・ファイルは {"path": …}、タグは {"tag": ID}、サブセクションは {"section": ID}。表示名を変えたときだけ "name" も
     private static func record(for item: SidebarItem) -> [String: String] {
+        if let sectionID = item.sectionID { return ["section": sectionID.uuidString] }
         var record = item.tagID.map { ["tag": $0.uuidString] } ?? ["path": item.url.path]
         if let customName = item.customName { record["name"] = customName }
         return record
@@ -434,7 +549,9 @@ final class SidebarStore {
     private func loadItems(_ records: [[String: String]]) -> [SidebarItem] {
         records.compactMap { record in
             var item: SidebarItem
-            if let tag = record["tag"], let id = UUID(uuidString: tag) {
+            if let section = record["section"], let id = UUID(uuidString: section) {
+                return SidebarItem.subsection(id)
+            } else if let tag = record["tag"], let id = UUID(uuidString: tag) {
                 let name = tags.tag(id: id)?.name ?? "（削除されたタグ）"
                 item = SidebarItem(url: TagLocation.url(for: id), name: name, symbol: "tag.fill", isMissing: tags.tag(id: id) == nil, tagID: id)
             } else if let path = record["path"] {
@@ -494,6 +611,10 @@ final class SidebarStore {
 
     /// ドラッグ＆ドロップ: section を target の位置へ移す（target の前に入れる）
     func moveSection(_ section: SidebarSection, before target: SidebarSection) {
+        if case .custom(let id) = section, isSubsection(id) {
+            unnestSection(id, before: target)
+            return
+        }
         guard section != target, sections.contains(section), sections.contains(target) else { return }
         sections.removeAll { $0 == section }
         let position = sections.firstIndex(of: target) ?? sections.count
@@ -503,6 +624,10 @@ final class SidebarStore {
 
     /// ドラッグ＆ドロップ: section を最後へ移す
     func moveSectionToEnd(_ section: SidebarSection) {
+        if case .custom(let id) = section, isSubsection(id) {
+            unnestSection(id, before: nil)
+            return
+        }
         guard sections.contains(section) else { return }
         sections.removeAll { $0 == section }
         sections.append(section)
@@ -551,7 +676,7 @@ final class SidebarStore {
 
     func resetSections() {
         // 自分で作ったセクションは消さず、最初の3つのあとに並べる
-        sections = SidebarSection.defaultOrder + customSections.map { .custom($0.id) }
+        sections = SidebarSection.defaultOrder + customSections.filter { $0.parentID == nil }.map { .custom($0.id) }
         hiddenSections = []
         saveSections()
     }
@@ -559,7 +684,7 @@ final class SidebarStore {
     private func loadSections() {
         if let ids = defaults.stringArray(forKey: Self.sectionsKey) {
             var loaded = ids.compactMap(SidebarSection.init(id:)).filter { section in
-                if case .custom(let id) = section { return customSection(id) != nil }
+                if case .custom(let id) = section { return customSection(id) != nil && !isSubsection(id) }
                 return true
             }
             // あとから増えたセクションは最後に足す

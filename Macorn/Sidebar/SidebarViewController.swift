@@ -126,17 +126,17 @@ final class SidebarViewController: NSViewController {
         scrollView.autohidesScrollers = true
         scrollView.drawsBackground = false
 
-        // いちばん下の「＋ セクションを作る」ボタン
-        addSectionButton.title = "セクションを作る"
+        // いちばん下の「＋ 追加」ボタン。押すと、タグ・セクションなど何を足すかを選ぶメニューを出す
+        addSectionButton.title = "追加"
         addSectionButton.image = NSImage(systemSymbolName: "plus", accessibilityDescription: nil)
         addSectionButton.imagePosition = .imageLeading
         addSectionButton.isBordered = false
         addSectionButton.contentTintColor = .secondaryLabelColor
         addSectionButton.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
-        addSectionButton.toolTip = "サイドバーに新しいセクションを作る"
-        addSectionButton.setAccessibilityLabel("セクションを作る")
+        addSectionButton.toolTip = "サイドバーに足すものを選ぶ（タグ・セクション・お気に入りなど）"
+        addSectionButton.setAccessibilityLabel("サイドバーに追加")
         addSectionButton.target = self
-        addSectionButton.action = #selector(createSection(_:))
+        addSectionButton.action = #selector(showAddMenu(_:))
         let separator = NSBox()
         separator.boxType = .separator
 
@@ -163,6 +163,100 @@ final class SidebarViewController: NSViewController {
     /// 「＋ セクションを作る」: 名前を聞いて、いちばん下に作る
     @objc func createSection(_ sender: Any?) {
         SidebarPrompts.createSection(in: store)
+    }
+
+    /// 「＋ 追加」: 何を足すかを選ぶメニューを、ボタンの上に出す
+    @objc func showAddMenu(_ sender: Any?) {
+        let menu = makeAddMenu()
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: addSectionButton.bounds.height + 4), in: addSectionButton)
+    }
+
+    /// 「＋ 追加」のメニュー。タグ・セクションを作るほか、表示中のフォルダをお気に入りやセクションに置く、
+    /// タグをセクションにする、隠したセクションを戻す、を選べる
+    func makeAddMenu() -> NSMenu {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        menu.addItem(item("タグを作る…") { [weak self] in
+            guard let self else { return }
+            SidebarPrompts.createTag(parent: nil, in: tags)
+        })
+        menu.addItem(item("セクションを作る…") { [weak self] in
+            guard let self else { return }
+            SidebarPrompts.createSection(in: store)
+        })
+        let ordered = store.customSectionsInOrder
+        let subsection = NSMenuItem(title: "サブセクションを作る", action: nil, keyEquivalent: "")
+        subsection.isEnabled = !ordered.isEmpty
+        let subsectionMenu = NSMenu()
+        for section in ordered {
+            subsectionMenu.addItem(item("「\(store.displayPath(ofSection: section.id))」の中に…") { [weak self] in
+                guard let self else { return }
+                SidebarPrompts.createSubsection(in: section.id, store: store)
+            })
+        }
+        subsection.submenu = subsectionMenu
+        menu.addItem(subsection)
+
+        // 表示中のフォルダを置く
+        menu.addItem(.separator())
+        let current = window.activePane.currentURL
+        let folderName = current.isFileURL ? FileManager.default.displayName(atPath: current.path) : nil
+        let favorite = item(folderName.map { "「\($0)」をお気に入りに追加" } ?? "表示中のフォルダをお気に入りに追加") { [weak self] in
+            self?.store.addFavorite(current)
+        }
+        favorite.isEnabled = current.isFileURL && !store.containsFavorite(current)
+        menu.addItem(favorite)
+        let place = NSMenuItem(title: folderName.map { "「\($0)」をセクションに置く" } ?? "表示中のフォルダをセクションに置く", action: nil, keyEquivalent: "")
+        place.isEnabled = current.isFileURL
+        let placeMenu = NSMenu()
+        for section in ordered {
+            placeMenu.addItem(item(store.displayPath(ofSection: section.id)) { [weak self] in self?.store.placeURL(current, in: .custom(section.id)) })
+        }
+        if !ordered.isEmpty { placeMenu.addItem(.separator()) }
+        placeMenu.addItem(item("新しいセクションを作って置く…") { [weak self] in
+            guard let self else { return }
+            SidebarPrompts.createSection(placing: [current], in: store)
+        })
+        place.submenu = placeMenu
+        menu.addItem(place)
+
+        // タグをセクションにする（そのタグが付いた項目の一覧を、サイドバーの見出しとして出す）
+        let candidates = tags.sortedTags.filter { !TagStore.isBuiltIn($0.id) && !store.containsTagSection($0.id) }
+        let tagSection = NSMenuItem(title: "タグをセクションとして出す", action: nil, keyEquivalent: "")
+        tagSection.isEnabled = !candidates.isEmpty
+        let tagMenu = NSMenu()
+        for tag in candidates {
+            let entry = item(tag.name.replacingOccurrences(of: "/", with: " › ")) { [weak self] in self?.store.addTagSection(tag.id) }
+            entry.image = Self.dot(NSColor(hex: tag.color))
+            tagMenu.addItem(entry)
+        }
+        tagSection.submenu = tagMenu
+        menu.addItem(tagSection)
+
+        // 隠したセクションを戻す
+        let hidden = store.sections.filter { store.isSectionHidden($0) }
+        if !hidden.isEmpty {
+            let restore = NSMenuItem(title: "隠したセクションを表示", action: nil, keyEquivalent: "")
+            let restoreMenu = NSMenu()
+            for section in hidden {
+                restoreMenu.addItem(item(section.title) { [weak self] in self?.store.setSection(section, hidden: false) })
+            }
+            restore.submenu = restoreMenu
+            menu.addItem(restore)
+        }
+
+        menu.addItem(.separator())
+        menu.addItem(item("サイドバーをカスタマイズ…") { SettingsWindowController.shared.show(tab: .sidebar) })
+        return menu
+    }
+
+    /// メニューに出すタグの色の丸
+    private static func dot(_ color: NSColor) -> NSImage {
+        NSImage(size: NSSize(width: 10, height: 10), flipped: false) { rect in
+            color.setFill()
+            NSBezierPath(ovalIn: rect.insetBy(dx: 1, dy: 1)).fill()
+            return true
+        }
     }
 
     override func viewDidLoad() {
@@ -218,13 +312,30 @@ final class SidebarViewController: NSViewController {
         "placed:" + section.id + "|" + item.id
     }
 
+    /// お気に入り・自分で作ったセクションの中の行。サブセクションは、その中身を子に持つ見出しの行にする
+    private func placedChildren(of section: SidebarSection) -> [SidebarNode] {
+        let children = store.items(in: section).map { item -> SidebarNode in
+            if let sectionID = item.sectionID {
+                let subsection = SidebarSection.custom(sectionID)
+                return node("section:" + subsection.id, .section(subsection), children: placedChildren(of: subsection))
+            }
+            return node(Self.placedID(item, in: section), .placed(item, in: section))
+        }
+        return children.isEmpty ? [node("hint:" + section.id, .hint("タグやフォルダをここへドラッグ"))] : children
+    }
+
+    /// サブセクション（セクションの中に入れたセクション）の行なら、その ID
+    private func subsectionID(of node: SidebarNode) -> UUID? {
+        guard case .section(.custom(let id)) = node.kind, store.isSubsection(id) else { return nil }
+        return id
+    }
+
     private func buildTree() -> [SidebarNode] {
         store.visibleSections.map { section in
             var children: [SidebarNode]
             switch section {
             case .favorites, .custom:
-                children = store.items(in: section).map { node(Self.placedID($0, in: section), .placed($0, in: section)) }
-                if children.isEmpty { children = [node("hint:" + section.id, .hint("タグやフォルダをここへドラッグ"))] }
+                children = placedChildren(of: section)
             case .tags:
                 children = tags.rootTags.map(tagNode)
                 if children.isEmpty { children = [node("hint:tags", .hint("項目を右クリック ›「タグ」で作れます"))] }
@@ -249,6 +360,7 @@ final class SidebarViewController: NSViewController {
         func expandTags(_ nodes: [SidebarNode]) {
             for node in nodes where !node.children.isEmpty {
                 if case .tag = node.kind, collapsedTagIDs.contains(node.id) { continue }
+                if subsectionID(of: node) != nil, collapsedTagIDs.contains(node.id) { continue }
                 outlineView.expandItem(node)
                 expandTags(node.children)
             }
@@ -296,6 +408,11 @@ final class SidebarViewController: NSViewController {
     @objc private func rowClicked(_ sender: Any?) {
         let row = outlineView.clickedRow
         guard row >= 0, let node = outlineView.item(atRow: row) as? SidebarNode else { return }
+        if subsectionID(of: node) != nil {
+            // サブセクションの行は、押すと開く・閉じる
+            if outlineView.isItemExpanded(node) { outlineView.collapseItem(node) } else { outlineView.expandItem(node) }
+            return
+        }
         open(node)
     }
 
@@ -375,10 +492,11 @@ extension SidebarViewController: NSOutlineViewDataSource {
 
     /// 行の上に置けるか（タグを付ける・タグの下へ入れる先になる行）
     private func acceptsDropOn(_ node: SidebarNode) -> Bool {
+        if subsectionID(of: node) != nil { return true }
         switch node.kind {
-        case .tag, .section(.tag): true
-        case .placed(let item, _): item.tagID != nil
-        default: false
+        case .tag, .section(.tag): return true
+        case .placed(let item, _): return item.tagID != nil
+        default: return false
         }
     }
 
@@ -419,8 +537,14 @@ extension SidebarViewController: NSOutlineViewDataSource {
 
     private func validateInternalDrop(_ drag: SidebarDrag, target: SidebarNode?, index: Int, copy: Bool) -> NSDragOperation {
         switch drag {
-        case .section:
-            // 見出しどうしの間にだけ置ける
+        case .section(let section):
+            // 自分で作ったセクションは、ほかの自分で作ったセクションの中へ入れられる（サブセクションになる）
+            if case .custom(let id) = section, let place = placementTarget(target: target, index: index),
+               case .custom(let parentID)? = place.node.section, store.canNestSection(id, in: parentID) {
+                retarget(place.node, dropChildIndex: place.index)
+                return .move
+            }
+            // それ以外は、見出しどうしの間に置く
             return retargetBetweenSections(target: target, index: index) ? .move : []
         case .tag(let id):
             if let place = placementTarget(target: target, index: index) {
@@ -548,6 +672,10 @@ extension SidebarViewController: NSOutlineViewDataSource {
         let sectionBefore: SidebarSection? = target == nil && index < roots.count ? roots[index].section : nil
         switch drag {
         case .section(let section):
+            if let target, case .custom(let parentID)? = target.section, case .custom(let id) = section {
+                store.nestSection(id, in: parentID, at: index == NSOutlineViewDropOnItemIndex ? nil : index)
+                return true
+            }
             guard target == nil else { return false }
             if let sectionBefore { store.moveSection(section, before: sectionBefore) } else { store.moveSectionToEnd(section) }
         case .tag(let id):
@@ -676,7 +804,8 @@ extension SidebarViewController {
 
 extension SidebarViewController: NSOutlineViewDelegate {
     func outlineView(_ outlineView: NSOutlineView, isGroupItem item: Any) -> Bool {
-        (item as? SidebarNode)?.section != nil
+        guard let node = item as? SidebarNode else { return false }
+        return node.section != nil && subsectionID(of: node) == nil
     }
 
     func outlineView(_ outlineView: NSOutlineView, shouldSelectItem item: Any) -> Bool {
@@ -688,18 +817,25 @@ extension SidebarViewController: NSOutlineViewDelegate {
     }
 
     func outlineView(_ outlineView: NSOutlineView, shouldShowOutlineCellForItem item: Any) -> Bool {
-        // 見出しの「隠す」ボタンは出さない（隠すのは右クリックから）
-        (item as? SidebarNode)?.section == nil
+        // 見出しの「隠す」ボタンは出さない（隠すのは右クリックから）。サブセクションには開く・閉じるの印を出す
+        guard let node = item as? SidebarNode else { return true }
+        return node.section == nil || subsectionID(of: node) != nil
     }
 
     func outlineViewItemDidCollapse(_ notification: Notification) {
-        guard !isRestoringExpansion, let node = notification.userInfo?["NSObject"] as? SidebarNode, case .tag = node.kind else { return }
+        guard !isRestoringExpansion, let node = notification.userInfo?["NSObject"] as? SidebarNode, isCollapsible(node) else { return }
         collapsedTagIDs.insert(node.id)
     }
 
     func outlineViewItemDidExpand(_ notification: Notification) {
-        guard !isRestoringExpansion, let node = notification.userInfo?["NSObject"] as? SidebarNode, case .tag = node.kind else { return }
+        guard !isRestoringExpansion, let node = notification.userInfo?["NSObject"] as? SidebarNode, isCollapsible(node) else { return }
         collapsedTagIDs.remove(node.id)
+    }
+
+    /// 閉じた状態を覚える行（子のあるタグとサブセクション）
+    private func isCollapsible(_ node: SidebarNode) -> Bool {
+        if case .tag = node.kind { return true }
+        return subsectionID(of: node) != nil
     }
 
     func outlineView(_ outlineView: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? {
@@ -708,6 +844,12 @@ extension SidebarViewController: NSOutlineViewDelegate {
 
     func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
         guard let node = item as? SidebarNode else { return nil }
+        if let id = subsectionID(of: node) {
+            let cell = outlineView.makeView(withIdentifier: SidebarCellView.identifier, owner: self) as? SidebarCellView ?? SidebarCellView()
+            cell.configure(title: store.customSection(id)?.name ?? "セクション", symbol: "rectangle.stack", tint: .secondaryLabelColor)
+            cell.toolTip = "サブセクション「\(store.displayPath(ofSection: id))」。中へタグ・フォルダ・ファイルをドラッグできます"
+            return cell
+        }
         if case .section(let section) = node.kind {
             let header = outlineView.makeView(withIdentifier: SidebarHeaderView.identifier, owner: self) as? SidebarHeaderView ?? SidebarHeaderView()
             header.configure(section: section, tags: tags) { [weak self] in
@@ -791,6 +933,10 @@ extension SidebarViewController: NSMenuDelegate {
     }
 
     private func sectionMenu(_ menu: NSMenu, _ section: SidebarSection) {
+        if case .custom(let id) = section, store.isSubsection(id) {
+            subsectionMenu(menu, id)
+            return
+        }
         let visible = store.visibleSections
         let up = item("上へ移動") { [weak self] in self?.store.moveSection(section, by: -1) }
         up.isEnabled = visible.first != section
@@ -802,6 +948,10 @@ extension SidebarViewController: NSMenuDelegate {
         case .tag(let id):
             menu.addItem(item("サイドバーから外す") { [weak self] in self?.store.removeTagSection(id) })
         case .custom(let id):
+            menu.addItem(item("サブセクションを作る…") { [weak self] in
+                guard let self else { return }
+                SidebarPrompts.createSubsection(in: id, store: store)
+            })
             menu.addItem(item("名前を変更…") { [weak self] in
                 guard let self else { return }
                 SidebarPrompts.renameSection(id, in: store)
@@ -825,6 +975,31 @@ extension SidebarViewController: NSMenuDelegate {
             SidebarPrompts.createSection(before: section, in: store)
         })
         menu.addItem(item("サイドバーをカスタマイズ…") { SettingsWindowController.shared.show(tab: .sidebar) })
+    }
+
+    /// サブセクションの右クリック
+    private func subsectionMenu(_ menu: NSMenu, _ id: UUID) {
+        let siblings = store.customSection(id).flatMap { $0.parentID }.flatMap { store.customSection($0)?.items } ?? []
+        let position = siblings.firstIndex { $0.sectionID == id }
+        let up = item("上へ移動") { [weak self] in self?.store.moveSubsection(id, by: -1) }
+        up.isEnabled = (position ?? 0) > 0
+        let down = item("下へ移動") { [weak self] in self?.store.moveSubsection(id, by: 1) }
+        down.isEnabled = position.map { $0 < siblings.count - 1 } ?? false
+        [up, down].forEach(menu.addItem)
+        menu.addItem(.separator())
+        menu.addItem(item("サブセクションを作る…") { [weak self] in
+            guard let self else { return }
+            SidebarPrompts.createSubsection(in: id, store: store)
+        })
+        menu.addItem(item("名前を変更…") { [weak self] in
+            guard let self else { return }
+            SidebarPrompts.renameSection(id, in: store)
+        })
+        menu.addItem(item("いちばん上の階層のセクションにする") { [weak self] in self?.store.unnestSection(id, before: nil) })
+        menu.addItem(item("サブセクションを削除…") { [weak self] in
+            guard let self else { return }
+            SidebarPrompts.deleteSection(id, in: store)
+        })
     }
 
     private func placedMenu(_ menu: NSMenu, _ placed: SidebarItem, in section: SidebarSection) {
@@ -905,8 +1080,8 @@ extension SidebarViewController: NSMenuDelegate {
         let submenu = NSMenu()
         submenu.autoenablesItems = false
         let current = store.placement(ofTag: tag.id)
-        for section in store.customSections {
-            let entry = item(section.name) { [weak self] in self?.store.placeTag(tag.id, in: .custom(section.id)) }
+        for section in store.customSectionsInOrder {
+            let entry = item(store.displayPath(ofSection: section.id)) { [weak self] in self?.store.placeTag(tag.id, in: .custom(section.id)) }
             entry.state = current == .custom(section.id) ? .on : .off
             submenu.addItem(entry)
         }
@@ -941,7 +1116,7 @@ extension SidebarViewController: NSMenuDelegate {
         return parentItem
     }
 
-    private func item(_ title: String, _ action: @escaping () -> Void) -> NSMenuItem {
+    fileprivate func item(_ title: String, _ action: @escaping () -> Void) -> NSMenuItem {
         ClosureMenuItem.make(title: title, handler: action)
     }
 }
@@ -982,7 +1157,7 @@ final class SidebarHeaderView: NSTableCellView {
         addButton.image = NSImage(systemSymbolName: "plus", accessibilityDescription: "タグを作る")
         addButton.isBordered = false
         addButton.contentTintColor = .secondaryLabelColor
-        addButton.toolTip = "タグを作る"
+        addButton.toolTip = "新しいタグを作る"
         addButton.target = self
         addButton.action = #selector(add(_:))
         let stack = NSStackView(views: [dot, label, NSView(), addButton])
@@ -1040,7 +1215,7 @@ final class SidebarCellView: NSTableCellView {
         ejectButton.image = NSImage(systemSymbolName: "eject.fill", accessibilityDescription: "取り出す")
         ejectButton.isBordered = false
         ejectButton.contentTintColor = .secondaryLabelColor
-        ejectButton.toolTip = "取り出す"
+        ejectButton.toolTip = "このディスクを取り出す"
         ejectButton.target = self
         ejectButton.action = #selector(eject(_:))
         let stack = NSStackView(views: [icon, label, NSView(), countLabel, ejectButton])

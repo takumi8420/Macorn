@@ -46,6 +46,8 @@ final class BrowserWindowController: NSWindowController {
         window.tabbingMode = .automatic
         window.isRestorable = false
         window.toolbarStyle = .unified
+        // タブの「×」をいつも見せる（標準ではカーソルを乗せたときしか出ない）
+        window.tab.accessoryView = TabCloseButton(window: window)
 
         super.init(window: window)
 
@@ -179,9 +181,12 @@ final class BrowserWindowController: NSWindowController {
         }
     }
 
-    // MARK: 2画面（要件 4章）
+    // MARK: 複数画面（要件 4章）
 
     @objc func toggleSplit(_ sender: Any?) { panes.toggleSplit() }
+    @objc func splitRight(_ sender: Any?) { panes.split(.right, focusNew: true) }
+    @objc func splitDown(_ sender: Any?) { panes.split(.down, focusNew: true) }
+    @objc func closePane(_ sender: Any?) { panes.closeActivePane() }
     @objc func switchPane(_ sender: Any?) { panes.switchActivePane() }
     @objc func copyToOtherPane(_ sender: Any?) { panes.transferSelectionToOtherPane(mode: .copy) }
     @objc func moveToOtherPane(_ sender: Any?) { panes.transferSelectionToOtherPane(mode: .move) }
@@ -222,8 +227,10 @@ final class BrowserWindowController: NSWindowController {
             browser.state.currentURL.isFileURL
         case #selector(copyToOtherPane(_:)), #selector(moveToOtherPane(_:)):
             panes.isSplit && !browser.selectedNodes.isEmpty && !(window?.firstResponder is NSText)
-        case #selector(switchPane(_:)), #selector(syncOtherPane(_:)), #selector(swapPanes(_:)):
+        case #selector(switchPane(_:)), #selector(syncOtherPane(_:)), #selector(swapPanes(_:)), #selector(closePane(_:)):
             panes.isSplit
+        case #selector(splitRight(_:)), #selector(splitDown(_:)):
+            panes.canSplit
         default: true
         }
     }
@@ -249,7 +256,10 @@ extension BrowserWindowController: NSMenuItemValidation, NSToolbarItemValidation
             let isFavorite = SidebarStore.shared.containsFavorite(browser.state.currentURL)
             item.image = NSImage(systemSymbolName: isFavorite ? "star.fill" : "star", accessibilityDescription: "お気に入り")
             item.label = isFavorite ? "お気に入りから外す" : "お気に入りに追加"
-            item.toolTip = item.label
+            item.toolTip = isFavorite ? "表示中のフォルダをお気に入りから外す" : "表示中のフォルダをお気に入りに追加"
+        }
+        if item.itemIdentifier == .split {
+            item.toolTip = panes.isSplit ? "1画面に戻す。操作中の画面だけを残す（⌘\\）" : "画面を左右2つに分ける（⌘\\）。さらに分けるには「表示」メニューの「右に分ける」「下に分ける」"
         }
         return isEnabled(item.action)
     }
@@ -306,35 +316,36 @@ extension BrowserWindowController: NSToolbarDelegate {
     ) -> NSToolbarItem? {
         switch itemIdentifier {
         case .back:
-            makeItem(itemIdentifier, label: "戻る", symbol: "chevron.left", action: #selector(goBack(_:)))
+            makeItem(itemIdentifier, label: "戻る", tip: "前に見ていたフォルダへ戻る（⌘[）", symbol: "chevron.left", action: #selector(goBack(_:)))
         case .forward:
-            makeItem(itemIdentifier, label: "進む", symbol: "chevron.right", action: #selector(goForward(_:)))
+            makeItem(itemIdentifier, label: "進む", tip: "戻る前のフォルダへ進む（⌘]）", symbol: "chevron.right", action: #selector(goForward(_:)))
         case .parent:
-            makeItem(itemIdentifier, label: "親フォルダ", symbol: "arrow.up", action: #selector(goToParent(_:)))
+            makeItem(itemIdentifier, label: "親フォルダ", tip: "1つ上のフォルダへ移動（⌘↑）", symbol: "arrow.up", action: #selector(goToParent(_:)))
         case .copyPath:
-            makeItem(itemIdentifier, label: "パスをコピー（⌥⌘C）", symbol: "doc.on.doc", action: #selector(copyPathFromToolbar(_:)))
+            makeItem(itemIdentifier, label: "パスをコピー", tip: "選んだ項目のパスをコピー。選んでいなければ表示中のフォルダのパス（⌥⌘C）", symbol: "doc.on.doc", action: #selector(copyPathFromToolbar(_:)))
         case .newFolder:
-            makeItem(itemIdentifier, label: "新規フォルダ（⇧⌘N）", symbol: "folder.badge.plus", action: #selector(createFolderFromToolbar(_:)))
+            makeItem(itemIdentifier, label: "新規フォルダ", tip: "表示中のフォルダに、新しいフォルダを作る（⇧⌘N）", symbol: "folder.badge.plus", action: #selector(createFolderFromToolbar(_:)))
         case .newFile:
-            makeItem(itemIdentifier, label: "新規ファイル（⌥⌘N）", symbol: "doc.badge.plus", action: #selector(createFileFromToolbar(_:)))
+            makeItem(itemIdentifier, label: "新規ファイル", tip: "表示中のフォルダに、新しいファイルを作る（⌥⌘N）", symbol: "doc.badge.plus", action: #selector(createFileFromToolbar(_:)))
         case .favorite:
-            makeItem(itemIdentifier, label: "お気に入り", symbol: "star", action: #selector(toggleFavoriteFolder(_:)))
+            makeItem(itemIdentifier, label: "お気に入り", tip: "表示中のフォルダをお気に入りに追加", symbol: "star", action: #selector(toggleFavoriteFolder(_:)))
         case .split:
-            makeItem(itemIdentifier, label: "2画面表示（⌘\\）", symbol: "rectangle.split.2x1", action: #selector(toggleSplit(_:)))
+            makeItem(itemIdentifier, label: "2画面表示", tip: "画面を左右2つに分ける（⌘\\）", symbol: "rectangle.split.2x1", action: #selector(toggleSplit(_:)))
         default:
             nil
         }
     }
 
-    private func makeItem(_ identifier: NSToolbarItem.Identifier, label: String, symbol: String, action: Selector) -> NSToolbarItem {
-        let item = NSToolbarItem(itemIdentifier: identifier)
+    /// label はメニュー（ツールバーがはみ出したとき）や読み上げに使う短い名前、tip はカーソルを乗せたときの説明
+    private func makeItem(_ identifier: NSToolbarItem.Identifier, label: String, tip: String, symbol: String, action: Selector) -> NSToolbarItem {
+        let item = ToolbarButtonItem(itemIdentifier: identifier)
         item.label = label
-        item.toolTip = label
         item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: label)
         item.action = action
         item.target = self
         item.isBordered = true
         item.autovalidates = true
+        item.toolTip = tip
         return item
     }
 }

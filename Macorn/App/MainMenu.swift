@@ -142,10 +142,13 @@ enum MainMenu {
         menu.addItem(item("プレビュー", #selector(FileBrowserViewController.toggleFilePreview(_:)), "p", [.command, .option]))
         menu.addItem(.separator())
         menu.addItem(item("2画面表示", #selector(BrowserWindowController.toggleSplit(_:)), "\\"))
+        menu.addItem(item("右に分ける", #selector(BrowserWindowController.splitRight(_:)), "\\", [.command, .option]))
+        menu.addItem(item("下に分ける", #selector(BrowserWindowController.splitDown(_:)), "\\", [.command, .option, .shift]))
+        menu.addItem(item("この画面を閉じる", #selector(BrowserWindowController.closePane(_:)), "w", [.command, .option]))
         // Tab キーは一覧の中だけで効く（入力欄の Tab と区別するため、メニューには割り当てない）
-        menu.addItem(item("もう一方の画面へ切り替え（Tab）", #selector(BrowserWindowController.switchPane(_:))))
-        menu.addItem(item("反対側を同じフォルダにする", #selector(BrowserWindowController.syncOtherPane(_:)), "=", [.command, .option]))
-        menu.addItem(item("左右のフォルダを入れ替え", #selector(BrowserWindowController.swapPanes(_:)), "u", [.command, .option]))
+        menu.addItem(item("次の画面へ切り替え（Tab）", #selector(BrowserWindowController.switchPane(_:))))
+        menu.addItem(item("もう一方の画面を同じフォルダにする", #selector(BrowserWindowController.syncOtherPane(_:)), "=", [.command, .option]))
+        menu.addItem(item("もう一方の画面とフォルダを入れ替え", #selector(BrowserWindowController.swapPanes(_:)), "u", [.command, .option]))
         menu.addItem(.separator())
         menu.addItem(item("フルスクリーンにする", #selector(NSWindow.toggleFullScreen(_:)), "f", [.command, .control]))
         return menu

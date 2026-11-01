@@ -90,6 +90,12 @@ enum DebugAutomation {
             }
         case "mksection":
             SidebarStore.shared.createSection(named: argument)
+        case "mksub":
+            // mksub:<親のセクションの名前>><サブセクションの名前>
+            let parts = argument.components(separatedBy: ">")
+            if parts.count == 2, let parent = SidebarStore.shared.customSections.first(where: { $0.name == parts[0] }) {
+                SidebarStore.shared.createSubsection(named: parts[1], in: parent.id)
+            }
         case "sbrows":
             if let split = controller.contentViewController as? NSSplitViewController,
                let sidebar = split.splitViewItems.first?.viewController as? SidebarViewController {
@@ -100,6 +106,36 @@ enum DebugAutomation {
             for (index, other) in controllers().enumerated() {
                 let names = other.browser.selectedURLs.map(\.lastPathComponent).joined(separator: ",")
                 print("[debug] window \(index) path=\(other.browser.state.currentURL.path) selected=\(names) preview=\(other.browser.isFilePreviewVisible)")
+            }
+        case "tabinfo":
+            // タブの並びと、各タブの「×」が画面に載っているか
+            let group = controller.window?.tabGroup?.windows ?? []
+            for (index, window) in group.enumerated() {
+                let button = window.tab.accessoryView
+                let frame = button.flatMap { $0.window == nil ? nil : $0.convert($0.bounds, to: nil) }
+                print("[debug] tab \(index) title=\(window.title) selected=\(window == window.tabGroup?.selectedWindow) closeButton=\(button is TabCloseButton) onScreen=\(frame.map { NSStringFromRect($0) } ?? "no")")
+            }
+            print("[debug] tabbar visible=\(controller.window?.tabGroup?.isTabBarVisible == true) count=\(group.count)")
+        case "tooltips":
+            // ウィンドウ中のボタン（ツールバー・タブ・パスバーなど）と、カーソルを乗せたときの説明
+            func walk(_ view: NSView, depth: Int) {
+                if view is NSButton || view.toolTip != nil || view.accessibilityRole() == .button {
+                    let frame = NSStringFromRect(view.convert(view.bounds, to: nil))
+                    let label = view.accessibilityLabel() ?? (view as? NSButton)?.title ?? ""
+                    print("[debug] button \(type(of: view)) label=\(label) tip=\(view.toolTip ?? "nil") frame=\(frame) hidden=\(view.isHiddenOrHasHiddenAncestor)")
+                }
+                view.subviews.forEach { walk($0, depth: depth + 1) }
+            }
+            if let root = controller.window?.contentView?.superview { walk(root, depth: 0) }
+        case "toolbarclick":
+            // ツールバーのボタン（短い名前で指定）を押す
+            let item = controller.window?.toolbar?.items.first { $0.label == argument }
+            (item?.view as? NSButton)?.performClick(nil)
+        case "tabclose":
+            // 指定した番号のタブの「×」を押す
+            let group = controller.window?.tabGroup?.windows ?? []
+            if let index = Int(argument), group.indices.contains(index) {
+                (group[index].tab.accessoryView as? TabCloseButton)?.closeTab()
             }
         case "state":
             let s = browser.state
@@ -138,6 +174,52 @@ enum DebugAutomation {
                         window.sendEvent(event)
                     }
                 }
+            }
+        case "addmenu":
+            // サイドバーの「＋ 追加」のメニューの中身を書き出す。引数に項目名（「>」で下の階層）を渡すと、それを選ぶ
+            if let split = controller.contentViewController as? NSSplitViewController,
+               let sidebar = split.splitViewItems.first?.viewController as? SidebarViewController {
+                let menu = sidebar.makeAddMenu()
+                func dump(_ menu: NSMenu, _ indent: String) {
+                    for entry in menu.items {
+                        if entry.isSeparatorItem { print("[debug] addmenu \(indent)---"); continue }
+                        print("[debug] addmenu \(indent)\(entry.title)\(entry.isEnabled ? "" : " (無効)")")
+                        if let sub = entry.submenu { dump(sub, indent + "  ") }
+                    }
+                }
+                if argument.isEmpty {
+                    dump(menu, "")
+                } else {
+                    var current: NSMenu? = menu
+                    var target: NSMenuItem?
+                    for name in argument.split(separator: ">").map(String.init) {
+                        target = current?.items.first { $0.title == name }
+                        current = target?.submenu
+                    }
+                    if let target, let owner = target.menu, let index = owner.items.firstIndex(of: target) {
+                        owner.performActionForItem(at: index)
+                    } else {
+                        print("[debug] addmenu 見つからない: \(argument)")
+                    }
+                }
+            }
+        case "clickwindow":
+            // ウィンドウの中身の決まった位置を1回クリックする（アプリ全体の経路で送るので、クリックの見張りにも届く）。
+            // 引数は「横,縦」の割合（0〜1。左下が 0,0）か「pathbar,横」。実際のマウスは動かさない
+            // 「pathbar,横」ならパスバーの中（入力中は入力欄の上）を押す
+            let onPathBar = argument.hasPrefix("pathbar")
+            if let window = controller.window, let content = onPathBar ? browser.pathBarHost : window.contentView {
+                let parts = argument.split(separator: ",").compactMap { Double($0) }
+                let fx = CGFloat(parts.first ?? 0.5)
+                let fy = CGFloat(onPathBar ? 0.5 : (parts.count > 1 ? parts[1] : 0.5))
+                let point = content.convert(NSPoint(x: content.bounds.width * fx, y: content.bounds.height * fy), to: nil)
+                func mouse(_ type: NSEvent.EventType) -> NSEvent? {
+                    NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                       windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)
+                }
+                // 一覧は押したあと離すまで待つので、離す操作を先に積んでから押す
+                if let up = mouse(.leftMouseUp) { NSApp.postEvent(up, atStart: false) }
+                if let down = mouse(.leftMouseDown) { NSApp.sendEvent(down) }
             }
         case "updatecheck":
             // 新しい版の確認（引数は確かめる先の URL）。結果を書き出し、アラートをシートで出す（snapsheet で撮る）
@@ -345,6 +427,21 @@ enum DebugAutomation {
             for pane in controller.panes.panes {
                 let outline = pane.outlineView
                 print("[debug] columns \(outline.tableColumns.map { "\($0.identifier.rawValue)=\(Int($0.width))\($0.isHidden ? "(hidden)" : "")" }) outline=\(Int(outline.frame.width)) clip=\(Int(outline.enclosingScrollView?.contentView.bounds.width ?? 0))")
+            }
+        case "split":
+            // 操作対象の画面を分ける（right / down）
+            controller.panes.split(argument == "down" ? .down : .right, focusNew: true)
+        case "closepane":
+            controller.panes.closeActivePane()
+        case "panelayout":
+            // 画面の並び（入れ子）と各画面の大きさを書き出す
+            let layout = controller.panes.layout
+            if let data = try? JSONEncoder().encode(layout.tree), let text = String(data: data, encoding: .utf8) {
+                print("[debug] panelayout active=\(layout.activeIndex) tree=\(text)")
+            }
+            for pane in controller.panes.panes {
+                let frame = pane.view.convert(pane.view.bounds, to: nil)
+                print("[debug] panelayout \(pane.state.currentURL.lastPathComponent) frame=\(Int(frame.minX)),\(Int(frame.minY)) \(Int(frame.width))x\(Int(frame.height)) active=\(pane.state.isActive) hidden=\(pane.view.isHiddenOrHasHiddenAncestor || pane.view.frame.width < 1)")
             }
         case "activate":
             controller.panes.setActive(index: Int(argument) ?? 0, focus: true)

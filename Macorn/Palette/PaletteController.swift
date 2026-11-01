@@ -134,8 +134,10 @@ final class PaletteController: NSObject {
         } else if flags == .command {
             let panes = controller.panes
             if !panes.isSplit { panes.openSplit(at: controller.browser.state.currentURL) }
-            panes.otherPane?.navigate(to: url)
-            panes.switchActivePane()
+            if let other = panes.otherPane {
+                other.navigate(to: url)
+                panes.activate(other, focus: true)
+            }
         } else {
             controller.browser.navigate(to: url)
             controller.browser.focusList()
@@ -156,7 +158,7 @@ final class PaletteController: NSObject {
             if !panes.isSplit { panes.openSplit(at: folder) }
             if let other = panes.otherPane {
                 other.navigate(to: folder, selecting: selection)
-                panes.switchActivePane()
+                panes.activate(other, focus: true)
             }
         } else {
             controller.browser.navigate(to: folder, selecting: selection)

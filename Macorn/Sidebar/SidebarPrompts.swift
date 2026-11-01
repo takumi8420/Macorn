@@ -58,6 +58,16 @@ enum SidebarPrompts {
         store.createSection(named: name, before: target)
     }
 
+    /// セクションの中に、サブセクションを作る（サイドバーの見た目だけのまとまりを、さらに分ける）
+    static func createSubsection(in parent: UUID, store: SidebarStore) {
+        guard let name = ask(
+            title: "「\(store.displayPath(ofSection: parent))」の中にサブセクションを作る",
+            message: "セクションの中をさらに分ける見出しです。項目には何も付きません。作ったら、タグやフォルダをドラッグして入れてください。",
+            value: "", placeholder: "サブセクションの名前", button: "作成"
+        ) else { return }
+        store.createSubsection(named: name, in: parent)
+    }
+
     /// 新しいセクションを作り、フォルダ・ファイルをそこに置く（一覧の右クリック「セクションに置く」から）
     static func createSection(placing urls: [URL], in store: SidebarStore) {
         guard let name = ask(
@@ -83,7 +93,7 @@ enum SidebarPrompts {
         }
         let alert = NSAlert()
         alert.messageText = "セクション「\(section.name)」を削除しますか？"
-        alert.informativeText = "中の項目はサイドバーから外れるだけで、フォルダ・ファイル・タグはそのまま残ります。"
+        alert.informativeText = "中の項目とサブセクションはサイドバーから外れるだけで、フォルダ・ファイル・タグはそのまま残ります。"
         alert.addButton(withTitle: "削除")
         alert.addButton(withTitle: "キャンセル")
         if alert.runModal() == .alertFirstButtonReturn { store.deleteSection(id) }

@@ -43,6 +43,51 @@ final class SidebarStoreTests {
         #expect(placed.items.isEmpty)
     }
 
+    /// サブセクション：作る・入れ子にする・外に出す・削除する。保存して読み直しても同じ
+    @Test func subsections() throws {
+        let store = SidebarStore(defaults: defaults, tags: tags, createsDefaultSection: false)
+        guard case .custom(let project)? = store.createSection(named: "案件"),
+              case .custom(let docs)? = store.createSection(named: "資料") else { Issue.record("セクションを作れない"); return }
+        let active = try #require(store.createSubsection(named: "進行中", in: project))
+        let client = try #require(store.createSubsection(named: "A社", in: active))
+        #expect(store.isSubsection(active))
+        #expect(store.displayPath(ofSection: client) == "案件 › 進行中 › A社")
+        #expect(store.customSectionsInOrder.map(\.name) == ["案件", "進行中", "A社", "資料"])
+        // サブセクションはいちばん上の並びには出ない
+        #expect(!store.sections.contains(.custom(active)))
+
+        // 中にフォルダを置ける
+        let folder = URL(fileURLWithPath: "/tmp/macorn-sub")
+        store.placeURL(folder, in: .custom(client))
+        #expect(store.customSection(client)?.items.map(\.url.path) == [folder.path])
+
+        // 自分の中・自分のサブセクションの中へは入れられない
+        #expect(!store.canNestSection(project, in: client))
+        #expect(!store.canNestSection(project, in: project))
+
+        // いちばん上のセクションを、ほかのセクションの中へ入れる
+        store.nestSection(docs, in: project, at: 0)
+        #expect(store.customSection(docs)?.parentID == project)
+        #expect(!store.sections.contains(.custom(docs)))
+        #expect(store.customSection(project)?.items.compactMap(\.sectionID) == [docs, active])
+
+        // 保存して読み直しても同じ
+        let reloaded = SidebarStore(defaults: defaults, tags: tags, createsDefaultSection: false)
+        #expect(reloaded.customSectionsInOrder.map(\.name) == ["案件", "資料", "進行中", "A社"])
+        #expect(reloaded.customSection(client)?.items.map(\.url.path) == [folder.path])
+
+        // 外に出すと、いちばん上の並びの最後に入る
+        store.unnestSection(active, before: nil)
+        #expect(store.sections.last == .custom(active))
+        #expect(store.customSection(active)?.parentID == nil)
+        #expect(store.customSection(project)?.items.compactMap(\.sectionID) == [docs])
+
+        // 削除すると、中のサブセクションも消える
+        store.deleteSection(active)
+        #expect(store.customSection(active) == nil)
+        #expect(store.customSection(client) == nil)
+    }
+
     @Test func sectionIDsRoundTrip() {
         let id = UUID()
         for section in [SidebarSection.favorites, .tags, .locations, .tag(id), .custom(id)] {

@@ -9,7 +9,7 @@ struct PathBarActions {
     var endEditing: () -> Void
     /// パスの直接入力を始める（1回のクリック・⌘L）
     var beginEditing: () -> Void
-    /// 表示中のフォルダのパスをコピーする（右端のボタン）。コピーできたら true
+    /// 表示中のフォルダのパスをコピーする（パスのすぐ右のボタン）。コピーできたら true
     var copyCurrentPath: () -> Bool
 }
 
@@ -35,10 +35,7 @@ struct PathBarView: View {
                 if let id = TagLocation.tagID(from: state.currentURL) {
                     tagChip(id)
                 } else {
-                    HStack(spacing: 6) {
-                        breadcrumbs
-                        CopyPathButton(copy: actions.copyCurrentPath)
-                    }
+                    breadcrumbs
                 }
             }
         }
@@ -96,9 +93,13 @@ struct PathBarView: View {
     private var breadcrumbs: some View {
         GeometryReader { geometry in
             ScrollView(.horizontal, showsIndicators: false) {
-                breadcrumbRow
-                    // 短いパスは左寄せ、長いパスは末尾（今いるフォルダ）が見えるようにする
-                    .frame(minWidth: geometry.size.width, minHeight: geometry.size.height, alignment: .leading)
+                // コピーのボタンは、パスの末尾（今いるフォルダ）のすぐ右に置く
+                HStack(spacing: 6) {
+                    breadcrumbRow
+                    CopyPathButton(path: state.currentURL.path, copy: actions.copyCurrentPath)
+                }
+                // 短いパスは左寄せ、長いパスは末尾（今いるフォルダ）とコピーのボタンが見えるようにする
+                .frame(minWidth: geometry.size.width, minHeight: geometry.size.height, alignment: .leading)
             }
             .defaultScrollAnchor(.trailing)
         }
@@ -137,8 +138,10 @@ struct PathBarView: View {
     }
 }
 
-/// パスバーの右端のボタン：表示中のフォルダのパスをコピーし、しばらくチェックの印を出す
+/// パスのすぐ右のボタン：表示中のフォルダのパスをコピーし、しばらくチェックの印を出す
 private struct CopyPathButton: View {
+    /// コピーされるパス（説明に出す）
+    let path: String
     let copy: () -> Bool
     @State private var copied = false
     @State private var isHovering = false
@@ -161,7 +164,7 @@ private struct CopyPathButton: View {
         }
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
-        .help(copied ? "コピーしました" : "このフォルダのパスをコピー（⌥⌘C）")
+        .help(copied ? "コピーしました" : "表示中のフォルダのパスをコピー\n\(path)")
     }
 }
 
@@ -198,7 +201,7 @@ private struct BreadcrumbButton: View {
         .contextMenu {
             SiblingFolderMenu(url: url, navigate: navigate)
         }
-        .help(isCurrent ? "クリックでパスを入力" : url.path)
+        .help(isCurrent ? "クリックでパスを入力（⌘L）" : "\(url.path) へ移動（右クリックで同じ階層のフォルダ）")
     }
 
     static func name(for url: URL) -> String {
@@ -256,6 +259,7 @@ struct PathTextField: NSViewRepresentable {
         field.font = .monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
         field.placeholderString = "パスを入力（Tab で補完、Esc で取り消し）"
         field.delegate = context.coordinator
+        field.onOutsideClick = { [weak coordinator = context.coordinator] in coordinator?.cancelByOutsideClick() }
         return field
     }
 
@@ -298,6 +302,13 @@ struct PathTextField: NSViewRepresentable {
             }
         }
 
+        /// 入力欄の外をクリックしたら、入力をやめて元の表示に戻す
+        func cancelByOutsideClick() {
+            guard !finished else { return }
+            finished = true
+            parent.onCancel()
+        }
+
         func controlTextDidEndEditing(_ notification: Notification) {
             // 別の場所をクリックしてフォーカスが外れたときは取り消し扱い
             guard !finished else { return }
@@ -308,13 +319,43 @@ struct PathTextField: NSViewRepresentable {
 }
 
 /// 表示されたらすぐに入力できる状態にするテキスト欄。
+/// 入力欄の外をクリックしたら `onOutsideClick` を呼ぶ。一覧などフォーカスを取らない場所のクリックでは
+/// フォーカスが外れず（controlTextDidEndEditing が来ず）、入力欄のまま残ってしまうため、クリックを見張る。
 private final class AutoFocusTextField: NSTextField {
+    var onOutsideClick: (() -> Void)?
+    private var clickMonitor: Any?
+
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        removeClickMonitor()
         guard let window else { return }
         Task { @MainActor in
             window.makeFirstResponder(self)
             self.currentEditor()?.moveToEndOfDocument(nil)
         }
+        clickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] event in
+            MainActor.assumeIsolated { self?.handleClick(event) }
+            // クリックそのものは止めない（一覧の項目を選ぶなど、押した先の操作もそのまま行う）
+            return event
+        }
+    }
+
+    private func handleClick(_ event: NSEvent) {
+        guard let window else { return }
+        if event.window === window {
+            let point = convert(event.locationInWindow, from: nil)
+            guard !bounds.contains(point) else { return }
+        }
+        onOutsideClick?()
+    }
+
+    private func removeClickMonitor() {
+        if let clickMonitor { NSEvent.removeMonitor(clickMonitor) }
+        clickMonitor = nil
+    }
+
+    override func removeFromSuperview() {
+        removeClickMonitor()
+        super.removeFromSuperview()
     }
 }
