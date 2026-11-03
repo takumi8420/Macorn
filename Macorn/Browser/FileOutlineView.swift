@@ -34,13 +34,18 @@ final class FileOutlineView: NSOutlineView {
         super.keyDown(with: event)
     }
 
-    /// ほかの場所からのドラッグが、いまこの一覧の上にある
-    private(set) var isDragTargeted = false
+    /// ほかの場所からのドラッグが、いまこの一覧の上にある。
+    /// ドロップを受け付けなかったときなど、終わりの知らせが届かないことがあるので、
+    /// マウスのボタンを離していればドラッグは終わったとみなす（「ドラッグ中」のまま残らないように）
+    var isDragTargeted: Bool {
+        dragEntered && NSEvent.pressedMouseButtons & 1 != 0
+    }
+    private var dragEntered = false
     /// 一覧の上でのドラッグが終わった（外へ出た・落とした・取りやめた）
     var onDragTargetEnded: (() -> Void)?
 
     override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
-        isDragTargeted = true
+        dragEntered = true
         return super.draggingEntered(sender)
     }
 
@@ -59,9 +64,14 @@ final class FileOutlineView: NSOutlineView {
         endDragTarget()
     }
 
+    #if DEBUG
+    /// 自動操作用: ドラッグが入ってきたまま、終わりの知らせが届かなかった状態を作る
+    func debugMarkDragEntered() { dragEntered = true }
+    #endif
+
     private func endDragTarget() {
-        guard isDragTargeted else { return }
-        isDragTargeted = false
+        guard dragEntered else { return }
+        dragEntered = false
         onDragTargetEnded?()
     }
 

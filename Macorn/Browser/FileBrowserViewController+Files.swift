@@ -339,10 +339,23 @@ extension FileBrowserViewController {
     }
 
     /// ドラッグの途中は一覧を読み直さない（行が入れ替わると、置き先やスクロールの位置がずれる）
-    var isDragging: Bool { isDragSourceActive || outlineView.isDragTargeted }
+    var isDragging: Bool {
+        (isDragSourceActive && NSEvent.pressedMouseButtons & 1 != 0) || outlineView.isDragTargeted
+    }
 
     func dragDidFinish() {
         flushDeferredRefresh()
+    }
+
+    /// ドラッグ中に後回しにした読み直しを、ドラッグが終わったら行う（終わりの知らせが届かなくても行えるよう、見張る）
+    func flushWhenDragEnds() {
+        guard !dragEndWatchScheduled else { return }
+        dragEndWatchScheduled = true
+        Task {
+            while isDragging { try? await Task.sleep(for: .milliseconds(200)) }
+            dragEndWatchScheduled = false
+            flushDeferredRefresh()
+        }
     }
 
     /// Dock のゴミ箱へドロップされたら、ゴミ箱へ入れる。
@@ -397,6 +410,14 @@ extension FileBrowserViewController {
                 refreshAfterChange(selecting: results)
             } else {
                 load(targetNode)
+            }
+            // 移動したときは、移動元のフォルダも読み直す（一覧に残ったままにしない）
+            if operation == .move {
+                let sourceFolders = Set(urls.map { Self.comparablePath($0.deletingLastPathComponent()) })
+                for folder in root.loadedFolders()
+                where folder !== targetNode && sourceFolders.contains(Self.comparablePath(folder.url)) {
+                    load(folder)
+                }
             }
         }
         return true

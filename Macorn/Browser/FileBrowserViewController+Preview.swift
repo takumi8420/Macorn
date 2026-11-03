@@ -72,6 +72,11 @@ extension FileBrowserViewController: NSSplitViewDelegate {
 
     // MARK: - 一覧とプレビューの境目
 
+    /// 一覧とプレビューの区切り線を掴みやすくする
+    func splitView(_ splitView: NSSplitView, effectiveRect proposedEffectiveRect: NSRect, forDrawnRect drawnRect: NSRect, ofDividerAt dividerIndex: Int) -> NSRect {
+        DividerGrab.rect(proposedEffectiveRect, vertical: splitView.isVertical)
+    }
+
     func splitView(_ splitView: NSSplitView, constrainMinCoordinate proposedMinimumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
         max(proposedMinimumPosition, 220)
     }

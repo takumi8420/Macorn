@@ -474,6 +474,12 @@ final class PaneGroupController: NSSplitViewController {
     }
 
     var isVertical: Bool { splitView.isVertical }
+    /// 画面どうしの区切り線を掴みやすくする
+    override func splitView(_ splitView: NSSplitView, effectiveRect proposedEffectiveRect: NSRect, forDrawnRect drawnRect: NSRect, ofDividerAt dividerIndex: Int) -> NSRect {
+        let rect = super.splitView(splitView, effectiveRect: proposedEffectiveRect, forDrawnRect: drawnRect, ofDividerAt: dividerIndex)
+        return DividerGrab.rect(rect, vertical: splitView.isVertical)
+    }
+
     var count: Int { splitViewItems.count }
     var members: [NSViewController] { splitViewItems.map(\.viewController) }
 

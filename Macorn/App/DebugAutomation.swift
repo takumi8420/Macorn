@@ -423,7 +423,27 @@ enum DebugAutomation {
             }
         case "closechanges":
             ChangesWindowController.open.forEach { $0.close() }
+        case "dividerhit":
+            // 区切り線の近くを押したとき、区切り線が反応するか（-6〜+6 ポイント）
+            if let content = controller.window?.contentView {
+                for split in content.allDescendants(of: NSSplitView.self) where !split.isHidden {
+                    let visible = split.arrangedSubviews.filter { !$0.isHidden }
+                    guard visible.count > 1 else { continue }
+                    for index in 0..<(visible.count - 1) {
+                        let a = visible[index].frame
+                        let center = split.isVertical ? NSPoint(x: a.maxX + split.dividerThickness / 2, y: split.bounds.midY)
+                                                      : NSPoint(x: split.bounds.midX, y: a.maxY + split.dividerThickness / 2)
+                        let hits = (-6...6).map { offset -> String in
+                            let local = split.isVertical ? NSPoint(x: center.x + CGFloat(offset), y: center.y) : NSPoint(x: center.x, y: center.y + CGFloat(offset))
+                            let point = split.superview!.convert(local, from: split)
+                            return split.hitTest(point) === split ? "■" : "·"
+                        }.joined()
+                        print("[debug] divider \(type(of: split)) vertical=\(split.isVertical) #\(index) \(hits)")
+                    }
+                }
+            }
         case "dragstate": browser.debugDragState(argument)
+        case "dragstuck": browser.outlineView.debugMarkDragEntered()
         case "listinfo": print("[debug] list \(browser.debugListInfo())")
         case "scrollbottom": browser.debugScrollToBottom()
         case "splitinfo":
@@ -708,6 +728,13 @@ extension FileBrowserViewController {
 }
 
 private extension NSView {
+    func allDescendants<T: NSView>(of type: T.Type) -> [T] {
+        subviews.flatMap { view -> [T] in
+            let own: [T] = (view as? T).map { [$0] } ?? []
+            return own + view.allDescendants(of: type)
+        }
+    }
+
     func firstDescendant<T: NSView>(of type: T.Type) -> T? {
         for subview in subviews {
             if let match = subview as? T { return match }

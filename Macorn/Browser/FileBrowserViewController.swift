@@ -52,6 +52,8 @@ final class FileBrowserViewController: NSViewController {
     var draggedURLs: [URL] = []
     /// この一覧からドラッグを始めて、まだ終わっていない
     var isDragSourceActive = false
+    /// ドラッグの終わりを見張っている
+    var dragEndWatchScheduled = false
     var gitSnapshot: GitSnapshot?
     var tagPopover: NSPopover?
     var bulkRenameSheet: NSWindow?
@@ -617,6 +619,7 @@ final class FileBrowserViewController: NSViewController {
         // 名前の変更中とドラッグ中は、読み直しを後回しにする（入力欄や置き先の行が消えないように）
         if renamingNode != nil || isDragging {
             needsRefreshAfterRename = true
+            if isDragging { flushWhenDragEnds() }
             return
         }
         // 表示中のフォルダ自体が消えたら、残っている一番近い親フォルダへ移動する

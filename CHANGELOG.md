@@ -4,6 +4,25 @@
 
 2026-10-26 に運用を開始した。2026-10-26 の分（要件定義から v1.0 の実装まで）は、作業したセッションの会話をもとに後から記録した。それ以前の経緯はない（このリポジトリは 2026-10-26 に作った）。
 
+## 2026-11-03
+
+### Macorn：バージョン 0.3.12 を LP で公開する
+
+- **きっかけ**：konta の依頼「0.3.12 で公開」（区切り線を掴みやすくしたことと、ドラッグ＆ドロップが1回で効かなくなる不具合の修正を受けて）
+- **意図・方針**：0.3.11 → 0.3.12（ビルド番号は 14 → 15）。`scripts/release.sh --publish` で署名・公証した DMG・LP の表記・`version.json` をまとめて差し替えた
+- 変更 `Macorn.xcodeproj/project.pbxproj` — `MARKETING_VERSION` を 0.3.12、`CURRENT_PROJECT_VERSION` を 15 に
+- 変更 `site/download/Macorn.dmg`、`site/index.html`、`site/version.json` — 0.3.12 の DMG・表記・最新版の情報
+
+### Macorn：区切り線を掴みやすくし、ドラッグ＆ドロップが1回で効かなくなるのを直す
+
+- **きっかけ**：konta の依頼（2026-11-03）「サイドバーなどの幅を変えるときにうまく divider を選択できない」「一度ファイルをドラッグアンドドロップで操作した後にほかのファイルがドラッグアンドドロップできない事象が発生する」
+- **意図・方針**：区切り線は 1 ポイントの細い線（`.thin`）で、掴める範囲も線の幅しかなかった。見た目は細いまま、掴める範囲を線の両側に 4 ポイントずつ広げた（サイドバー・分けた画面どうし・一覧とプレビューの3か所）。ドラッグの件は、2026-11-01 に足した「ドラッグが一覧の上にある」状態が、ドロップを受け付けなかったとき（同じフォルダの上で離したときなど）に終わりの知らせが届かず残り、以後フォルダの変化を一覧に反映しなくなっていた。移動したファイルが一覧に残り、それを掴んでも動かせなかった。マウスのボタンを離していればドラッグは終わったとみなし、後回しにした読み直しはドラッグの終わりを見張って必ず行うようにした。あわせて、ドロップで移動したときは移動元のフォルダも読み直す
+- 追加 `Macorn/Window/DividerGrab.swift` — 区切り線の掴める範囲と、ウィンドウ全体の分割（`BrowserSplitViewController`）
+- 変更 `Macorn/Window/BrowserWindowController.swift`・`Macorn/Window/PaneContainerViewController.swift`・`Macorn/Browser/FileBrowserViewController+Preview.swift` — 3か所の区切り線の掴める範囲を広げる
+- 変更 `Macorn/Browser/FileOutlineView.swift` — 「ドラッグが一覧の上にある」は、マウスのボタンを押している間だけにする
+- 変更 `Macorn/Browser/FileBrowserViewController.swift`・`Macorn/Browser/FileBrowserViewController+Files.swift` — ドラッグの終わりを見張って後回しにした読み直しを行う。ドロップで移動したら移動元のフォルダも読み直す
+- 変更 `Macorn/App/DebugAutomation.swift` — 確認用の手順 `dividerhit`（区切り線の近くを押したときに反応するか）・`dragstuck`（終わりの知らせが届かなかった状態を作る）を足す
+
 ## 2026-11-02
 
 ### Macorn：Zenn の記事を 0.3.11 のアプリに合わせる

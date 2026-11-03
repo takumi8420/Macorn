@@ -67,7 +67,7 @@ final class BrowserWindowController: NSWindowController {
             }
         }
 
-        let splitViewController = NSSplitViewController()
+        let splitViewController = BrowserSplitViewController()
         let sidebarItem = NSSplitViewItem(sidebarWithViewController: sidebar)
         sidebarItem.minimumThickness = 160
         sidebarItem.maximumThickness = 320
