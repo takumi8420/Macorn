@@ -24,6 +24,10 @@ final class PaneState {
     var gitBranch: String?
     /// 表示中のフォルダを含む Git リポジトリのルート
     var gitRepositoryRoot: URL?
+    /// リポジトリの名前（「持ち主/リポジトリ」）と、リモートを Web で開く URL・サービスの名前
+    var gitRepositoryName: String?
+    var gitRemoteWebURL: URL?
+    var gitRemoteServiceName: String?
     /// ウィンドウの下に内蔵ターミナルを出しているか（ステータスバーのボタンの見た目用）
     var isTerminalVisible = false
     var gitChangeCount = 0

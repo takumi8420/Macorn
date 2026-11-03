@@ -128,3 +128,58 @@ struct GitHeadTests {
         #expect(DirectoryReader.entry(for: plain).gitBranch == nil)
     }
 }
+
+struct GitRemoteTests {
+    @Test func convertsRemotesToWebURLs() {
+        #expect(GitRepository.webURL(fromRemote: "git@github.com:takumi8420/Macorn.git")?.absoluteString == "https://github.com/takumi8420/Macorn")
+        #expect(GitRepository.webURL(fromRemote: "https://github.com/takumi8420/Macorn.git\n")?.absoluteString == "https://github.com/takumi8420/Macorn")
+        #expect(GitRepository.webURL(fromRemote: "https://user:token@github.com/a/b")?.absoluteString == "https://github.com/a/b")
+        #expect(GitRepository.webURL(fromRemote: "ssh://git@github.com/a/b.git")?.absoluteString == "https://github.com/a/b")
+        #expect(GitRepository.webURL(fromRemote: "git@gitlab.com:group/sub/project.git")?.absoluteString == "https://gitlab.com/group/sub/project")
+        #expect(GitRepository.webURL(fromRemote: "/Users/me/repos/local.git") == nil)
+        #expect(GitRepository.webURL(fromRemote: "") == nil)
+    }
+
+    @Test func namesRepositoryFromRemote() {
+        var snapshot = GitSnapshot(root: URL(fileURLWithPath: "/work/macorn-local"), branch: "main")
+        #expect(snapshot.repositoryName == "macorn-local")
+        #expect(snapshot.remoteServiceName == nil)
+        snapshot.remoteWebURL = URL(string: "https://github.com/takumi8420/Macorn")
+        #expect(snapshot.repositoryName == "takumi8420/Macorn")
+        #expect(snapshot.remoteServiceName == "GitHub")
+        snapshot.remoteWebURL = URL(string: "https://gitlab.com/group/sub/project")
+        #expect(snapshot.repositoryName == "sub/project")
+        #expect(snapshot.remoteServiceName == "GitLab")
+    }
+}
+
+struct GitConfigTests {
+    @Test func readsOriginFromConfig() {
+        let config = """
+        [core]
+        \trepositoryformatversion = 0
+        [remote "upstream"]
+        \turl = https://github.com/other/upstream.git
+        [remote "origin"]
+        \turl = git@github.com:takumi8420/Macorn.git
+        \tfetch = +refs/heads/*:refs/remotes/origin/*
+        [branch "main"]
+        \tremote = origin
+        """
+        #expect(GitRepository.remoteURL(fromConfig: config) == "git@github.com:takumi8420/Macorn.git")
+        #expect(GitRepository.remoteURL(fromConfig: "[remote \"fork\"]\n url = https://gitlab.com/a/b\n") == "https://gitlab.com/a/b")
+        #expect(GitRepository.remoteURL(fromConfig: "[core]\n bare = false\n") == nil)
+    }
+
+    @Test func readsRemoteOfRepositoryFolder() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("macorn-remote-\(UUID().uuidString)")
+        let git = folder.appendingPathComponent(".git")
+        try FileManager.default.createDirectory(at: git, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        try "ref: refs/heads/main\n".write(to: git.appendingPathComponent("HEAD"), atomically: true, encoding: .utf8)
+        #expect(GitRepository.remoteWebURL(ofRepositoryAt: folder) == nil)
+        try "[remote \"origin\"]\n\turl = git@github.com:a/b.git\n".write(to: git.appendingPathComponent("config"), atomically: true, encoding: .utf8)
+        #expect(GitRepository.remoteWebURL(ofRepositoryAt: folder)?.absoluteString == "https://github.com/a/b")
+        #expect(GitRepository.headBranch(ofRepositoryAt: folder) == "main")
+    }
+}

@@ -65,6 +65,21 @@ extension FileBrowserViewController {
         return String(path.dropFirst(root.count + 1))
     }
 
+    /// リポジトリのページ（GitHub など）をブラウザで開く
+    @objc func openRepositoryOnWeb(_ sender: Any?) {
+        guard let url = gitSnapshot?.remoteWebURL else {
+            NSSound.beep()
+            return
+        }
+        NSWorkspace.shared.open(url)
+    }
+
+    /// 一覧の右クリック:「GitHub で開く」（そのフォルダのリポジトリのページ）
+    @objc func openRemoteFromMenu(_ sender: NSMenuItem) {
+        guard let url = sender.representedObject as? URL else { return }
+        NSWorkspace.shared.open(url)
+    }
+
     @objc func copyPath(_ sender: Any?) { copyPaths(.full) }
     @objc func copyTildePath(_ sender: Any?) { copyPaths(.tilde) }
     @objc func copyRelativePath(_ sender: Any?) { copyPaths(.relativeToRepository) }
@@ -83,6 +98,8 @@ extension FileBrowserViewController {
         case #selector(showSelectionDiff(_:)):
             guard let snapshot = gitSnapshot, selectedNodes.count == 1 else { return false }
             return Self.diffPath(of: selectedNodes[0], in: snapshot) != nil
+        case #selector(openRepositoryOnWeb(_:)):
+            return gitSnapshot?.remoteWebURL != nil
         case #selector(openRepositoryInEditor(_:)), #selector(copyRelativePath(_:)), #selector(showChanges(_:)):
             return gitSnapshot != nil
         case #selector(copyPath(_:)), #selector(copyTildePath(_:)), #selector(copyShellQuotedPath(_:)):
@@ -113,6 +130,9 @@ extension FileBrowserViewController {
                 gitSnapshot = snapshot
                 state.gitBranch = snapshot?.branch
                 state.gitRepositoryRoot = snapshot?.root
+                state.gitRepositoryName = snapshot?.repositoryName
+                state.gitRemoteWebURL = snapshot?.remoteWebURL
+                state.gitRemoteServiceName = snapshot?.remoteServiceName
                 state.gitChangeCount = snapshot?.changeCount ?? 0
                 reloadVisibleRows()
             }

@@ -120,6 +120,7 @@ enum CommandCatalog {
         "copyTildePath:": "Copy Path with Tilde",
         "copyRelativePath:": "Copy Relative Path from Git Root",
         "showChanges:": "Show Changes Git Diff",
+        "openRepositoryOnWeb:": "Open Repository on GitHub Web Remote Browser",
         "toggleTerminal:": "Toggle Integrated Terminal Shell Console",
         "placeTerminalAtBottom:": "Move Terminal to Bottom Panel Position",
         "placeTerminalAtLeft:": "Move Terminal to Left Panel Position",

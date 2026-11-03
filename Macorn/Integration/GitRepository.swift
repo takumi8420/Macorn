@@ -28,6 +28,23 @@ nonisolated struct GitSnapshot: Sendable, Equatable {
     var ignoredFolders: [String] = []
     /// 中に変更のあるファイルを含むフォルダ（相対パス）
     var changedFolders: Set<String> = []
+    /// リモート（origin）を Web で開く URL。GitHub なら https://github.com/持ち主/リポジトリ
+    var remoteWebURL: URL?
+
+    /// 「持ち主/リポジトリ」（リモートがあればその名前、なければフォルダ名）
+    var repositoryName: String {
+        if let remoteWebURL, let name = GitRepository.repositoryName(of: remoteWebURL) { return name }
+        return root.lastPathComponent
+    }
+
+    /// リモートのサービスの名前（ボタンの文字に使う）
+    var remoteServiceName: String? {
+        guard let host = remoteWebURL?.host?.lowercased() else { return nil }
+        if host == "github.com" || host.hasSuffix(".github.com") || host.contains("github") { return "GitHub" }
+        if host.contains("gitlab") { return "GitLab" }
+        if host.contains("bitbucket") { return "Bitbucket" }
+        return host
+    }
 
     var changeCount: Int { statuses.values.filter { $0 != .ignored }.count }
 
@@ -113,19 +130,65 @@ nonisolated enum GitRepository {
     /// folder がリポジトリのルート（中に .git がある）なら、今のブランチ名。git を起動せず HEAD を直接読む（一覧の各フォルダに使うため）。
     /// ブランチにいないときは「(1a2b3c4)」のようにコミットの先頭 7 文字
     static func headBranch(ofRepositoryAt folder: URL) -> String? {
+        guard let gitDir = gitDirectory(ofRepositoryAt: folder) else { return nil }
+        guard let gitDir, let head = try? String(contentsOf: gitDir.appendingPathComponent("HEAD"), encoding: .utf8) else { return "" }
+        return branchName(fromHEAD: head)
+    }
+
+    /// フォルダの直下の .git が指す Git の管理フォルダ。.git がなければ nil、読めなければ .some(nil)
+    private static func gitDirectory(ofRepositoryAt folder: URL) -> URL?? {
         let dotGit = folder.appendingPathComponent(".git")
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: dotGit.path, isDirectory: &isDirectory) else { return nil }
-        var gitDir = dotGit
-        if !isDirectory.boolValue {
-            // worktree・submodule は「gitdir: <場所>」と書かれたファイル
-            guard let text = try? String(contentsOf: dotGit, encoding: .utf8),
-                  let line = text.split(separator: "\n").first, line.hasPrefix("gitdir:") else { return "" }
-            let path = line.dropFirst("gitdir:".count).trimmingCharacters(in: .whitespaces)
-            gitDir = path.hasPrefix("/") ? URL(fileURLWithPath: path) : folder.appendingPathComponent(path)
+        if isDirectory.boolValue { return .some(dotGit) }
+        // worktree・submodule は「gitdir: <場所>」と書かれたファイル
+        guard let text = try? String(contentsOf: dotGit, encoding: .utf8),
+              let line = text.split(separator: "\n").first, line.hasPrefix("gitdir:") else { return .some(nil) }
+        let path = line.dropFirst("gitdir:".count).trimmingCharacters(in: .whitespaces)
+        return .some(path.hasPrefix("/") ? URL(fileURLWithPath: path) : folder.appendingPathComponent(path))
+    }
+
+    /// フォルダの直下の .git の設定から、リモート（origin。なければ最初のもの）を Web で開く URL を読む。
+    /// 一覧の行ごとに呼ぶので、git コマンドは使わずに設定ファイルを直に読む
+    static func remoteWebURL(ofRepositoryAt folder: URL) -> URL? {
+        guard let found = gitDirectory(ofRepositoryAt: folder), let gitDir = found else { return nil }
+        var configDir = gitDir
+        // worktree は、共通の管理フォルダ（commondir）に設定がある
+        if let common = try? String(contentsOf: gitDir.appendingPathComponent("commondir"), encoding: .utf8) {
+            let path = common.trimmingCharacters(in: .whitespacesAndNewlines)
+            configDir = path.hasPrefix("/") ? URL(fileURLWithPath: path) : gitDir.appendingPathComponent(path)
         }
-        guard let head = try? String(contentsOf: gitDir.appendingPathComponent("HEAD"), encoding: .utf8) else { return "" }
-        return branchName(fromHEAD: head)
+        guard let config = try? String(contentsOf: configDir.appendingPathComponent("config"), encoding: .utf8) else { return nil }
+        return remoteURL(fromConfig: config).flatMap(webURL(fromRemote:))
+    }
+
+    /// .git/config の中身から、origin（なければ最初のリモート）の url を取り出す
+    static func remoteURL(fromConfig config: String) -> String? {
+        var current: String?
+        var urls: [(name: String, url: String)] = []
+        for raw in config.split(whereSeparator: \.isNewline) {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("[") {
+                // [remote "origin"]
+                if line.hasPrefix("[remote"), let open = line.firstIndex(of: "\""), let close = line.lastIndex(of: "\""), open < close {
+                    current = String(line[line.index(after: open)..<close])
+                } else {
+                    current = nil
+                }
+            } else if let name = current, let equal = line.firstIndex(of: "=") {
+                let key = line[..<equal].trimmingCharacters(in: .whitespaces).lowercased()
+                if key == "url", !urls.contains(where: { $0.name == name }) {
+                    urls.append((name, line[line.index(after: equal)...].trimmingCharacters(in: .whitespaces)))
+                }
+            }
+        }
+        return (urls.first { $0.name == "origin" } ?? urls.first)?.url
+    }
+
+    /// Web の URL から「持ち主/リポジトリ」
+    static func repositoryName(of webURL: URL) -> String? {
+        let parts = webURL.path.split(separator: "/")
+        return parts.count >= 2 ? parts.suffix(2).joined(separator: "/") : nil
     }
 
     /// HEAD の中身「ref: refs/heads/main」→「main」、コミットの番号だけなら「(1a2b3c4)」
@@ -138,11 +201,48 @@ nonisolated enum GitRepository {
         return text.isEmpty ? "" : "(\(text.prefix(7)))"
     }
 
+    /// リモートの URL を、ブラウザで開ける URL にする。
+    /// 「git@github.com:持ち主/リポジトリ.git」「ssh://git@github.com/持ち主/リポジトリ.git」「https://ユーザー:トークン@github.com/持ち主/リポジトリ.git」
+    /// → 「https://github.com/持ち主/リポジトリ」。ローカルのフォルダなどは nil
+    static func webURL(fromRemote remote: String) -> URL? {
+        var text = remote.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return nil }
+        var host: String
+        var path: String
+        if let components = URLComponents(string: text), let scheme = components.scheme?.lowercased(),
+           ["https", "http", "ssh", "git", "git+ssh", "ssh+git"].contains(scheme), let componentsHost = components.host {
+            host = componentsHost
+            path = components.path
+        } else if !text.contains("://"), let colon = text.firstIndex(of: ":"), !text.hasPrefix("/") {
+            // scp 形式: [ユーザー@]ホスト:パス
+            var hostPart = String(text[..<colon])
+            if let at = hostPart.lastIndex(of: "@") { hostPart = String(hostPart[hostPart.index(after: at)...]) }
+            host = hostPart
+            path = String(text[text.index(after: colon)...])
+            text = ""
+        } else {
+            return nil
+        }
+        guard !host.isEmpty, !path.isEmpty else { return nil }
+        if path.hasSuffix(".git") { path.removeLast(4) }
+        if path.hasSuffix("/") { path.removeLast() }
+        if !path.hasPrefix("/") { path = "/" + path }
+        guard path.count > 1 else { return nil }
+        return URL(string: "https://\(host)\(path)")
+    }
+
     static func snapshot(root: URL) -> GitSnapshot? {
         guard let output = run(["-C", root.path, "status", "--porcelain=v1", "-z", "--branch", "--ignored"]) else {
             return nil
         }
-        return GitSnapshot.parse(output, root: root)
+        var snapshot = GitSnapshot.parse(output, root: root)
+        // origin がなければ、最初に登録されたリモートを使う
+        var remote = run(["-C", root.path, "remote", "get-url", "origin"])
+        if remote == nil, let first = run(["-C", root.path, "remote"])?.split(separator: "\n").first {
+            remote = run(["-C", root.path, "remote", "get-url", String(first)])
+        }
+        snapshot.remoteWebURL = remote.flatMap { webURL(fromRemote: $0) }
+        return snapshot
     }
 
     /// git を実行して標準出力を返す。終了コードが allowedStatuses にないときは nil。

@@ -352,6 +352,9 @@ final class FileBrowserViewController: NSViewController {
         gitSnapshot = nil
         state.gitBranch = nil
         state.gitRepositoryRoot = nil
+        state.gitRepositoryName = nil
+        state.gitRemoteWebURL = nil
+        state.gitRemoteServiceName = nil
         state.gitChangeCount = 0
         if url.isFileURL {
             startWatching()
@@ -863,6 +866,12 @@ extension FileBrowserViewController: NSMenuDelegate {
         }
 
         menu.addItem(tagMenuItem(for: urls))
+        if nodes.count == 1, let web = nodes[0].entry.gitRemoteWebURL {
+            let service = GitSnapshot(root: nodes[0].url, branch: "", remoteWebURL: web).remoteServiceName ?? "Web"
+            let item = NSMenuItem(title: "\(service) で開く", action: #selector(openRemoteFromMenu(_:)), keyEquivalent: "")
+            item.representedObject = web
+            menu.addItem(item)
+        }
         if nodes.count == 1, let snapshot = gitSnapshot, Self.diffPath(of: nodes[0], in: snapshot) != nil {
             menu.addItem(NSMenuItem(title: "差分を見る", action: #selector(showSelectionDiff(_:)), keyEquivalent: ""))
         }

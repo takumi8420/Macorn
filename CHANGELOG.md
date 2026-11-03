@@ -4,7 +4,46 @@
 
 2026-10-26 に運用を開始した。2026-10-26 の分（要件定義から v1.0 の実装まで）は、作業したセッションの会話をもとに後から記録した。それ以前の経緯はない（このリポジトリは 2026-10-26 に作った）。
 
+## 2026-11-04
+
+### Macorn：バージョン 0.3.14 を LP で公開する
+
+- **きっかけ**：konta の依頼（2026-11-04）「0.3.14 で公開」（一覧のフォルダの GitHub のリポジトリ名、右上の GitHub ボタン、押せるリポジトリ名を手元で試したうえで）
+- **意図・方針**：0.3.13 → 0.3.14（ビルド番号は 16 → 17）。`scripts/release.sh --publish` で署名・公証した DMG・LP の表記・`version.json` をまとめて差し替えた
+- 変更 `Macorn.xcodeproj/project.pbxproj` — `MARKETING_VERSION` を 0.3.14、`CURRENT_PROJECT_VERSION` を 17 に
+- 変更 `site/download/Macorn.dmg`、`site/index.html`、`site/sitemap.xml`、`site/version.json` — 0.3.14 の DMG・表記・最新版の情報
+
+### Macorn：リポジトリ名を押すと GitHub のページへ移れるようにする
+
+- **きっかけ**：konta の依頼（2026-11-04）「レポジトリ名はクリックしたら遷移できるようにボタンにして欲しい」
+- **意図・方針**：一覧の「持ち主/リポジトリ」に薄い角丸の背景を敷いてボタンらしく見せ、そこを押したときだけリポジトリのページをブラウザで開く（名前の欄のほかの所を押したときは、これまでどおり行の選択）。マウスを乗せると指の形のカーソルになる。押せる範囲は、欄と同じ条件で文字を並べて求め、省略されて見えないときは押せない。ステータスバーのリポジトリ名もリンクのボタンにした
+- 変更 `Macorn/Browser/FileCellView.swift` — 「持ち主/リポジトリ」をボタンにする（背景・カーソル・押したときの動作）
+- 変更 `Macorn/Browser/StatusBarView.swift` — リポジトリ名を押すと開く
+- 変更 `Macorn/App/DebugAutomation.swift` — 確認用の手順 `repolink:名前` を足す
+- 変更 `docs/REQUIREMENTS.md`（T-20）・`AGENTS.md`（確定している前提）
+
+### Macorn：一覧のフォルダにも GitHub のリポジトリを出し、GitHub のボタンを右上へ移す
+
+- **きっかけ**：konta の依頼（2026-11-04）「フォルダ一覧においても github のレポジトリを表示して欲しい。また、GitHub のボタンが右下にあり見にくいので右上に持ってきて欲しい」（リポジトリではない `work` を開いていて、どこにリポジトリの情報があるか分からなかった）
+- **意図・方針**：一覧のリポジトリのフォルダは、ブランチ名の後ろに「持ち主/リポジトリ」を添え、右クリックに「GitHub で開く」を足した。行ごとに読むので git コマンドは使わず、`.git/config` を直に読む（worktree は共通の管理フォルダの設定を読む）。GitHub のボタンはステータスバーから外し、各画面のパスバーの右端（ウィンドウの右上）へ移した。画面ごとに出るので、分けていてもどの画面のリポジトリか分かる。狭い画面では「GitHub」だけにして、パスの末尾とコピーのボタンが隠れないようにした（幅が変わったらパスを末尾が見える位置に戻す）。ステータスバーのリポジトリ名・ブランチ・変更の数はそのまま
+- 変更 `Macorn/Integration/GitRepository.swift`・`Macorn/Model/FileEntry.swift` — フォルダの `.git/config` からリモートを読み、項目に Web の URL を持たせる
+- 変更 `Macorn/Browser/FileCellView.swift`・`Macorn/Browser/FileBrowserViewController.swift`・`Macorn/Browser/FileBrowserViewController+Integration.swift` — 一覧に「持ち主/リポジトリ」、右クリックの「GitHub で開く」
+- 変更 `Macorn/Browser/PathBarView.swift`・`Macorn/Browser/StatusBarView.swift` — GitHub のボタンをパスバーの右端へ移す
+- 変更 `MacornTests/GitDiffTests.swift` — `.git/config` の読み取りのテスト
+- 変更 `docs/REQUIREMENTS.md`（T-20）・`AGENTS.md`（確定している前提）
+
 ## 2026-11-03
+
+### Macorn：ステータスバーに GitHub のリポジトリ名とリンクのボタンを出す
+
+- **きっかけ**：konta の依頼（2026-11-03）「github のレポジトリのリンクなども表示しておいて欲しい（ボタンを設ければ十分）。現状ブランチ名しか書かれていないので、レポジトリの情報が見えない」
+- **意図・方針**：ステータスバーのリポジトリ名はフォルダ名だけで、どのリポジトリか分からなかった。リモート（origin。なければ最初のリモート）の URL を読み、リポジトリ名を「持ち主/リポジトリ」にして、その右に「GitHub」ボタンを置いた（依頼どおりボタンで十分とし、URL そのものは出さない。ボタンに乗せると URL が出る）。`git@github.com:…`・`ssh://`・トークンつきの `https://` も、ブラウザで開ける形に直す（トークンは捨てる）。GitLab・Bitbucket などはその名前のボタンにする。ファイル › リポジトリを Web で開く・パレットからも開ける
+- 変更 `Macorn/Integration/GitRepository.swift` — リモートの URL を読み、Web の URL・リポジトリ名・サービス名にする
+- 変更 `Macorn/Browser/StatusBarView.swift`・`Macorn/Browser/PaneState.swift`・`Macorn/Browser/FileBrowserViewController.swift`・`Macorn/Browser/FileBrowserViewController+Integration.swift` — ステータスバーのリポジトリ名と「GitHub」ボタン、リポジトリを Web で開く操作
+- 変更 `Macorn/App/MainMenu.swift`・`Macorn/Palette/CommandCatalog.swift` — ファイル › リポジトリを Web で開く
+- 変更 `Macorn/App/DebugAutomation.swift` — 確認用の手順 `gitinfo` を足す
+- 変更 `MacornTests/GitDiffTests.swift` — リモートの URL の変換とリポジトリ名のテスト
+- 変更 `docs/REQUIREMENTS.md`（T-20）・`AGENTS.md`（確定している前提）
 
 ### Macorn：バージョン 0.3.13 を LP で公開する
 

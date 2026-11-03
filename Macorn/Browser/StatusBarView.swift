@@ -32,8 +32,19 @@ struct StatusBarView: View {
                 HStack(spacing: 3) {
                     if let root = state.gitRepositoryRoot {
                         Image(systemName: "shippingbox")
-                        Text(root.lastPathComponent)
+                        if let url = state.gitRemoteWebURL {
+                            // 押すとリポジトリのページ（GitHub など）を開く
+                            Button(state.gitRepositoryName ?? root.lastPathComponent) {
+                                NSWorkspace.shared.open(url)
+                            }
+                            .buttonStyle(.link)
                             .fontWeight(.medium)
+                            .help("\(url.absoluteString) をブラウザで開く")
+                        } else {
+                            Text(root.lastPathComponent)
+                                .fontWeight(.medium)
+                                .help(root.path)
+                        }
                         Text("・")
                     }
                     Image(systemName: "arrow.triangle.branch")

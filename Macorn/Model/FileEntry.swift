@@ -17,6 +17,8 @@ nonisolated struct FileEntry: Sendable, Hashable {
     var tagSortKey: String? = nil
     /// Git リポジトリのフォルダ（中に .git がある）なら、今のブランチ名。読めなければ空文字
     var gitBranch: String? = nil
+    /// Git リポジトリのフォルダで、リモートがあれば、それを Web で開く URL（GitHub など）
+    var gitRemoteWebURL: URL? = nil
 
     var path: String { url.path }
 }
@@ -67,6 +69,7 @@ nonisolated enum DirectoryReader {
         let isPackage = values?.isPackage ?? false
         let size: Int64? = isDirectory ? nil : (values?.totalFileSize ?? values?.fileSize).map(Int64.init)
         let name = url.path == "/" ? "/" : url.lastPathComponent
+        let gitBranch = isDirectory && !isPackage ? GitRepository.headBranch(ofRepositoryAt: url) : nil
 
         return FileEntry(
             url: url,
@@ -78,7 +81,8 @@ nonisolated enum DirectoryReader {
             size: size,
             dateModified: values?.contentModificationDate,
             kind: values?.localizedTypeDescription ?? "",
-            gitBranch: isDirectory && !isPackage ? GitRepository.headBranch(ofRepositoryAt: url) : nil
+            gitBranch: gitBranch,
+            gitRemoteWebURL: gitBranch != nil ? GitRepository.remoteWebURL(ofRepositoryAt: url) : nil
         )
     }
 

@@ -19,44 +19,56 @@ struct PathBarActions {
 struct PathBarView: View {
     var state: PaneState
     var actions: PathBarActions
+    /// パスバーの幅（狭いときは、リポジトリのボタンを短くする）
+    @State private var width: CGFloat = 1000
 
     var body: some View {
-        ZStack(alignment: .leading) {
-            if state.isEditingPath {
-                PathTextField(
-                    initialText: initialEditingText,
-                    onCommit: { text in
-                        guard actions.commitPath(text) else { return false }
-                        finishEditing()
-                        return true
-                    },
-                    onCancel: finishEditing,
-                    onComplete: actions.complete
-                )
-            } else {
-                if let id = TagLocation.tagID(from: state.currentURL) {
-                    tagChip(id)
+        HStack(spacing: 6) {
+            ZStack(alignment: .leading) {
+                if state.isEditingPath {
+                    PathTextField(
+                        initialText: initialEditingText,
+                        onCommit: { text in
+                            guard actions.commitPath(text) else { return false }
+                            finishEditing()
+                            return true
+                        },
+                        onCancel: finishEditing,
+                        onComplete: actions.complete
+                    )
                 } else {
-                    breadcrumbs
+                    if let id = TagLocation.tagID(from: state.currentURL) {
+                        tagChip(id)
+                    } else {
+                        breadcrumbs
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            // 右端: Git のリポジトリのページを開くボタンと、分けているときはこの画面を閉じる「×」
+            if !state.isEditingPath {
+                if let url = state.gitRemoteWebURL {
+                    RepositoryWebButton(
+                        url: url,
+                        name: state.gitRepositoryName ?? url.lastPathComponent,
+                        service: state.gitRemoteServiceName ?? "Web",
+                        isCompact: width < 760
+                    )
+                }
+                if state.isInSplit {
+                    ClosePaneButton(close: actions.closePane)
                 }
             }
         }
         .padding(.leading, 14)
-        // 分けているときは、右端の「×」と重ならないよう空けておく
-        .padding(.trailing, state.isInSplit ? 40 : 14)
+        .padding(.trailing, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         .opacity(isDimmed ? 0.55 : 1)
         .background(isHighlighted ? Theme.shared.accent.opacity(0.10) : .clear)
         .contentShape(Rectangle())
         // 空いている所を1回クリックすると、パスを直接入力できる（⌘L と同じ）
         .onTapGesture { startEditing() }
-        // 画面を分けているときだけ、右端にこの画面を閉じる「×」を出す
-        .overlay(alignment: .trailing) {
-            if state.isInSplit && !state.isEditingPath {
-                ClosePaneButton(close: actions.closePane)
-                    .padding(.trailing, 8)
-            }
-        }
         .overlay(alignment: .bottom) {
             // 2画面のときは、操作対象の画面の下に色付きの線を引いて区別する（要件 P-03）
             if isHighlighted {
@@ -113,6 +125,8 @@ struct PathBarView: View {
                 .frame(minWidth: geometry.size.width, minHeight: geometry.size.height, alignment: .leading)
             }
             .defaultScrollAnchor(.trailing)
+            // 幅が変わったら作り直して、末尾（今いるフォルダとコピーのボタン）が見える位置に戻す
+            .id(Int(geometry.size.width))
         }
     }
 
@@ -177,6 +191,55 @@ private struct CopyPathButton: View {
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
         .help(copied ? "コピーしました" : "表示中のフォルダのパスをコピー\n\(path)")
+    }
+}
+
+/// Git リポジトリの中を表示しているときに、パスバーの右端に出すボタン。
+/// 「持ち主/リポジトリ」と「GitHub」を並べ、押すとリポジトリのページをブラウザで開く
+private struct RepositoryWebButton: View {
+    let url: URL
+    let name: String
+    let service: String
+    /// 狭い画面では「持ち主/リポジトリ」を省き、「GitHub」だけにする
+    let isCompact: Bool
+    @State private var isHovering = false
+
+    var body: some View {
+        Button {
+            NSWorkspace.shared.open(url)
+        } label: {
+            HStack(spacing: 5) {
+                if !isCompact {
+                    Image(systemName: "shippingbox")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                    Text(name)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                serviceLabel
+            }
+            .font(.system(size: 11))
+            .padding(.horizontal, 8)
+            .frame(height: 22)
+            .background(RoundedRectangle(cornerRadius: 5).fill(Color.primary.opacity(isHovering ? 0.10 : 0.05)))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+        .fixedSize()
+        .help("\(url.absoluteString) をブラウザで開く")
+        .accessibilityLabel("\(name) を \(service) で開く")
+    }
+
+    private var serviceLabel: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "arrow.up.right.square")
+            Text(service)
+                .fontWeight(.medium)
+        }
+        .lineLimit(1)
+        .foregroundStyle(isHovering ? Color.accentColor : .primary)
     }
 }
 

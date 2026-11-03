@@ -454,6 +454,8 @@ enum DebugAutomation {
             print("[debug] term pos=\(controller.workspace.position) vertical=\(split.isVertical) visible=\(controller.workspace.isTerminalVisible) running=\(controller.workspace.terminal.isRunning) frames=\(split.arrangedSubviews.map { "\($0.frame)" }) termFrame=\(controller.workspace.terminal.view.frame)")
         case "termhide":
             controller.workspace.hideTerminal()
+        case "gitinfo":
+            print("[debug] git name=\(browser.state.gitRepositoryName ?? "-") branch=\(browser.state.gitBranch ?? "-") web=\(browser.state.gitRemoteWebURL?.absoluteString ?? "-") service=\(browser.state.gitRemoteServiceName ?? "-")")
         case "changeselect":
             ChangesWindowController.open.first?.model.select(argument)
         case "changesinfo":
@@ -488,6 +490,12 @@ enum DebugAutomation {
         case "dragstate": browser.debugDragState(argument)
         case "dragstuck": browser.outlineView.debugMarkDragEntered()
         case "listinfo": print("[debug] list \(browser.debugListInfo())")
+        case "repolink":
+            // repolink: 一覧の名前の欄で「持ち主/リポジトリ」の押せる範囲（ウィンドウの座標）
+            for cell in browser.view.allDescendants(of: FileCellView.self) {
+                guard let field = cell.textField, field.stringValue.hasPrefix(argument), let rect = cell.repositoryLinkRect() else { continue }
+                print("[debug] repolink \(field.stringValue) rect=\(field.convert(rect, to: nil)) field=\(field.convert(field.bounds, to: nil))")
+            }
         case "scrollbottom": browser.debugScrollToBottom()
         case "splitinfo":
             let split = browser.contentSplit

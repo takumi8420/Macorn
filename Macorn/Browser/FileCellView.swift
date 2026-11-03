@@ -46,7 +46,12 @@ enum FileColumn: String, CaseIterable {
     }
 }
 
-final class FileCellView: NSTableCellView {
+extension NSAttributedString.Key {
+    /// 一覧の名前の欄で、押すとリポジトリのページを開く部分（「持ち主/リポジトリ」）
+    static let repositoryLink = NSAttributedString.Key("macornRepositoryLink")
+}
+
+final class FileCellView: NSTableCellView, NSGestureRecognizerDelegate {
     private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
@@ -65,6 +70,11 @@ final class FileCellView: NSTableCellView {
         }
     }
     private var badgeClick: NSClickGestureRecognizer?
+    /// 名前の欄の「持ち主/リポジトリ」を押したときに開くページ
+    private var repositoryURL: URL?
+    private var repositoryClick: NSClickGestureRecognizer?
+    /// 「持ち主/リポジトリ」の後ろに敷く、ボタンらしい角丸の背景
+    private var repositoryPill: NSView?
 
     init(column: FileColumn) {
         self.column = column
@@ -102,6 +112,17 @@ final class FileCellView: NSTableCellView {
             click.isEnabled = false
             badge.addGestureRecognizer(click)
             badgeClick = click
+            // 「持ち主/リポジトリ」を押したときだけ受け取る（ほかの所のクリックは行の選択のまま）
+            let repoClick = NSClickGestureRecognizer(target: self, action: #selector(repositoryClicked(_:)))
+            repoClick.delegate = self
+            label.addGestureRecognizer(repoClick)
+            repositoryClick = repoClick
+            let pill = NSView()
+            pill.wantsLayer = true
+            pill.layer?.cornerRadius = 4
+            pill.isHidden = true
+            addSubview(pill, positioned: .below, relativeTo: label)
+            repositoryPill = pill
             constraints.removeAll { $0.firstAnchor == label.trailingAnchor }
             constraints += [
                 badge.centerYAnchor.constraint(equalTo: centerYAnchor),
@@ -192,7 +213,97 @@ final class FileCellView: NSTableCellView {
         onBadgeClick?()
     }
 
+    @objc private func repositoryClicked(_ sender: NSClickGestureRecognizer) {
+        guard let repositoryURL else { return }
+        NSWorkspace.shared.open(repositoryURL)
+    }
+
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: NSGestureRecognizer) -> Bool {
+        guard gestureRecognizer === repositoryClick, let textField, let rect = repositoryLinkRect() else { return false }
+        return rect.contains(gestureRecognizer.location(in: textField))
+    }
+
+    /// 名前の欄のうち「持ち主/リポジトリ」が描かれている範囲（欄の座標）。見えていなければ nil
+    func repositoryLinkRect() -> NSRect? {
+        guard repositoryURL != nil, let textField, !isEditingName else { return nil }
+        let text = textField.attributedStringValue
+        var range = NSRange(location: NSNotFound, length: 0)
+        text.enumerateAttribute(.repositoryLink, in: NSRange(location: 0, length: text.length)) { value, found, stop in
+            if value != nil { range = found; stop.pointee = true }
+        }
+        guard range.location != NSNotFound else { return nil }
+        // 欄と同じ条件（1行・はみ出したら省略）で並べて、その部分の位置を求める
+        let storage = NSTextStorage(attributedString: text)
+        let layout = NSLayoutManager()
+        let container = NSTextContainer(size: NSSize(width: max(textField.bounds.width - 4, 1), height: 1000))
+        container.maximumNumberOfLines = 1
+        container.lineBreakMode = .byTruncatingTail
+        container.lineFragmentPadding = 0
+        layout.addTextContainer(container)
+        storage.addLayoutManager(layout)
+        layout.ensureLayout(for: container)
+        let glyphs = layout.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+        var rect = layout.boundingRect(forGlyphRange: glyphs, in: container)
+        // 省略されて見えない部分は除く
+        let used = layout.usedRect(for: container)
+        rect = rect.intersection(used)
+        guard rect.width > 4 else { return nil }
+        // 欄の中の文字の位置に合わせる（左の余白 2pt、上下は欄いっぱい）
+        return NSRect(x: rect.minX + 2, y: 0, width: rect.width, height: textField.bounds.height)
+    }
+
+    override func layout() {
+        super.layout()
+        updateRepositoryPill()
+    }
+
+    private func updateRepositoryPill() {
+        guard let pill = repositoryPill else { return }
+        guard let textField, let rect = repositoryLinkRect() else {
+            pill.isHidden = true
+            return
+        }
+        let frame = convert(rect, from: textField)
+        pill.frame = NSRect(x: frame.minX - 4, y: frame.midY - 9, width: frame.width + 7, height: 18)
+        pill.layer?.backgroundColor = NSColor.labelColor.withAlphaComponent(0.07).cgColor
+        pill.isHidden = false
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        updateRepositoryPill()
+    }
+
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        if let textField, let rect = repositoryLinkRect() {
+            addCursorRect(convert(rect, from: textField), cursor: .pointingHand)
+        }
+    }
+
     /// 「  ⎇ main」（ブランチの印とブランチ名。小さく、アクセントの色で）
+    /// ブランチ名の後ろに添える「持ち主/リポジトリ」（リモートがあるとき）
+    static func repositoryText(_ webURL: URL?, paragraph: NSParagraphStyle) -> NSAttributedString {
+        guard let webURL, let name = GitRepository.repositoryName(of: webURL) else { return NSAttributedString() }
+        let color = NSColor.secondaryLabelColor
+        let font = NSFont.systemFont(ofSize: 11)
+        let text = NSMutableAttributedString(string: "  ", attributes: [.font: font])
+        if let symbol = NSImage(systemSymbolName: "shippingbox", accessibilityDescription: "リポジトリ")?
+            .withSymbolConfiguration(.init(pointSize: 10, weight: .regular).applying(.init(paletteColors: [color]))) {
+            let attachment = NSTextAttachment()
+            attachment.image = symbol
+            attachment.bounds = NSRect(x: 0, y: -1, width: symbol.size.width, height: symbol.size.height)
+            text.append(NSAttributedString(attachment: attachment))
+            text.append(NSAttributedString(string: " ", attributes: [.font: font]))
+        }
+        text.append(NSAttributedString(string: name, attributes: [
+            .font: font, .foregroundColor: color, .paragraphStyle: paragraph,
+        ]))
+        // 先頭の空白を除いた「印と名前」を押せる部分にする
+        text.addAttribute(.repositoryLink, value: webURL, range: NSRange(location: 2, length: text.length - 2))
+        return text
+    }
+
     static func branchText(_ branch: String, paragraph: NSParagraphStyle) -> NSAttributedString {
         let color = NSColor.controlAccentColor
         let font = NSFont.systemFont(ofSize: 11, weight: .medium)
@@ -214,6 +325,7 @@ final class FileCellView: NSTableCellView {
     func configure(with node: FileNode, gitStatus: GitFileStatus? = nil, tags: [Tag] = [], folderColor: String? = nil, showsLocation: Bool = false) {
         if isEditingName { endEditing() }
         let entry = node.entry
+        repositoryURL = column == .name ? entry.gitRemoteWebURL : nil
         switch column {
         case .name:
             textField?.attributedStringValue = NSAttributedString(string: "")
@@ -253,6 +365,7 @@ final class FileCellView: NSTableCellView {
                 .paragraphStyle: paragraph,
             ])
             text.append(Self.branchText(branch, paragraph: paragraph))
+            text.append(Self.repositoryText(entry.gitRemoteWebURL, paragraph: paragraph))
             textField?.attributedStringValue = text
             if badge?.toolTip == nil { badge?.toolTip = "Git リポジトリ（ブランチ \(branch.isEmpty ? "不明" : branch)）" }
         }
@@ -270,7 +383,10 @@ final class FileCellView: NSTableCellView {
                 string: "  " + PathCompletion.abbreviate(entry.url.deletingLastPathComponent().path),
                 attributes: [.foregroundColor: NSColor.secondaryLabelColor, .font: NSFont.systemFont(ofSize: 11), .paragraphStyle: paragraph]
             ))
-            if let branch = entry.gitBranch { text.append(Self.branchText(branch, paragraph: paragraph)) }
+            if let branch = entry.gitBranch {
+                text.append(Self.branchText(branch, paragraph: paragraph))
+                text.append(Self.repositoryText(entry.gitRemoteWebURL, paragraph: paragraph))
+            }
             textField?.attributedStringValue = text
         }
         // VoiceOver で Git の状態も読み上げる（要件 9.3）
@@ -280,6 +396,8 @@ final class FileCellView: NSTableCellView {
         }
         // 隠しファイルは Finder と同じく薄く表示する
         alphaValue = entry.isHidden ? 0.5 : 1
-        toolTip = column == .name ? entry.path : nil
+        toolTip = column == .name ? [entry.path, entry.gitRemoteWebURL.map { "リポジトリ名を押すと開く: \($0.absoluteString)" }].compactMap { $0 }.joined(separator: "\n") : nil
+        window?.invalidateCursorRects(for: self)
+        needsLayout = true
     }
 }
