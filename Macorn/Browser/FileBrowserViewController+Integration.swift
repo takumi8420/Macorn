@@ -41,6 +41,30 @@ extension FileBrowserViewController {
         ChangesWindowController.show(root: root)
     }
 
+    /// 選んでいる項目の差分を、変更のウィンドウで見る（変更のあるファイル、または変更を含むフォルダ）
+    @objc func showSelectionDiff(_ sender: Any?) {
+        guard selectedNodes.count == 1 else { return }
+        showDiff(for: selectedNodes[0])
+    }
+
+    /// node に変更があれば、変更のウィンドウをその項目を選んで開く
+    func showDiff(for node: FileNode) {
+        guard let snapshot = gitSnapshot, let relative = Self.diffPath(of: node, in: snapshot) else {
+            NSSound.beep()
+            return
+        }
+        ChangesWindowController.show(root: snapshot.root, selecting: relative)
+    }
+
+    /// 差分を見られる項目なら、リポジトリのルートからの相対パス
+    static func diffPath(of node: FileNode, in snapshot: GitSnapshot) -> String? {
+        guard let status = snapshot.status(for: node.url), status != .ignored else { return nil }
+        let path = comparablePath(node.url)
+        let root = comparablePath(snapshot.root)
+        guard path.hasPrefix(root + "/") else { return nil }
+        return String(path.dropFirst(root.count + 1))
+    }
+
     @objc func copyPath(_ sender: Any?) { copyPaths(.full) }
     @objc func copyTildePath(_ sender: Any?) { copyPaths(.tilde) }
     @objc func copyRelativePath(_ sender: Any?) { copyPaths(.relativeToRepository) }
@@ -56,6 +80,9 @@ extension FileBrowserViewController {
             return TerminalLauncher.selected != nil && terminalFolder.isFileURL
         case #selector(openInEditor(_:)):
             return EditorLauncher.selected != nil && !targetURLs.isEmpty
+        case #selector(showSelectionDiff(_:)):
+            guard let snapshot = gitSnapshot, selectedNodes.count == 1 else { return false }
+            return Self.diffPath(of: selectedNodes[0], in: snapshot) != nil
         case #selector(openRepositoryInEditor(_:)), #selector(copyRelativePath(_:)), #selector(showChanges(_:)):
             return gitSnapshot != nil
         case #selector(copyPath(_:)), #selector(copyTildePath(_:)), #selector(copyShellQuotedPath(_:)):
@@ -85,6 +112,7 @@ extension FileBrowserViewController {
             if folder.path == state.currentURL.path, snapshot != gitSnapshot {
                 gitSnapshot = snapshot
                 state.gitBranch = snapshot?.branch
+                state.gitRepositoryRoot = snapshot?.root
                 state.gitChangeCount = snapshot?.changeCount ?? 0
                 reloadVisibleRows()
             }

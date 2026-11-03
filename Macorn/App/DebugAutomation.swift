@@ -411,6 +411,49 @@ enum DebugAutomation {
             if let root = browser.gitSnapshot?.root ?? GitRepository.root(containing: browser.state.currentURL) {
                 ChangesWindowController.show(root: root, activate: false)
             }
+        case "filediff":
+            // 一覧で選んでいる項目の差分を、キーにせずに開く
+            if let snapshot = browser.gitSnapshot, let node = browser.selectedNodes.first,
+               let relative = FileBrowserViewController.diffPath(of: node, in: snapshot) {
+                ChangesWindowController.show(root: snapshot.root, selecting: relative, activate: false)
+            } else {
+                print("[debug] filediff unavailable")
+            }
+        case "terminal":
+            // 内蔵ターミナルを出す（キーにはしない）
+            controller.workspace.showTerminal(in: browser.state.currentURL)
+        case "termtype":
+            controller.workspace.terminal.debugSend(argument)
+        case "termdump":
+            let terminal = controller.workspace.terminal.emulator
+            print("[debug] term visible=\(controller.workspace.isTerminalVisible) running=\(controller.workspace.terminal.isRunning) size=\(terminal.columns)x\(terminal.rows) cursor=\(terminal.cursorX),\(terminal.cursorY) alt=\(terminal.isAlternateScreen) dir=\(terminal.reportedDirectory ?? "-")")
+            for (index, line) in terminal.screenText.enumerated() where !line.isEmpty { print("[debug] term \(index): \(line)") }
+            print("[debug] term layout \(controller.workspace.terminal.debugLayout)")
+        case "termkey":
+            // キーボードから打ったのと同じ経路（keyDown → 日本語入力の仕組み）で文字を送る。最後に Return
+            let view = controller.workspace.terminal.terminalView!
+            let window = view.window
+            for character in argument + "\r" {
+                let text = String(character)
+                let keyCode: UInt16 = text == "\r" ? 36 : 0
+                if let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+                                                windowNumber: window?.windowNumber ?? 0, context: nil,
+                                                characters: text, charactersIgnoringModifiers: text,
+                                                isARepeat: false, keyCode: keyCode) {
+                    view.keyDown(with: event)
+                }
+            }
+        case "termbutton":
+            // ステータスバーのターミナルのボタンを押したのと同じ
+            ActionRouter.send(#selector(BrowserWindowController.toggleTerminalPanel(_:)), in: controller.window)
+            print("[debug] term button visible=\(controller.workspace.isTerminalVisible) paneState=\(controller.panes.panes.map(\.state.isTerminalVisible))")
+        case "termpos":
+            // termpos:bottom|left|right
+            if let position = TerminalPosition(rawValue: argument) { controller.workspace.move(to: position) }
+            let split = controller.workspace.splitView
+            print("[debug] term pos=\(controller.workspace.position) vertical=\(split.isVertical) visible=\(controller.workspace.isTerminalVisible) running=\(controller.workspace.terminal.isRunning) frames=\(split.arrangedSubviews.map { "\($0.frame)" }) termFrame=\(controller.workspace.terminal.view.frame)")
+        case "termhide":
+            controller.workspace.hideTerminal()
         case "changeselect":
             ChangesWindowController.open.first?.model.select(argument)
         case "changesinfo":
@@ -424,7 +467,7 @@ enum DebugAutomation {
         case "closechanges":
             ChangesWindowController.open.forEach { $0.close() }
         case "dividerhit":
-            // 区切り線の近くを押したとき、区切り線が反応するか（-6〜+6 ポイント）
+            // 区切り線の近くを押したとき、区切り線が反応するか（-14〜+6 ポイント）
             if let content = controller.window?.contentView {
                 for split in content.allDescendants(of: NSSplitView.self) where !split.isHidden {
                     let visible = split.arrangedSubviews.filter { !$0.isHidden }
@@ -433,7 +476,7 @@ enum DebugAutomation {
                         let a = visible[index].frame
                         let center = split.isVertical ? NSPoint(x: a.maxX + split.dividerThickness / 2, y: split.bounds.midY)
                                                       : NSPoint(x: split.bounds.midX, y: a.maxY + split.dividerThickness / 2)
-                        let hits = (-6...6).map { offset -> String in
+                        let hits = (-14...6).map { offset -> String in
                             let local = split.isVertical ? NSPoint(x: center.x + CGFloat(offset), y: center.y) : NSPoint(x: center.x, y: center.y + CGFloat(offset))
                             let point = split.superview!.convert(local, from: split)
                             return split.hitTest(point) === split ? "■" : "·"

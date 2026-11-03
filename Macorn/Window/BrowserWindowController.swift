@@ -22,6 +22,8 @@ final class BrowserWindowController: NSWindowController {
     static let tabbingIdentifier = "macorn.browser"
 
     let panes: PaneContainerViewController
+    /// 画面と、その下の内蔵ターミナル
+    let workspace: WorkspaceSplitViewController
     weak var appDelegate: BrowserWindowControllerDelegate?
     private let textUndoManager = UndoManager()
 
@@ -34,6 +36,7 @@ final class BrowserWindowController: NSWindowController {
 
     init(layout: PaneLayout) {
         panes = PaneContainerViewController(layout: layout)
+        workspace = WorkspaceSplitViewController(panes: panes)
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1000, height: 640),
@@ -55,6 +58,7 @@ final class BrowserWindowController: NSWindowController {
         panes.onActivePaneChanged = { [weak self] in
             guard let self else { return }
             updateTitle(for: browser.state.currentURL)
+            syncTerminalState()
         }
         window.delegate = self
 
@@ -72,7 +76,7 @@ final class BrowserWindowController: NSWindowController {
         sidebarItem.minimumThickness = 160
         sidebarItem.maximumThickness = 320
         sidebarItem.canCollapse = true
-        let contentItem = NSSplitViewItem(viewController: panes)
+        let contentItem = NSSplitViewItem(viewController: workspace)
         contentItem.minimumThickness = 360
         splitViewController.addSplitViewItem(sidebarItem)
         splitViewController.addSplitViewItem(contentItem)
@@ -88,6 +92,11 @@ final class BrowserWindowController: NSWindowController {
         window.toolbar = toolbar
 
         updateTitle(for: browser.state.currentURL)
+        workspace.terminal.onClose = { [weak self] in self?.hideTerminal() }
+        workspace.terminal.folderProvider = { [weak self] in
+            guard let url = self?.browser.state.currentURL, url.isFileURL else { return FileManager.default.homeDirectoryForCurrentUser }
+            return url
+        }
     }
 
     @available(*, unavailable)
@@ -100,6 +109,53 @@ final class BrowserWindowController: NSWindowController {
         window.title = TagLocation.displayName(for: url)
         window.representedURL = url.isFileURL ? url : nil
         window.toolbar?.validateVisibleItems()
+        // 内蔵ターミナルも、表示中のフォルダへ追いかける
+        workspace.terminal.follow(url)
+    }
+
+    // MARK: - 内蔵ターミナル（要件 T-30）
+
+    /// ⌃`: ターミナルを出す。出ていてフォーカスがあれば隠し、フォーカスがなければターミナルへ移る
+    @objc func toggleTerminal(_ sender: Any?) {
+        if workspace.isTerminalVisible {
+            if workspace.terminal.hasFocus {
+                hideTerminal()
+            } else {
+                workspace.terminal.focus()
+            }
+        } else {
+            let folder = browser.state.currentURL.isFileURL ? browser.state.currentURL : FileManager.default.homeDirectoryForCurrentUser
+            workspace.showTerminal(in: folder)
+        }
+        syncTerminalState()
+    }
+
+    /// 表示 › ターミナルの位置
+    @objc func placeTerminalAtBottom(_ sender: Any?) { workspace.move(to: .bottom) }
+    @objc func placeTerminalAtLeft(_ sender: Any?) { workspace.move(to: .left) }
+    @objc func placeTerminalAtRight(_ sender: Any?) { workspace.move(to: .right) }
+
+    /// ステータスバーのボタン: 出ていれば隠し、出ていなければ出す（フォーカスの有無にかかわらず）
+    @objc func toggleTerminalPanel(_ sender: Any?) {
+        if workspace.isTerminalVisible {
+            hideTerminal()
+        } else {
+            toggleTerminal(sender)
+        }
+    }
+
+    private func hideTerminal() {
+        workspace.hideTerminal()
+        window?.makeFirstResponder(browser.outlineView)
+        syncTerminalState()
+    }
+
+    /// ステータスバーのターミナルのボタンの見た目を、出しているかどうかに合わせる
+    private func syncTerminalState() {
+        let visible = workspace.isTerminalVisible
+        for pane in panes.panes where pane.state.isTerminalVisible != visible {
+            pane.state.isTerminalVisible = visible
+        }
     }
 
     // MARK: - メニュー・ツールバーの操作
@@ -243,6 +299,17 @@ extension BrowserWindowController: NSMenuItemValidation, NSToolbarItemValidation
         if menuItem.action == #selector(toggleSplit(_:)) {
             menuItem.state = panes.isSplit ? .on : .off
         }
+        if menuItem.action == #selector(toggleTerminal(_:)) {
+            menuItem.state = workspace.isTerminalVisible ? .on : .off
+        }
+        let positions: [Selector: TerminalPosition] = [
+            #selector(placeTerminalAtBottom(_:)): .bottom,
+            #selector(placeTerminalAtLeft(_:)): .left,
+            #selector(placeTerminalAtRight(_:)): .right,
+        ]
+        if let action = menuItem.action, let position = positions[action] {
+            menuItem.state = workspace.position == position ? .on : .off
+        }
         if menuItem.action == #selector(addToSidebar(_:)) {
             let targets = favoriteTargets
             menuItem.title = !targets.isEmpty && targets.allSatisfy(SidebarStore.shared.containsFavorite) ? "お気に入りから外す" : "お気に入りに追加"
@@ -288,6 +355,7 @@ extension BrowserWindowController: NSWindowDelegate {
 
     func windowWillClose(_ notification: Notification) {
         panes.panes.forEach { $0.tearDown() }
+        workspace.terminal.tearDown()
         appDelegate?.windowControllerDidClose(self)
     }
 

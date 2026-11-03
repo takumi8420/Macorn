@@ -11,7 +11,8 @@ final class ChangesWindowController: NSWindowController, NSWindowDelegate {
     /// root のリポジトリの変更のウィンドウを開く（開いていれば前に出して読み直す）。
     /// activate が false のときはキーにしない（自動操作用）
     @discardableResult
-    static func show(root: URL, activate: Bool = true) -> ChangesWindowController {
+    /// selecting にリポジトリのルートからの相対パスを渡すと、そのファイル（フォルダならその中の最初の変更）を選んで開く
+    static func show(root: URL, selecting: String? = nil, activate: Bool = true) -> ChangesWindowController {
         let key = root.standardizedFileURL.path
         let controller = controllers[key] ?? ChangesWindowController(root: root)
         controllers[key] = controller
@@ -20,7 +21,7 @@ final class ChangesWindowController: NSWindowController, NSWindowDelegate {
         } else {
             controller.window?.orderFront(nil)
         }
-        controller.model.reload()
+        controller.model.reload(selecting: selecting)
         return controller
     }
 
@@ -84,7 +85,7 @@ final class ChangesModel {
         changes.first { $0.path == selectedPath }
     }
 
-    func reload() {
+    func reload(selecting preferred: String? = nil) {
         let token = UUID()
         reloadToken = token
         isLoading = true
@@ -98,6 +99,11 @@ final class ChangesModel {
             failed = result.0 == nil
             changes = result.0 ?? []
             branch = result.1
+            // 一覧から開いたファイルがあればそれを選ぶ
+            if let preferred,
+               let match = changes.first(where: { $0.path == preferred || $0.path.hasPrefix(preferred + "/") }) {
+                selectedPath = match.path
+            }
             // 選んでいたファイルが残っていればそのまま、なければ先頭を選ぶ
             if selectedPath == nil || !changes.contains(where: { $0.path == selectedPath }) {
                 selectedPath = changes.first?.path

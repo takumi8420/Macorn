@@ -110,6 +110,34 @@ nonisolated enum GitRepository {
         }
     }
 
+    /// folder がリポジトリのルート（中に .git がある）なら、今のブランチ名。git を起動せず HEAD を直接読む（一覧の各フォルダに使うため）。
+    /// ブランチにいないときは「(1a2b3c4)」のようにコミットの先頭 7 文字
+    static func headBranch(ofRepositoryAt folder: URL) -> String? {
+        let dotGit = folder.appendingPathComponent(".git")
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: dotGit.path, isDirectory: &isDirectory) else { return nil }
+        var gitDir = dotGit
+        if !isDirectory.boolValue {
+            // worktree・submodule は「gitdir: <場所>」と書かれたファイル
+            guard let text = try? String(contentsOf: dotGit, encoding: .utf8),
+                  let line = text.split(separator: "\n").first, line.hasPrefix("gitdir:") else { return "" }
+            let path = line.dropFirst("gitdir:".count).trimmingCharacters(in: .whitespaces)
+            gitDir = path.hasPrefix("/") ? URL(fileURLWithPath: path) : folder.appendingPathComponent(path)
+        }
+        guard let head = try? String(contentsOf: gitDir.appendingPathComponent("HEAD"), encoding: .utf8) else { return "" }
+        return branchName(fromHEAD: head)
+    }
+
+    /// HEAD の中身「ref: refs/heads/main」→「main」、コミットの番号だけなら「(1a2b3c4)」
+    static func branchName(fromHEAD head: String) -> String {
+        let text = head.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.hasPrefix("ref:") {
+            let ref = text.dropFirst(4).trimmingCharacters(in: .whitespaces)
+            return ref.hasPrefix("refs/heads/") ? String(ref.dropFirst("refs/heads/".count)) : ref
+        }
+        return text.isEmpty ? "" : "(\(text.prefix(7)))"
+    }
+
     static func snapshot(root: URL) -> GitSnapshot? {
         guard let output = run(["-C", root.path, "status", "--porcelain=v1", "-z", "--branch", "--ignored"]) else {
             return nil

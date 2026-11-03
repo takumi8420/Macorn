@@ -15,6 +15,8 @@ nonisolated struct FileEntry: Sendable, Hashable {
     let kind: String
     /// タグ別に並べるときの基準（付いているタグのうち名前の順で最初のもの）。タグが無ければ nil
     var tagSortKey: String? = nil
+    /// Git リポジトリのフォルダ（中に .git がある）なら、今のブランチ名。読めなければ空文字
+    var gitBranch: String? = nil
 
     var path: String { url.path }
 }
@@ -75,7 +77,8 @@ nonisolated enum DirectoryReader {
             isSymbolicLink: isSymbolicLink,
             size: size,
             dateModified: values?.contentModificationDate,
-            kind: values?.localizedTypeDescription ?? ""
+            kind: values?.localizedTypeDescription ?? "",
+            gitBranch: isDirectory && !isPackage ? GitRepository.headBranch(ofRepositoryAt: url) : nil
         )
     }
 

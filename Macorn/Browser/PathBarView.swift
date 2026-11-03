@@ -128,6 +128,7 @@ struct PathBarView: View {
                     BreadcrumbButton(
                         url: url,
                         isCurrent: index == components.count - 1,
+                        branch: state.gitRepositoryRoot?.standardizedFileURL.path == url.path ? state.gitBranch : nil,
                         navigate: actions.navigate,
                         beginEditing: startEditing
                     )
@@ -202,6 +203,8 @@ private struct ClosePaneButton: View {
 private struct BreadcrumbButton: View {
     let url: URL
     let isCurrent: Bool
+    /// この階層が Git リポジトリのルートなら、そのブランチ名
+    var branch: String? = nil
     let navigate: (URL) -> Void
     /// 今いるフォルダ（いちばん右）をクリックしたら、移動の代わりにパスの入力にする
     let beginEditing: () -> Void
@@ -219,6 +222,19 @@ private struct BreadcrumbButton: View {
                 Text(Self.name(for: url))
                     .fontWeight(isCurrent ? .semibold : .regular)
                     .lineLimit(1)
+                if let branch {
+                    // リポジトリのルートに、ブランチ名の小さな札を付ける
+                    HStack(spacing: 2) {
+                        Image(systemName: "arrow.triangle.branch")
+                        Text(branch).lineLimit(1)
+                    }
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(Color.accentColor)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(Capsule().fill(Color.accentColor.opacity(0.14)))
+                    .help("Git リポジトリ「\(Self.name(for: url))」・ブランチ \(branch)")
+                }
             }
             .padding(.horizontal, 5)
             .padding(.vertical, 2)

@@ -58,6 +58,13 @@ final class FileCellView: NSTableCellView {
     private let column: FileColumn
     /// Git の状態の印（名前の列の右端）
     private var badge: NSTextField?
+    /// Git の印を押したとき（差分を開く）。nil なら押せない
+    var onBadgeClick: (() -> Void)? {
+        didSet {
+            badgeClick?.isEnabled = onBadgeClick != nil
+        }
+    }
+    private var badgeClick: NSClickGestureRecognizer?
 
     init(column: FileColumn) {
         self.column = column
@@ -91,6 +98,10 @@ final class FileCellView: NSTableCellView {
             badge.setContentHuggingPriority(.required, for: .horizontal)
             addSubview(badge)
             self.badge = badge
+            let click = NSClickGestureRecognizer(target: self, action: #selector(badgeClicked(_:)))
+            click.isEnabled = false
+            badge.addGestureRecognizer(click)
+            badgeClick = click
             constraints.removeAll { $0.firstAnchor == label.trailingAnchor }
             constraints += [
                 badge.centerYAnchor.constraint(equalTo: centerYAnchor),
@@ -177,6 +188,29 @@ final class FileCellView: NSTableCellView {
         textField.delegate = nil
     }
 
+    @objc private func badgeClicked(_ sender: Any?) {
+        onBadgeClick?()
+    }
+
+    /// 「  ⎇ main」（ブランチの印とブランチ名。小さく、アクセントの色で）
+    static func branchText(_ branch: String, paragraph: NSParagraphStyle) -> NSAttributedString {
+        let color = NSColor.controlAccentColor
+        let font = NSFont.systemFont(ofSize: 11, weight: .medium)
+        let text = NSMutableAttributedString(string: "  ", attributes: [.font: font])
+        if let symbol = NSImage(systemSymbolName: "arrow.triangle.branch", accessibilityDescription: "ブランチ")?
+            .withSymbolConfiguration(.init(pointSize: 10, weight: .semibold).applying(.init(paletteColors: [color]))) {
+            let attachment = NSTextAttachment()
+            attachment.image = symbol
+            attachment.bounds = NSRect(x: 0, y: -1, width: symbol.size.width, height: symbol.size.height)
+            text.append(NSAttributedString(attachment: attachment))
+            text.append(NSAttributedString(string: " ", attributes: [.font: font]))
+        }
+        text.append(NSAttributedString(string: branch.isEmpty ? "git" : branch, attributes: [
+            .font: font, .foregroundColor: color, .paragraphStyle: paragraph,
+        ]))
+        return text
+    }
+
     func configure(with node: FileNode, gitStatus: GitFileStatus? = nil, tags: [Tag] = [], folderColor: String? = nil, showsLocation: Bool = false) {
         if isEditingName { endEditing() }
         let entry = node.entry
@@ -209,6 +243,19 @@ final class FileCellView: NSTableCellView {
             textField?.attributedStringValue = Self.tagText(tags)
             toolTip = tags.isEmpty ? nil : tags.map(\.name).joined(separator: "、")
         }
+        // Git リポジトリのフォルダは、名前の後ろにブランチ名を添える（リポジトリだと分かるように）
+        if column == .name, !showsLocation, let branch = entry.gitBranch {
+            let paragraph = NSMutableParagraphStyle()
+            paragraph.lineBreakMode = .byTruncatingTail
+            let text = NSMutableAttributedString(string: entry.name, attributes: [
+                .font: NSFont.systemFont(ofSize: NSFont.systemFontSize),
+                .foregroundColor: textField?.textColor ?? .labelColor,
+                .paragraphStyle: paragraph,
+            ])
+            text.append(Self.branchText(branch, paragraph: paragraph))
+            textField?.attributedStringValue = text
+            if badge?.toolTip == nil { badge?.toolTip = "Git リポジトリ（ブランチ \(branch.isEmpty ? "不明" : branch)）" }
+        }
         // タグの一覧では、いろいろなフォルダの項目が並ぶので、名前の後ろに場所を添える
         if column == .name, showsLocation {
             // 1行に収め、はみ出したら場所の方（後ろ）を省略する
@@ -223,6 +270,7 @@ final class FileCellView: NSTableCellView {
                 string: "  " + PathCompletion.abbreviate(entry.url.deletingLastPathComponent().path),
                 attributes: [.foregroundColor: NSColor.secondaryLabelColor, .font: NSFont.systemFont(ofSize: 11), .paragraphStyle: paragraph]
             ))
+            if let branch = entry.gitBranch { text.append(Self.branchText(branch, paragraph: paragraph)) }
             textField?.attributedStringValue = text
         }
         // VoiceOver で Git の状態も読み上げる（要件 9.3）

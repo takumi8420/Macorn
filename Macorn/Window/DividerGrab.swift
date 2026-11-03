@@ -6,8 +6,17 @@ enum DividerGrab {
     /// 線の両側に足す幅（ポイント）
     static let margin: CGFloat = 4
 
-    static func rect(_ rect: NSRect, vertical: Bool) -> NSRect {
-        vertical ? rect.insetBy(dx: -margin, dy: 0) : rect.insetBy(dx: 0, dy: -margin)
+    /// leading は線の左（上）側、trailing は右（下）側に足す幅
+    static func rect(_ rect: NSRect, vertical: Bool, leading: CGFloat = margin, trailing: CGFloat = margin) -> NSRect {
+        var result = rect
+        if vertical {
+            result.origin.x -= leading
+            result.size.width += leading + trailing
+        } else {
+            result.origin.y -= leading
+            result.size.height += leading + trailing
+        }
+        return result
     }
 }
 

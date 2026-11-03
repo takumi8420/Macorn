@@ -72,9 +72,9 @@ extension FileBrowserViewController: NSSplitViewDelegate {
 
     // MARK: - 一覧とプレビューの境目
 
-    /// 一覧とプレビューの区切り線を掴みやすくする
+    /// 一覧とプレビューの区切り線を掴みやすくする。一覧の右の余白（行が終わってから線までの帯）も掴めるようにする
     func splitView(_ splitView: NSSplitView, effectiveRect proposedEffectiveRect: NSRect, forDrawnRect drawnRect: NSRect, ofDividerAt dividerIndex: Int) -> NSRect {
-        DividerGrab.rect(proposedEffectiveRect, vertical: splitView.isVertical)
+        DividerGrab.rect(proposedEffectiveRect, vertical: splitView.isVertical, leading: Self.listInset + 2)
     }
 
     func splitView(_ splitView: NSSplitView, constrainMinCoordinate proposedMinimumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {

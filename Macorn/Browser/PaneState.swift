@@ -22,6 +22,10 @@ final class PaneState {
     var isInSplit = false
     /// Git リポジトリの中ならブランチ名（要件 T-20）
     var gitBranch: String?
+    /// 表示中のフォルダを含む Git リポジトリのルート
+    var gitRepositoryRoot: URL?
+    /// ウィンドウの下に内蔵ターミナルを出しているか（ステータスバーのボタンの見た目用）
+    var isTerminalVisible = false
     var gitChangeCount = 0
     /// 絞り込み（要件 S-04）
     var isFiltering = false

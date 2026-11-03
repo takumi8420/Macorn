@@ -87,7 +87,14 @@ final class FileBrowserViewController: NSViewController {
         let pathBar = NSHostingView(rootView: PathBarView(state: state, actions: pathBarActions))
         pathBar.sizingOptions = []
         pathBarHost = pathBar
-        let statusBar = NSHostingView(rootView: StatusBarView(state: state, onShowChanges: { [weak self] in self?.showChanges(nil) }))
+        let statusBar = NSHostingView(rootView: StatusBarView(
+            state: state,
+            onShowChanges: { [weak self] in self?.showChanges(nil) },
+            onToggleTerminal: { [weak self] in
+                guard let window = self?.view.window else { return }
+                ActionRouter.send(#selector(BrowserWindowController.toggleTerminalPanel(_:)), in: window)
+            }
+        ))
         statusBar.sizingOptions = []
         let messageHost = NSHostingView(rootView: PaneMessageView(state: state, onOpenSettings: Self.openPrivacySettings))
         messageHost.sizingOptions = []
@@ -344,6 +351,7 @@ final class FileBrowserViewController: NSViewController {
         loadRoot()
         gitSnapshot = nil
         state.gitBranch = nil
+        state.gitRepositoryRoot = nil
         state.gitChangeCount = 0
         if url.isFileURL {
             startWatching()
@@ -752,6 +760,15 @@ extension FileBrowserViewController: NSOutlineViewDelegate {
             folderColor: column == .name && node.entry.isFolder ? TagStore.shared.folderColor(for: node.url) : nil,
             showsLocation: isTagView && node.parent === root
         )
+        // 名前の右の M・U などの印を押したら、その差分を開く
+        if column == .name, let snapshot = gitSnapshot, Self.diffPath(of: node, in: snapshot) != nil {
+            cell.onBadgeClick = { [weak self, weak node] in
+                guard let self, let node else { return }
+                self.showDiff(for: node)
+            }
+        } else {
+            cell.onBadgeClick = nil
+        }
         return cell
     }
 
@@ -846,6 +863,9 @@ extension FileBrowserViewController: NSMenuDelegate {
         }
 
         menu.addItem(tagMenuItem(for: urls))
+        if nodes.count == 1, let snapshot = gitSnapshot, Self.diffPath(of: nodes[0], in: snapshot) != nil {
+            menu.addItem(NSMenuItem(title: "差分を見る", action: #selector(showSelectionDiff(_:)), keyEquivalent: ""))
+        }
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "ゴミ箱に入れる", action: #selector(moveToTrash(_:)), keyEquivalent: ""))
         menu.addItem(.separator())

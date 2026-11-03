@@ -102,6 +102,7 @@ git add site && git commit -m "Macorn <バージョン> を公開する" && git 
 | `Macorn/Operations` | コピー・移動・ゴミ箱・名前変更などの実行と取り消し、進み具合の表示、クリップボード |
 | `Macorn/Preview` | ファイルのプレビュー（Markdown → HTML の変換、CSV → 表の変換と、Markdown・HTML・CSV・画像・PDF・動画・書類の表示） |
 | `Macorn/Palette` | コマンドパレット（あいまい検索・ローマ字・フォルダ履歴） |
+| `Macorn/Terminal` | 内蔵ターミナル（疑似端末・制御文字の読み取りと画面の中身・描画とキー入力・ウィンドウの下のパネル） |
 | `Macorn/Integration` | ターミナル・エディタ連携、パスのコピー、Git の状態と差分の読み取り |
 | `Macorn/Settings` | 設定ウィンドウ、ショートカットの変更、コマンドラインツール |
 | `Macorn/Sidebar` | サイドバー |

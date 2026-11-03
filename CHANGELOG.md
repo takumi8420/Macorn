@@ -6,6 +6,74 @@
 
 ## 2026-11-03
 
+### Macorn：バージョン 0.3.13 を LP で公開する
+
+- **きっかけ**：konta の依頼「0.3.13 で公開」（内蔵ターミナル、Git リポジトリの表示とファイルごとの差分、一覧とプレビューの区切り線の修正を手元で試し「特にないです」を受けて）
+- **意図・方針**：0.3.12 → 0.3.13（ビルド番号は 15 → 16）。`scripts/release.sh --publish` で署名・公証した DMG・LP の表記・`version.json` をまとめて差し替えた
+- 変更 `Macorn.xcodeproj/project.pbxproj` — `MARKETING_VERSION` を 0.3.13、`CURRENT_PROJECT_VERSION` を 16 に
+- 変更 `site/download/Macorn.dmg`、`site/index.html`、`site/version.json` — 0.3.13 の DMG・表記・最新版の情報
+
+### Macorn：内蔵ターミナルを下・左・右のどこにでも置けるようにする
+
+- **きっかけ**：konta の依頼（2026-11-03）「ターミナルを開く位置は左右下に柔軟に移動できるようにして欲しい」
+- **意図・方針**：画面とターミナルの分割の向きと順番を、置き場所に合わせて組み替える。動いているシェルはそのまま使い続ける。切り替えは、ターミナルのヘッダーの置き場所のボタン（下・左・右のメニュー）と、表示 › ターミナルの位置（パレットからも呼べる）。選んだ場所は設定として覚えるが、開いているかどうかは覚えない（起動時はいつも閉じる、の前の依頼に合わせる）。左・右に置くとウィンドウの上端まで伸びてツールバーにヘッダーが隠れたので、ヘッダーはツールバーの下から始める
+- 変更 `Macorn/Terminal/TerminalPanelController.swift` — 置き場所（`TerminalPosition`）、ヘッダーの置き場所のボタン、置き場所に合わせた分割の組み替え
+- 変更 `Macorn/Model/Preferences.swift` — ターミナルの置き場所を覚える
+- 変更 `Macorn/Window/BrowserWindowController.swift`・`Macorn/App/MainMenu.swift`・`Macorn/Palette/CommandCatalog.swift` — 表示 › ターミナルの位置（下・左・右）
+- 変更 `Macorn/App/DebugAutomation.swift` — 確認用の手順 `termpos:bottom|left|right` を足す
+- 変更 `docs/REQUIREMENTS.md`（T-30）・`AGENTS.md`（確定している前提）
+
+### Macorn：ステータスバーのボタンで内蔵ターミナルを出し入れできるようにする
+
+- **きっかけ**：konta の依頼（2026-11-03、手元で試して）「下部の方のボタンを押して下に表示されるようにして欲しい」
+- **意図・方針**：⌃` を知らなくても使えるよう、各画面のステータスバーの左端に「ターミナル」ボタンを置いた。出しているときはアクセントの色で塗る。⌃` は「出ていてフォーカスがなければターミナルへ移る」動きだが、ボタンは押すたびに出す・隠すを切り替える（ボタンとして素直な動きにするため）
+- 変更 `Macorn/Browser/StatusBarView.swift`・`Macorn/Browser/PaneState.swift`・`Macorn/Browser/FileBrowserViewController.swift` — ステータスバーのターミナルのボタン
+- 変更 `Macorn/Window/BrowserWindowController.swift` — ボタン用の出し入れ（`toggleTerminalPanel`）と、ボタンの見た目を出しているかどうかに合わせる
+- 変更 `Macorn/App/DebugAutomation.swift` — 確認用の手順 `termbutton`・`termkey:文字`（キーボードと同じ経路で打つ）を足す。`termdump` に表示・起動の状態を出す
+- 変更 `docs/REQUIREMENTS.md`（T-30）・`AGENTS.md`（確定している前提）
+
+### Macorn：内蔵ターミナルに打ち込めないのを直し、起動時はしまっておく
+
+- **きっかけ**：konta の指摘（2026-11-03、手元で試して）「ターミナルに打ち込めないのと、ターミナルはデフォルトではしまっておいて欲しい」
+- **意図・方針**：ターミナルの開閉を分割の自動保存で覚えていたため、確認の自動操作で開いた状態が普段の設定に残り、起動時にパネルだけが開いていた。シェルは ⌃` で開いたときにしか起動しないので、開いて見えていても打ち込み先がなかった。開閉は覚えず起動時はいつも閉じておき、どんな開き方でも（区切り線を引き出したときも）パネルが出てきたらシェルを起動するようにした
+- 変更 `Macorn/Terminal/TerminalPanelController.swift` — 分割の自動保存をやめる。パネルが出てきたらシェルを起動する
+- 変更 `Macorn/Window/BrowserWindowController.swift` — シェルを起動するフォルダ（表示中のフォルダ）を渡す
+
+### Macorn：ウィンドウの下に出す内蔵ターミナルを自前で作る（最初の版）
+
+- **きっかけ**：konta の依頼（2026-11-03）「アプリの下の方で ghostty を開くこともできるようにして欲しい」→ libghostty と自前を比べたうえで「自前の内蔵ターミナルの実装は可能なのか」「お願いします」
+- **意図・方針**：Ghostty の画面は macOS の制約でほかのアプリに埋め込めない。libghostty は正式な API がなく、「外部ライブラリなし」の前提も変えることになるので、自前で作った（要件 T-30 の最初の版）。目標は「ファイル操作の流れで、すぐ下でコマンドを打てる」ことで、Ghostty ほどの速さや再現度は目指さない。疑似端末（`forkpty`）でログインシェルを動かし、xterm 互換の主な命令を自前で読む。日本語で使う前提なので、全角を 2 マスで扱い、結合文字・日本語入力（変換中の表示）にも対応した。Macorn で開いたフォルダへの自動の `cd` は、コマンドの実行中や打ちかけの入力があるときは送らない（邪魔をしないため）。アプリから起動すると LANG が無く日本語が化けることがあるので、無ければ ja_JP.UTF-8 を渡す。macOS 14 から自分の枠の外にも描けてしまうため、端末の画面は枠で切る（上のヘッダーが塗りつぶされていた）。マウス操作の受け渡しと、フォント・配色の設定は次の版に回す
+- 追加 `Macorn/Terminal/TerminalProcess.swift` — 疑似端末でシェルを動かし、入出力・大きさの通知・前面のプロセスの確認を行う
+- 追加 `Macorn/Terminal/TerminalEmulator.swift` — 制御文字の読み取りと、画面の中身（升目・流れた行・別画面・カーソル）
+- 追加 `Macorn/Terminal/TerminalView.swift` — 描画・キー入力・日本語入力・選択とコピー・貼り付け・スクロール・ファイルのドロップ
+- 追加 `Macorn/Terminal/TerminalPanelController.swift` — ウィンドウの下のパネル（ヘッダーに今のフォルダと閉じるボタン）と、画面とターミナルの上下の分割
+- 変更 `Macorn/Window/BrowserWindowController.swift`・`Macorn/App/MainMenu.swift`・`Macorn/Palette/CommandCatalog.swift` — 表示 › ターミナル（⌃`）、フォルダを移ったら追いかける、ウィンドウを閉じたらシェルを終える
+- 変更 `Macorn/App/DebugAutomation.swift` — 確認用の手順 `terminal`・`termtype:文字`・`termdump`・`termhide` を足す
+- 追加 `MacornTests/TerminalEmulatorTests.swift` — 文字・折り返し・カーソル移動・消去・色・全角・結合文字・UTF-8 の分割・別画面・スクロール範囲・挿入と削除・問い合わせ・題名とフォルダ・大きさの変更
+- 変更 `docs/REQUIREMENTS.md`（T-30）・`AGENTS.md`（確定している前提）・`README.md`（フォルダの役割）
+
+### Macorn：Git リポジトリのフォルダにブランチ名を出し、変更のあるファイルからその差分を開けるようにする
+
+- **きっかけ**：konta の依頼（2026-11-03）「git で管理されているフォルダに関しては、それがわかるようにして欲しい。どのブランチにいるのか、リポジトリ名がなんなのか表示して欲しい」「差分があるファイルに関しては、その差分も見れるような機能を実装して欲しい」
+- **意図・方針**：これまではリポジトリの中に入ったときだけ、ステータスバーにブランチ名が出ていた。一覧のどのフォルダがリポジトリかは分からなかった。一覧ではフォルダ名の後ろに「⎇ ブランチ名」をアクセントの色で添え、パスバーではリポジトリのルートの階層にブランチ名の札を付け、ステータスバーにはリポジトリ名も出す。一覧のフォルダごとに git を起動すると重いので、`.git/HEAD` を直接読む（worktree・submodule の `.git` ファイルにも対応）。差分は 2026-11-01 に作った差分のウィンドウ（ユーザーの選択で「専用のウィンドウ」）を、そのファイルを選んだ状態で開く。フォルダならその中の最初の変更を選ぶ
+- 変更 `Macorn/Integration/GitRepository.swift` — `.git/HEAD` からブランチ名を読む（`headBranch(ofRepositoryAt:)`）
+- 変更 `Macorn/Model/FileEntry.swift` — リポジトリのフォルダならブランチ名を持つ
+- 変更 `Macorn/Browser/FileCellView.swift` — フォルダ名の後ろにブランチ名を添える。Git の印を押せるようにする
+- 変更 `Macorn/Browser/PathBarView.swift`・`Macorn/Browser/StatusBarView.swift`・`Macorn/Browser/PaneState.swift` — パスバーのリポジトリのルートにブランチ名の札、ステータスバーにリポジトリ名
+- 変更 `Macorn/Browser/FileBrowserViewController.swift`・`Macorn/Browser/FileBrowserViewController+Integration.swift`・`Macorn/App/MainMenu.swift`・`Macorn/Palette/CommandCatalog.swift` — 右クリックの「差分を見る」、印のクリック、ファイル › 選んだ項目の差分を見る
+- 変更 `Macorn/Window/ChangesWindow.swift` — 開くときに選ぶファイルを渡せるようにする
+- 変更 `Macorn/App/DebugAutomation.swift` — 確認用の手順 `filediff` を足す
+- 変更 `MacornTests/GitDiffTests.swift` — HEAD の読み取りとリポジトリのフォルダの見分けのテスト
+- 変更 `docs/REQUIREMENTS.md`（T-20・T-23）・`AGENTS.md`（確定している前提）
+
+### Macorn：一覧とプレビューの区切り線を、一覧の右の余白からも掴めるようにする
+
+- **きっかけ**：konta の指摘（2026-11-03、0.3.12 の画面のスクリーンショットつき）「ファイル一覧とプレビューの divider も選択しにくい」
+- **意図・方針**：区切り線の両側 4 ポイントは掴めるようになっていたが、一覧には右に 10 ポイントの余白（`listInset`）があり、見た目の境目は行が終わってから線までの帯になっていた。その帯を押しても反応しなかったので、一覧側は余白ごと（10 ＋ 2 ポイント）掴めるようにした。プレビュー側は 4 ポイントのまま（プレビューの操作を邪魔しないように）
+- 変更 `Macorn/Window/DividerGrab.swift` — 線の左右（上下）で別々に掴める幅を足せるようにする
+- 変更 `Macorn/Browser/FileBrowserViewController+Preview.swift` — 一覧とプレビューの区切り線は、一覧側の余白も掴めるようにする
+- 変更 `Macorn/App/DebugAutomation.swift` — `dividerhit` で測る範囲を -14〜+6 ポイントに広げる
+
 ### Macorn：バージョン 0.3.12 を LP で公開する
 
 - **きっかけ**：konta の依頼「0.3.12 で公開」（区切り線を掴みやすくしたことと、ドラッグ＆ドロップが1回で効かなくなる不具合の修正を受けて）

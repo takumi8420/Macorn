@@ -25,6 +25,13 @@ enum Preferences {
         static let skippedUpdateVersion = "skippedUpdateVersion"
         static let suppressMoveToApplications = "suppressMoveToApplications"
         static let previousFileHandlers = "previousFileHandlers"
+        static let terminalPosition = "terminalPosition"
+    }
+
+    /// 内蔵ターミナルを置く場所（下・左・右）
+    static var terminalPosition: TerminalPosition {
+        get { defaults.string(forKey: Key.terminalPosition).flatMap(TerminalPosition.init(rawValue:)) ?? .bottom }
+        set { defaults.set(newValue.rawValue, forKey: Key.terminalPosition) }
     }
 
     private static var defaults: UserDefaults { AppDefaults.store }

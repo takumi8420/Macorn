@@ -100,3 +100,31 @@ struct GitDiffTests {
         #expect(diff.removedCount == 1)
     }
 }
+
+struct GitHeadTests {
+    @Test func readsBranchFromHEAD() {
+        #expect(GitRepository.branchName(fromHEAD: "ref: refs/heads/main\n") == "main")
+        #expect(GitRepository.branchName(fromHEAD: "ref: refs/heads/feature/login\n") == "feature/login")
+        #expect(GitRepository.branchName(fromHEAD: "1a2b3c4d5e6f7a8b9c0d\n") == "(1a2b3c4)")
+    }
+
+    @Test func detectsRepositoryFolders() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("macorn-head-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let repo = folder.appendingPathComponent("repo")
+        let plain = folder.appendingPathComponent("plain")
+        try FileManager.default.createDirectory(at: repo.appendingPathComponent(".git"), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: plain, withIntermediateDirectories: true)
+        try Data("ref: refs/heads/dev\n".utf8).write(to: repo.appendingPathComponent(".git/HEAD"))
+        // worktree のように .git がファイルのとき
+        let worktree = folder.appendingPathComponent("wt")
+        try FileManager.default.createDirectory(at: worktree, withIntermediateDirectories: true)
+        try Data("gitdir: ../repo/.git\n".utf8).write(to: worktree.appendingPathComponent(".git"))
+
+        #expect(GitRepository.headBranch(ofRepositoryAt: repo) == "dev")
+        #expect(GitRepository.headBranch(ofRepositoryAt: plain) == nil)
+        #expect(GitRepository.headBranch(ofRepositoryAt: worktree) == "dev")
+        #expect(DirectoryReader.entry(for: repo).gitBranch == "dev")
+        #expect(DirectoryReader.entry(for: plain).gitBranch == nil)
+    }
+}
