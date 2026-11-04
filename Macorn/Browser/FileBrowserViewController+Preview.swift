@@ -97,9 +97,20 @@ extension FileBrowserViewController: NSSplitViewDelegate {
     func setListCollapsed(_ collapsed: Bool) {
         guard collapsed != isListCollapsed else { return }
         guard !collapsed || isFilePreviewVisible else { return }
-        listContainer.isHidden = collapsed
-        contentSplit.adjustSubviews()
-        if !collapsed {
+        if collapsed {
+            // 境目をドラッグで左端へ寄せたときと同じ方法で畳む。
+            // isHidden で隠すだけだと、分割の境目の線（専用のレイヤー）が元の位置に残ってしまう
+            contentSplit.collapseSubview(at: 0)
+            if !isListCollapsed {
+                // 万一畳めなかったときの予備（線が残らないよう、描き直しも頼む）
+                listContainer.isHidden = true
+                contentSplit.adjustSubviews()
+                contentSplit.needsLayout = true
+                contentSplit.needsDisplay = true
+            }
+        } else {
+            listContainer.isHidden = false
+            contentSplit.adjustSubviews()
             let width = contentSplit.bounds.width
             if width > 0 { contentSplit.setPosition(width * (1 - Preferences.filePreviewFraction), ofDividerAt: 0) }
         }
@@ -131,7 +142,7 @@ extension FileBrowserViewController: NSSplitViewDelegate {
     /// 境目を左端の近くまで寄せると、一覧を畳む（境目を右へ引けば戻る）
     /// 画面が狭いときに AppKit が勝手に畳まないよう、境目を操作している間だけ畳めるようにする
     func splitView(_ splitView: NSSplitView, canCollapseSubview subview: NSView) -> Bool {
-        subview === listContainer && contentSplit.isTrackingDivider
+        subview === listContainer && (contentSplit.isTrackingDivider || contentSplit.isCollapsingByCode)
     }
 
     /// 境目をダブルクリックすると、一覧を畳む・広げる
@@ -161,6 +172,16 @@ extension FileBrowserViewController: NSSplitViewDelegate {
 /// 一覧とプレビューを分ける線。境目をドラッグ・ダブルクリックしている間かどうかを分かるようにする
 final class PreviewSplitView: NSSplitView {
     private(set) var isTrackingDivider = false
+    /// ボタンなど、コードから畳んでいる最中
+    private(set) var isCollapsingByCode = false
+
+    /// index 番目の部品を、境目を端へ寄せて畳む（ドラッグで畳んだときと同じ結果にする）
+    func collapseSubview(at index: Int) {
+        guard index < arrangedSubviews.count, index < max(arrangedSubviews.count - 1, 1) else { return }
+        isCollapsingByCode = true
+        defer { isCollapsingByCode = false }
+        setPosition(minPossiblePositionOfDivider(at: index), ofDividerAt: index)
+    }
 
     override func mouseDown(with event: NSEvent) {
         // NSSplitView は mouseDown の中でドラッグを追いかけるので、その間だけ立てておく

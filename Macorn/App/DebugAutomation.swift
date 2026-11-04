@@ -385,6 +385,14 @@ enum DebugAutomation {
         case "listcollapse":
             // プレビューの左上の「一覧を畳む」を押したときと同じ
             browser.filePreview.onCollapseList?()
+        case "previewmax":
+            // プレビューの「最大化」・畳んでいるときの「一覧を表示」を押したときと同じ
+            browser.filePreview.onToggleMaximize?()
+        case "splitviews":
+            // 一覧とプレビューの分割の中の部品と位置（境目の線が残っていないかの確認用）
+            let split = browser.contentSplit
+            let parts = split.subviews.map { "\(type(of: $0))\($0.isHidden ? "(hidden)" : "") x=\(Int($0.frame.minX)) w=\(Int($0.frame.width))" }
+            print("[debug] split width=\(Int(split.bounds.width)) arranged=\(split.arrangedSubviews.count) subviews=\(parts) sublayers=\(split.layer?.sublayers?.map { "\(type(of: $0)) x=\(Int($0.frame.minX)) w=\(Int($0.frame.width))" } ?? [])")
         case "listdrag":
             // 一覧とプレビューの境目を指定の位置へ動かす（ドラッグの代わり。0 で左端へ）
             browser.contentSplit.setPosition(CGFloat(Double(argument) ?? 0), ofDividerAt: 0)
