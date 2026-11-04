@@ -372,6 +372,9 @@ enum DebugAutomation {
             } else {
                 print("[debug] no popover")
             }
+        case "closepreview":
+            // プレビューの「×」を押したときと同じ
+            browser.filePreview.onClose?()
         case "mdstate":
             let preview = browser.filePreview
             print("[debug] md visible=\(browser.isFilePreviewVisible) file=\(preview.fileURL?.lastPathComponent ?? "-") html=\(preview.lastHTMLLength) width=\(Int(preview.view.frame.width))/\(Int(browser.contentSplit.bounds.width))")

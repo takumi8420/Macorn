@@ -6,6 +6,34 @@
 
 ## 2026-11-04
 
+### Macorn：バージョン 0.3.16 を LP で公開する
+
+- **きっかけ**：konta の依頼（2026-11-04）「0.3.16 で公開」（プレビューの「×」の修正と、LP の SEO 対策を受けて）
+- **意図・方針**：0.3.15 → 0.3.16（ビルド番号は 18 → 19）。`scripts/release.sh --publish` で署名・公証した DMG・LP の表記・`version.json` をまとめて差し替え、SEO 対策をした LP と一緒に公開した。リリースノートのいちばん上に 0.3.16 を足し、「最新」の印を付け替えた
+- 変更 `Macorn.xcodeproj/project.pbxproj` — `MARKETING_VERSION` を 0.3.16、`CURRENT_PROJECT_VERSION` を 19 に
+- 変更 `site/download/Macorn.dmg`、`site/index.html`、`site/sitemap.xml`、`site/version.json` — 0.3.16 の DMG・表記・最新版の情報
+- 変更 `site/releases/index.html` — 0.3.16 のリリースノート
+
+### Macorn：プレビューの「×」で、選んだときのプレビューが出なくなる不具合を直す
+
+- **きっかけ**：konta の依頼（2026-11-04）「プレビューの表示に関して、ダブルクリックでなくてもプレビューが表示されるようにして欲しい」
+- **意図・方針**：プレビューの右上の「×」が、プレビューを閉じるだけでなく「選んだら右にプレビューを出す」設定そのものをオフにしていた。そのため一度閉じると、以後はダブルクリック（Macorn の中で開く）でしかプレビューが出なかった（konta の手元の設定もオフになっていたので、既定（オン）に戻した）。「×」は今のファイルのプレビューだけを閉じ、そのファイルを選んでいる間は出さず、別のファイルを選べばまた出すようにした。出さないようにするのは ⌥⌘P と設定に任せる
+- 変更 `Macorn/Browser/FileBrowserViewController+Preview.swift`・`Macorn/Browser/FileBrowserViewController.swift` — 「×」で閉じたファイルだけを覚え、設定は変えない
+- 変更 `Macorn/Preview/FilePreviewController.swift` — 「×」の説明を直す
+- 変更 `Macorn/App/DebugAutomation.swift` — 確認用の手順 `closepreview` を足す
+- 変更 `AGENTS.md`（確定している前提）
+
+### Macorn：LP の SEO 対策（「Finder の代わり」で見つけてもらう）
+
+- **きっかけ**：konta の依頼（2026-11-04）「mac finder 代わり、finder 代わり などで検索したときに出るようにしたい」→「SEO 対策も講じて欲しい」
+- **意図・方針**：これまでの LP はタイトルにも説明にも「Finder の代わり」という言葉がなく、その検索で出る材料がなかった。検索結果の上位は比較記事が占めるので、まずは自分のサイトで「Finder の代わり」と言い切る。トップはキャッチコピー（「フォルダはそのまま。…」）を残したまま、タイトル・説明・OGP・構造化データを「Finder の代わりに使える Mac のファイルマネージャー（無料）」の方向にし、ヒーローの上に一言を足した。Finder との比較の節とよくある質問の節も足した。さらに専用のページ `/finder-alternative/` を作り、Finder で不便なこと7つと Macorn での解決・比較表・併用のしかた・よくある質問（FAQ の構造化データつき）を載せた。Finder についての記述は事実に沿うようにした（タブ・プレビュー（⇧⌘P）・タグはあるが階層はない、など）。どのページからも互いに行けるよう、ヘッダーとフッターにリンクを置き、サイトマップに載せた。外部からのリンク集め（記事の公開・掲載依頼）と Search Console での登録申請は、konta のアカウントでの作業になるので残っている
+- 変更 `site/index.html` — タイトル・説明・OGP・構造化データ、ヒーローの一言、「Finder との違い」と「よくある質問」の節、ナビとフッターのリンク
+- 追加 `site/finder-alternative/index.html` — 「Finder の代わり」の専用のページ
+- 変更 `site/releases/index.html` — ナビとフッターのリンク
+- 変更 `site/style.css` — 比較・よくある質問・専用のページ・フッターのリンクの見た目
+- 変更 `site/sitemap.xml` — 専用のページを載せる
+- 変更 `AGENTS.md`（確定している前提）
+
 ### Macorn：リリースノートから具体的なアプリの名前を外す
 
 - **きっかけ**：konta の依頼（2026-11-04）「Slack など具体の名前は出さないで欲しい」

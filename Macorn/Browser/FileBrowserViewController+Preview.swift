@@ -3,9 +3,13 @@ import AppKit
 /// ファイルのプレビュー（.md・.html・画像・PDF・動画などを選ぶと一覧の右に表示する）とテーマの反映。
 extension FileBrowserViewController: NSSplitViewDelegate {
     func configureFilePreview() {
+        // 「×」は今のファイルのプレビューだけを閉じる（設定は変えない。別のファイルを選べばまた出る）。
+        // 以前は設定ごとオフにしていたため、一度閉じるとダブルクリックしないと出なくなっていた
         filePreview.onClose = { [weak self] in
-            Preferences.filePreview = false
-            self?.hideFilePreview()
+            guard let self else { return }
+            dismissedPreviewURL = filePreview.fileURL
+            pinnedPreviewURL = nil
+            hideFilePreview()
         }
         filePreview.onOpenInEditor = { url in EditorLauncher.open([url]) }
         filePreview.onOpenPreviewable = { [weak self] url in
@@ -21,7 +25,10 @@ extension FileBrowserViewController: NSSplitViewDelegate {
         let nodes = selectedNodes
         let pinned = nodes.count == 1 && pinnedPreviewURL.map { Self.comparablePath($0) == Self.comparablePath(nodes[0].url) } == true
         if !pinned && !nodes.isEmpty { pinnedPreviewURL = nil }
-        guard Preferences.filePreview || pinned, nodes.count == 1, let node = nodes.first,
+        // 「×」で閉じたファイルを選んでいる間は出さない。ほかを選んだら忘れる
+        let dismissed = nodes.count == 1 && dismissedPreviewURL.map { Self.comparablePath($0) == Self.comparablePath(nodes[0].url) } == true
+        if !dismissed { dismissedPreviewURL = nil }
+        guard (Preferences.filePreview && !dismissed) || pinned, nodes.count == 1, let node = nodes.first,
               !node.entry.isFolder, FilePreviewController.kind(for: node.url) != nil else {
             if isFilePreviewVisible { hideFilePreview() }
             return
@@ -53,6 +60,7 @@ extension FileBrowserViewController: NSSplitViewDelegate {
     /// ⌥⌘P: プレビュー（Markdown・HTML）を使うかどうか
     @objc func toggleFilePreview(_ sender: Any?) {
         Preferences.filePreview.toggle()
+        dismissedPreviewURL = nil
         NotificationCenter.default.post(name: .macornDisplayPreferencesChanged, object: nil)
     }
 

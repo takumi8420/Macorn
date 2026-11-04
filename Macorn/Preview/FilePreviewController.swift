@@ -139,7 +139,7 @@ final class FilePreviewController: NSViewController {
         self.browserButton = browserButton
         let editButton = Self.headerButton(symbol: "square.and.pencil", tip: "このファイルをエディタで開く（⌥⌘E）", target: self, action: #selector(openInEditor(_:)))
         self.editButton = editButton
-        let closeButton = Self.headerButton(symbol: "xmark", tip: "プレビューを閉じる（⌥⌘P で切り替え）", target: self, action: #selector(closePreview(_:)))
+        let closeButton = Self.headerButton(symbol: "xmark", tip: "このファイルのプレビューを閉じる（別のファイルを選ぶとまた出ます。出さないようにするには ⌥⌘P）", target: self, action: #selector(closePreview(_:)))
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         let zoomOut = Self.headerButton(symbol: "minus.magnifyingglass", tip: "プレビューを縮小（⌘−）", target: self, action: #selector(zoomOut(_:)))

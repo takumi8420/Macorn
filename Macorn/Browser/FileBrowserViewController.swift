@@ -39,6 +39,8 @@ final class FileBrowserViewController: NSViewController {
     var pendingSelection: [URL] = []
     /// ほかのアプリから開いたファイル。プレビューを切っていても、これを選んでいる間は出す
     var pinnedPreviewURL: URL?
+    /// プレビューの「×」で閉じたファイル。そのファイルを選んでいる間はプレビューを出さない
+    var dismissedPreviewURL: URL?
     /// パスバー（自動操作でクリックするため）
     var pathBarHost: NSView?
     var pendingRename: URL?
