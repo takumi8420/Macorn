@@ -6,6 +6,12 @@
 
 ## 2026-11-04
 
+### Macorn：リリースノートから具体的なアプリの名前を外す
+
+- **きっかけ**：konta の依頼（2026-11-04）「Slack など具体の名前は出さないで欲しい」
+- **意図・方針**：0.3.15 のリリースノートから具体的なアプリの名前を外し、「ほかのアプリ」とだけ書いた。CHANGELOG の同じ件の書き方もそろえた
+- 変更 `site/releases/index.html` — 0.3.15 の文言
+
 ### Macorn：バージョン 0.3.15 を LP で公開する
 
 - **きっかけ**：konta の依頼（2026-11-04）「0.3.15 で公開」（他のアプリへドラッグしたあと次のドラッグが始まらない不具合の修正を受けて）
@@ -17,7 +23,7 @@
 ### Macorn：他のアプリへドラッグしたあと、次のドラッグが始まらない不具合を直す
 
 - **きっかけ**：konta の報告（2026-11-04）「いまだに、ドラッグアンドドロップを一回した後にほかのファイルをドラッグアンドドロップしようとすると失敗する」→「アプリ内では再発しないが、他アプリにファイルをドラッグ&ドロップで添付した場合などに再発した」
-- **意図・方針**：ドラッグの各段階を記録するログを入れて手元で再現してもらい、原因を特定した。Slack などへ落とすと、ドラッグの終わりに一覧（`FileOutlineView`）の `draggingEnded` が呼ばれる。0.3.12 で足したこの処理が、元の `NSOutlineView` が持っていない `draggingEnded` を `super` で呼んでいて、「知らない命令」の例外になっていた。そのため macOS 側のドラッグの後始末が途中で止まり、次のドラッグが「前のドラッグが終わっていない」（`Cannot start a new drag. A previous drag has not finished.`）として始められなかった。元の部品が持っているときだけ `super` を呼ぶようにした。ドラッグの始まり・受け入れ・終わりは、今後の調査用に `log` で見られるよう残した（細かい記録は外した）
+- **意図・方針**：ドラッグの各段階を記録するログを入れて手元で再現してもらい、原因を特定した。他のアプリへ落とすと、ドラッグの終わりに一覧（`FileOutlineView`）の `draggingEnded` が呼ばれる。0.3.12 で足したこの処理が、元の `NSOutlineView` が持っていない `draggingEnded` を `super` で呼んでいて、「知らない命令」の例外になっていた。そのため macOS 側のドラッグの後始末が途中で止まり、次のドラッグが「前のドラッグが終わっていない」（`Cannot start a new drag. A previous drag has not finished.`）として始められなかった。元の部品が持っているときだけ `super` を呼ぶようにした。ドラッグの始まり・受け入れ・終わりは、今後の調査用に `log` で見られるよう残した（細かい記録は外した）
 - 変更 `Macorn/Browser/FileOutlineView.swift` — `draggingEnded` で、ない `super` を呼ばない
 - 追加 `Macorn/Browser/DragLog.swift`、変更 `Macorn/Browser/FileBrowserViewController+Files.swift` — ドラッグの流れの記録（`log show --predicate 'subsystem == "dev.macorn.Macorn" AND category == "drag"'`）
 
