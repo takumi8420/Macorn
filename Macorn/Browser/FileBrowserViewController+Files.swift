@@ -336,6 +336,7 @@ extension FileBrowserViewController {
     func outlineView(_ outlineView: NSOutlineView, draggingSession session: NSDraggingSession, willBeginAt screenPoint: NSPoint, forItems draggedItems: [Any]) {
         draggedURLs = draggedItems.compactMap { ($0 as? FileNode)?.url }
         isDragSourceActive = true
+        DragLog.note("source began \(draggedURLs.map(\.lastPathComponent))")
     }
 
     /// ドラッグの途中は一覧を読み直さない（行が入れ替わると、置き先やスクロールの位置がずれる）
@@ -364,6 +365,7 @@ extension FileBrowserViewController {
             let urls = draggedURLs
             Task { await FileOperationManager.shared.moveToTrash(urls, window: view.window) }
         }
+        DragLog.note("source ended op=\(operation.rawValue)")
         draggedURLs = []
         isDragSourceActive = false
         dragDidFinish()
@@ -393,6 +395,7 @@ extension FileBrowserViewController {
     func outlineView(_ outlineView: NSOutlineView, acceptDrop info: any NSDraggingInfo, item: Any?, childIndex index: Int) -> Bool {
         let urls = Self.fileURLs(from: info)
         let targetNode = (item as? FileNode) ?? root
+        DragLog.note("accept \(urls.map(\.lastPathComponent)) → \(targetNode.url.lastPathComponent)")
         if targetNode === root, let tag = currentTag {
             TagStore.shared.assign(tag.id, to: urls)
             refreshAfterChange(selecting: urls)

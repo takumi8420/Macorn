@@ -46,23 +46,40 @@ final class FileOutlineView: NSOutlineView {
 
     override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
         dragEntered = true
-        return super.draggingEntered(sender)
+        let result = super.draggingEntered(sender)
+        DragLog.note("entered seq=\(sender.draggingSequenceNumber) result=\(result.rawValue)")
+        return result
     }
 
     override func draggingExited(_ sender: (any NSDraggingInfo)?) {
         super.draggingExited(sender)
+        DragLog.note("exited")
         endDragTarget()
     }
 
     override func draggingEnded(_ sender: any NSDraggingInfo) {
-        super.draggingEnded(sender)
+        // NSOutlineView（NSTableView）は draggingEnded を持っていないので、super は呼ばない。
+        // 呼ぶと「知らない命令」の例外になり、macOS 側のドラッグの後始末が途中で止まって、
+        // 次のドラッグが「前のドラッグが終わっていない」として始められなくなる
+        if NSOutlineView.instancesRespond(to: #selector(NSDraggingDestination.draggingEnded(_:))) {
+            super.draggingEnded(sender)
+        }
+        DragLog.note("ended(target)")
         endDragTarget()
+    }
+
+    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        let result = super.performDragOperation(sender)
+        DragLog.note("perform result=\(result)")
+        return result
     }
 
     override func concludeDragOperation(_ sender: (any NSDraggingInfo)?) {
         super.concludeDragOperation(sender)
+        DragLog.note("conclude")
         endDragTarget()
     }
+
 
     #if DEBUG
     /// 自動操作用: ドラッグが入ってきたまま、終わりの知らせが届かなかった状態を作る
