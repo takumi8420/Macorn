@@ -11,6 +11,8 @@ extension FileBrowserViewController: NSSplitViewDelegate {
             pinnedPreviewURL = nil
             hideFilePreview()
         }
+        filePreview.onToggleMaximize = { [weak self] in self?.togglePreviewMaximized(nil) }
+        filePreview.onCollapseList = { [weak self] in self?.setListCollapsed(true) }
         filePreview.onOpenInEditor = { url in EditorLauncher.open([url]) }
         filePreview.onOpenPreviewable = { [weak self] url in
             // プレビューの中のリンクから別の Markdown・HTML を開いたら、一覧もそのファイルの場所へ移る
@@ -49,6 +51,9 @@ extension FileBrowserViewController: NSSplitViewDelegate {
     }
 
     func hideFilePreview() {
+        // 最大化・一覧を畳んだまま閉じたら、元の並びに戻す
+        if isPreviewMaximized { setPreviewMaximized(false) }
+        if isListCollapsed { setListCollapsed(false) }
         filePreview.stop()
         filePreview.view.isHidden = true
         // 隠すだけだと境目の線が描かれたまま残るので、分割から外す（次に出すときに戻す）
@@ -62,6 +67,44 @@ extension FileBrowserViewController: NSSplitViewDelegate {
         Preferences.filePreview.toggle()
         dismissedPreviewURL = nil
         NotificationCenter.default.post(name: .macornDisplayPreferencesChanged, object: nil)
+    }
+
+    // MARK: - プレビューの最大化と、一覧を畳む
+
+    /// 一覧を畳んでいる（境目を左端へ寄せたか、最大化した）
+    var isListCollapsed: Bool { listContainer.isHidden }
+
+    /// ⇧⌘↩・プレビューのヘッダーのボタン: プレビューを最大化する／元に戻す。
+    /// 最大化すると、この画面の一覧・サイドバー・ほかの画面を畳む（ターミナルはそのまま）
+    @objc func togglePreviewMaximized(_ sender: Any?) {
+        if isPreviewMaximized || isListCollapsed {
+            setPreviewMaximized(false)
+            setListCollapsed(false)
+        } else {
+            guard isFilePreviewVisible else { NSSound.beep(); return }
+            setPreviewMaximized(true)
+        }
+    }
+
+    func setPreviewMaximized(_ maximized: Bool) {
+        guard maximized != isPreviewMaximized else { return }
+        isPreviewMaximized = maximized
+        setListCollapsed(maximized)
+        onPreviewMaximizeChanged?(maximized)
+    }
+
+    /// 一覧を畳む・広げる。畳んでいる間のキー操作はプレビューに届く（↑↓ でスクロール）。広げたら一覧に戻す
+    func setListCollapsed(_ collapsed: Bool) {
+        guard collapsed != isListCollapsed else { return }
+        guard !collapsed || isFilePreviewVisible else { return }
+        listContainer.isHidden = collapsed
+        contentSplit.adjustSubviews()
+        if !collapsed {
+            let width = contentSplit.bounds.width
+            if width > 0 { contentSplit.setPosition(width * (1 - Preferences.filePreviewFraction), ofDividerAt: 0) }
+        }
+        if !collapsed { view.window?.makeFirstResponder(outlineView) }
+        filePreview.setMaximized(collapsed)
     }
 
     // MARK: - プレビューの拡大・縮小（⌘+ ⌘− ⌘0）
@@ -85,6 +128,17 @@ extension FileBrowserViewController: NSSplitViewDelegate {
         DividerGrab.rect(proposedEffectiveRect, vertical: splitView.isVertical, leading: Self.listInset + 2)
     }
 
+    /// 境目を左端の近くまで寄せると、一覧を畳む（境目を右へ引けば戻る）
+    /// 画面が狭いときに AppKit が勝手に畳まないよう、境目を操作している間だけ畳めるようにする
+    func splitView(_ splitView: NSSplitView, canCollapseSubview subview: NSView) -> Bool {
+        subview === listContainer && contentSplit.isTrackingDivider
+    }
+
+    /// 境目をダブルクリックすると、一覧を畳む・広げる
+    func splitView(_ splitView: NSSplitView, shouldCollapseSubview subview: NSView, forDoubleClickOnDividerAt dividerIndex: Int) -> Bool {
+        subview === listContainer
+    }
+
     func splitView(_ splitView: NSSplitView, constrainMinCoordinate proposedMinimumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
         max(proposedMinimumPosition, 220)
     }
@@ -95,8 +149,23 @@ extension FileBrowserViewController: NSSplitViewDelegate {
 
     /// プレビューの幅を覚えておき、次に開いたときも同じ幅にする
     func splitViewDidResizeSubviews(_ notification: Notification) {
-        guard isFilePreviewVisible, contentSplit.bounds.width > 0 else { return }
+        // ドラッグで畳んだ・広げたときも、ボタンの見た目を合わせる
+        if filePreview.isMaximizedAppearance != isListCollapsed { filePreview.setMaximized(isListCollapsed) }
+        if !isListCollapsed, isPreviewMaximized { setPreviewMaximized(false) }
+        guard isFilePreviewVisible, !isListCollapsed, contentSplit.bounds.width > 0 else { return }
         let fraction = filePreview.view.frame.width / contentSplit.bounds.width
         if fraction > 0.1, fraction < 0.9 { Preferences.filePreviewFraction = fraction }
+    }
+}
+
+/// 一覧とプレビューを分ける線。境目をドラッグ・ダブルクリックしている間かどうかを分かるようにする
+final class PreviewSplitView: NSSplitView {
+    private(set) var isTrackingDivider = false
+
+    override func mouseDown(with event: NSEvent) {
+        // NSSplitView は mouseDown の中でドラッグを追いかけるので、その間だけ立てておく
+        isTrackingDivider = true
+        defer { isTrackingDivider = false }
+        super.mouseDown(with: event)
     }
 }

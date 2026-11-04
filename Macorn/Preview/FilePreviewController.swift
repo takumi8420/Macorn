@@ -69,6 +69,10 @@ final class FilePreviewController: NSViewController {
     private(set) var lastHTMLLength = 0
     var onOpenInEditor: ((URL) -> Void)?
     var onClose: (() -> Void)?
+    /// ヘッダーの「最大化」ボタン（一覧・サイドバー・ほかの画面を畳んで、プレビューを広げる）
+    var onToggleMaximize: (() -> Void)?
+    /// ヘッダーの左端の「一覧を畳む」ボタン（一覧だけを畳む）
+    var onCollapseList: (() -> Void)?
     /// プレビューの中のリンクから、別のプレビューできるファイル（Markdown・HTML）を開いたとき
     var onOpenPreviewable: ((URL) -> Void)?
 
@@ -109,6 +113,11 @@ final class FilePreviewController: NSViewController {
     private let iconView = NSImageView()
     private var scriptButton: NSButton?
     private var browserButton: NSButton?
+    private var maximizeButton: NSButton?
+    /// 一覧を畳んでいるときだけ左上に出す「一覧を表示」ボタン（戻し方が分かるように）
+    private var showListButton: NSButton?
+    /// 一覧を出しているときに左上に出す「一覧を畳む」ボタン（「一覧を表示」と同じ位置）
+    private var hideListButton: NSButton?
     private var zoomControls: NSStackView?
     nonisolated(unsafe) private var magnifyMonitor: Any?
     private let zoomLabel = NSButton(title: "100%", target: nil, action: nil)
@@ -139,6 +148,19 @@ final class FilePreviewController: NSViewController {
         self.browserButton = browserButton
         let editButton = Self.headerButton(symbol: "square.and.pencil", tip: "このファイルをエディタで開く（⌥⌘E）", target: self, action: #selector(openInEditor(_:)))
         self.editButton = editButton
+        let maximizeButton = Self.headerButton(symbol: "arrow.up.left.and.arrow.down.right", tip: "", target: self, action: #selector(toggleMaximize(_:)))
+        self.maximizeButton = maximizeButton
+        let showListButton = NSButton(title: "一覧を表示", image: NSImage(systemSymbolName: "sidebar.left", accessibilityDescription: "一覧を表示")!, target: self, action: #selector(toggleMaximize(_:)))
+        showListButton.bezelStyle = .accessoryBarAction
+        showListButton.controlSize = .small
+        showListButton.font = .systemFont(ofSize: 11, weight: .medium)
+        showListButton.imagePosition = .imageLeading
+        showListButton.toolTip = "畳んだファイルの一覧を表示する（⇧⌘↩）"
+        showListButton.isHidden = true
+        self.showListButton = showListButton
+        let hideListButton = Self.headerButton(symbol: "sidebar.left", tip: "ファイルの一覧を畳む（もう一度押すと戻す）", target: self, action: #selector(collapseList(_:)))
+        self.hideListButton = hideListButton
+        setMaximized(false)
         let closeButton = Self.headerButton(symbol: "xmark", tip: "このファイルのプレビューを閉じる（別のファイルを選ぶとまた出ます。出さないようにするには ⌥⌘P）", target: self, action: #selector(closePreview(_:)))
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
@@ -154,7 +176,7 @@ final class FilePreviewController: NSViewController {
         let zoomControls = NSStackView(views: [zoomOut, zoomLabel, zoomIn])
         zoomControls.spacing = 2
         self.zoomControls = zoomControls
-        [icon, titleLabel, spacer, zoomControls, scriptButton, browserButton, editButton, closeButton].forEach(header.addArrangedSubview)
+        [showListButton, hideListButton, icon, titleLabel, spacer, zoomControls, scriptButton, browserButton, editButton, maximizeButton, closeButton].forEach(header.addArrangedSubview)
         updateHeader()
 
         let separator = NSBox()
@@ -482,6 +504,27 @@ final class FilePreviewController: NSViewController {
     @objc private func closePreview(_ sender: Any?) {
         onClose?()
     }
+
+    @objc private func collapseList(_ sender: Any?) {
+        onCollapseList?()
+    }
+
+    @objc private func toggleMaximize(_ sender: Any?) {
+        onToggleMaximize?()
+    }
+
+    /// 「最大化」ボタンの見た目。広げている（一覧を畳んでいる）ときは「元に戻す」にする
+    func setMaximized(_ maximized: Bool) {
+        isMaximizedAppearance = maximized
+        showListButton?.isHidden = !maximized
+        hideListButton?.isHidden = maximized
+        let symbol = maximized ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right"
+        let tip = maximized ? "元の大きさに戻す（⇧⌘↩）" : "プレビューを最大化（一覧・サイドバー・ほかの画面を畳む）（⇧⌘↩）"
+        maximizeButton?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: tip)
+        maximizeButton?.toolTip = tip
+    }
+
+    private(set) var isMaximizedAppearance = false
 
     @objc private func toggleScripts(_ sender: Any?) {
         scriptsEnabled.toggle()

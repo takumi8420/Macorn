@@ -29,6 +29,8 @@ final class BrowserWindowController: NSWindowController {
 
     /// 操作対象の画面（2画面のときは、最後にクリック・フォーカスした側）
     var browser: FileBrowserViewController { panes.activePane }
+    /// プレビューの最大化のために畳んだサイドバー（やめたときに戻す）
+    private var sidebarCollapsedForPreview = false
 
     convenience init(url: URL) {
         self.init(layout: PaneLayout(paths: [url.path]))
@@ -55,6 +57,7 @@ final class BrowserWindowController: NSWindowController {
         super.init(window: window)
 
         panes.setPaneDelegate(self)
+        panes.onPreviewMaximizeChanged = { [weak self] maximized in self?.collapseSidebarForPreview(maximized) }
         panes.onActivePaneChanged = { [weak self] in
             guard let self else { return }
             updateTitle(for: browser.state.currentURL)
@@ -111,6 +114,22 @@ final class BrowserWindowController: NSWindowController {
         window.toolbar?.validateVisibleItems()
         // 内蔵ターミナルも、表示中のフォルダへ追いかける
         workspace.terminal.follow(url)
+    }
+
+    // MARK: - プレビューの最大化
+
+    /// プレビューを最大化するときはサイドバーも畳み、やめたら戻す（自分で畳んでいたサイドバーは開かない）
+    private func collapseSidebarForPreview(_ maximized: Bool) {
+        guard let split = window?.contentViewController as? NSSplitViewController,
+              let sidebar = split.splitViewItems.first(where: { $0.behavior == .sidebar }) else { return }
+        if maximized {
+            guard !sidebar.isCollapsed else { return }
+            sidebarCollapsedForPreview = true
+            sidebar.animator().isCollapsed = true
+        } else if sidebarCollapsedForPreview {
+            sidebarCollapsedForPreview = false
+            sidebar.animator().isCollapsed = false
+        }
     }
 
     // MARK: - 内蔵ターミナル（要件 T-30）

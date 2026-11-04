@@ -372,6 +372,14 @@ enum DebugAutomation {
             } else {
                 print("[debug] no popover")
             }
+        case "maxstate":
+            print("[debug] max=\(browser.isPreviewMaximized) listCollapsed=\(browser.isListCollapsed) button=\(browser.filePreview.isMaximizedAppearance) preview=\(Int(browser.filePreview.view.frame.width))/\(Int(browser.contentSplit.bounds.width)) panes=\(controller.panes.panes.map { Int($0.view.frame.width) }) sidebar=\((controller.window?.contentViewController as? NSSplitViewController)?.splitViewItems.first?.isCollapsed ?? false) first=\(controller.window?.firstResponder.map { String(describing: type(of: $0)) } ?? "-")")
+        case "listcollapse":
+            // プレビューの左上の「一覧を畳む」を押したときと同じ
+            browser.filePreview.onCollapseList?()
+        case "listdrag":
+            // 一覧とプレビューの境目を指定の位置へ動かす（ドラッグの代わり。0 で左端へ）
+            browser.contentSplit.setPosition(CGFloat(Double(argument) ?? 0), ofDividerAt: 0)
         case "closepreview":
             // プレビューの「×」を押したときと同じ
             browser.filePreview.onClose?()

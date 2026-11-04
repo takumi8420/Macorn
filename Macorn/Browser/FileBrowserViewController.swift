@@ -28,7 +28,13 @@ final class FileBrowserViewController: NSViewController {
     var pendingG = false
     var resortForSizesScheduled = false
     private let headerMenu = NSMenu()
-    let contentSplit = NSSplitView()
+    let contentSplit = PreviewSplitView()
+    /// 一覧（プレビューの左）。境目を左端へ寄せるか、プレビューの最大化で畳める
+    let listContainer = NSView()
+    /// プレビューを最大化している（一覧・サイドバー・ほかの画面を畳んでいる）
+    var isPreviewMaximized = false
+    /// プレビューの最大化を切り替えたとき（ほかの画面とサイドバーを畳む・戻すため）
+    var onPreviewMaximizeChanged: ((Bool) -> Void)?
     let filePreview = FilePreviewController()
     private let rowMenu = NSMenu()
 
@@ -119,7 +125,6 @@ final class FileBrowserViewController: NSViewController {
         filterBar.clipsToBounds = true
 
         // 一覧と Markdown のプレビューを左右に並べる（プレビューは .md を選んだときだけ出る）
-        let listContainer = NSView()
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         listContainer.addSubview(scrollView)
         contentSplit.isVertical = true
@@ -1022,6 +1027,10 @@ extension FileBrowserViewController: NSMenuItemValidation {
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         if [#selector(zoomInPreview(_:)), #selector(zoomOutPreview(_:)), #selector(resetPreviewZoom(_:))].contains(menuItem.action) {
             return canZoomPreview
+        }
+        if menuItem.action == #selector(togglePreviewMaximized(_:)) {
+            menuItem.title = isPreviewMaximized || isListCollapsed ? "プレビューの最大化をやめる" : "プレビューを最大化"
+            return isFilePreviewVisible
         }
         if menuItem.action == #selector(toggleFilePreview(_:)) {
             menuItem.state = Preferences.filePreview ? .on : .off

@@ -143,6 +143,7 @@ enum MainMenu {
         menu.addItem(item("プレビューを縮小", #selector(FileBrowserViewController.zoomOutPreview(_:)), "-"))
         menu.addItem(item("プレビューを実際のサイズに", #selector(FileBrowserViewController.resetPreviewZoom(_:)), "0"))
         menu.addItem(item("プレビュー", #selector(FileBrowserViewController.toggleFilePreview(_:)), "p", [.command, .option]))
+        menu.addItem(item("プレビューを最大化", #selector(FileBrowserViewController.togglePreviewMaximized(_:)), "\r", [.command, .shift]))
         menu.addItem(.separator())
         menu.addItem(item("2画面表示", #selector(BrowserWindowController.toggleSplit(_:)), "\\"))
         menu.addItem(item("右に分ける", #selector(BrowserWindowController.splitRight(_:)), "\\", [.command, .option]))

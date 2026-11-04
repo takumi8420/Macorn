@@ -6,6 +6,35 @@
 
 ## 2026-11-04
 
+### Macorn：ボタン1つで一覧を畳めるようにする
+
+- **きっかけ**：konta の依頼（2026-11-04）「ボタン一つで一覧パネルを閉じれるようにもして欲しい」
+- **意図・方針**：一覧を出しているときは、プレビューのヘッダーの左端に「一覧を畳む」ボタン（サイドバーの形のアイコン）を出す。押すと一覧だけを畳み、同じ位置が「一覧を表示」に変わるので、同じ場所を押せば戻る。サイドバー・ほかの画面まで畳む最大化（右上のボタン）とは分けた
+- 変更 `Macorn/Preview/FilePreviewController.swift` — 「一覧を畳む」ボタンを足し、「一覧を表示」と入れ替えて出す
+- 変更 `Macorn/Browser/FileBrowserViewController+Preview.swift` — ボタンで一覧だけを畳む
+- 変更 `Macorn/App/DebugAutomation.swift` — `listcollapse` をボタンと同じ経路にする
+- 変更 `AGENTS.md`・`docs/REQUIREMENTS.md` — 畳み方を書き足す
+
+### Macorn：畳んだ一覧の戻し方を分かりやすくする
+
+- **きっかけ**：konta の指摘（2026-11-04）「ファイルやフォルダが表示されているパネルが畳まれている時に表示し直す UX がわかりにくい」
+- **意図・方針**：畳んだあとは左端の細い境目と、右上の小さなアイコンでしか戻せず、気づきにくかった。一覧を畳んでいる間（境目で畳んだときも、最大化したときも）は、プレビューのヘッダーの左端に文字つきの「一覧を表示」ボタンを出し、押せば元の並びに戻るようにした
+- 変更 `Macorn/Preview/FilePreviewController.swift` — 一覧を畳んでいる間だけ「一覧を表示」ボタンを出す
+- 変更 `Macorn/App/DebugAutomation.swift` — 自動操作の手順 `listcollapse` を足す
+- 変更 `AGENTS.md`・`docs/REQUIREMENTS.md` — 戻し方を書き足す
+
+### Macorn：プレビューを最大化し、一覧を畳めるようにする
+
+- **きっかけ**：konta の依頼（2026-11-04）「プレビュー表示に関して、アプリ内で画面を最大化するボタン、左側のファイルやフォルダサイドバーがこれ以上畳めなかった。これらも畳めるような UX を」
+- **意図・方針**：プレビューのヘッダーに「最大化」ボタン（⇧⌘↩、表示 › プレビューを最大化）を足した。押すと、その画面の一覧・サイドバー・ほかの画面を畳んで、プレビューをウィンドウいっぱいに広げる。もう一度押すと元に戻す。サイドバーは最大化のために畳んだときだけ開き直す（自分で畳んでいたものは開かない）。ターミナルは利用者が開いたものなので残す。あわせて、一覧とプレビューの境目を左端の近くまでドラッグするか、境目をダブルクリックすると一覧だけを畳めるようにした（境目を右へ引くか、ボタンで戻る）。AppKit は狭い画面で勝手に畳むことがあるため、畳めるのは境目を操作している間だけにした。最大化中のキー操作はプレビューに届く（↑↓ でスクロール）。プレビューを閉じる・画面を分ける・閉じる・ほかの画面へ移ると、最大化をやめる
+- 変更 `Macorn/Preview/FilePreviewController.swift` — ヘッダーに最大化・元に戻すボタンを足す
+- 変更 `Macorn/Browser/FileBrowserViewController.swift`・`FileBrowserViewController+Preview.swift` — 一覧を畳む・最大化の切り替え、境目のドラッグ・ダブルクリックで畳む（`PreviewSplitView`）、メニューの有効・無効
+- 変更 `Macorn/Window/PaneContainerViewController.swift` — 最大化した画面以外を畳み、やめたら戻す
+- 変更 `Macorn/Window/BrowserWindowController.swift` — 最大化のあいだサイドバーを畳む
+- 変更 `Macorn/App/MainMenu.swift` — 表示 › プレビューを最大化（⇧⌘↩）
+- 変更 `Macorn/App/DebugAutomation.swift` — 自動操作の手順 `maxstate`・`listdrag` を足す
+- 変更 `AGENTS.md`・`docs/REQUIREMENTS.md` — 前提と S-05 に最大化・一覧を畳む操作を書く
+
 ### Macorn：バージョン 0.3.16 を LP で公開する
 
 - **きっかけ**：konta の依頼（2026-11-04）「0.3.16 で公開」（プレビューの「×」の修正と、LP の SEO 対策を受けて）

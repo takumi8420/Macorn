@@ -102,6 +102,10 @@ final class PaneContainerViewController: NSViewController {
 
     /// 幅が狭いために一時的に隠している画面があるか（要件 P-08）
     private var isTemporarilyCollapsed = false
+    /// プレビューを最大化している画面（ほかの画面は畳んでいる）
+    private weak var maximizedPane: FileBrowserViewController?
+    /// プレビューの最大化を始めた・やめたとき（サイドバーを畳む・戻すため）
+    var onPreviewMaximizeChanged: ((Bool) -> Void)?
 
     init(layout: PaneLayout) {
         let tree = layout.resolvedTree
@@ -200,6 +204,10 @@ final class PaneContainerViewController: NSViewController {
             activate(pane, focus: false)
         }
         pane.onSwitchPane = { [weak self] in self?.switchActivePane() }
+        pane.onPreviewMaximizeChanged = { [weak self, weak pane] maximized in
+            guard let self, let pane else { return }
+            setMaximizedPane(maximized ? pane : nil)
+        }
         pane.onClosePane = { [weak self, weak pane] in
             // ボタンを押した処理が終わってから閉じる（押したボタンを含む画面ごと外すため）
             DispatchQueue.main.async {
@@ -221,6 +229,30 @@ final class PaneContainerViewController: NSViewController {
     // MARK: - 分ける・閉じる
 
     /// ⌘\：1画面なら右に分ける（要件 P-01）。分けているなら、操作対象の画面だけを残して1画面に戻す（要件 P-07）
+    /// プレビューを最大化した画面だけを残して、ほかの画面を畳む。nil で元に戻す
+    private func setMaximizedPane(_ pane: FileBrowserViewController?) {
+        if let current = maximizedPane, current !== pane {
+            maximizedPane = nil
+            current.setPreviewMaximized(false)
+        }
+        maximizedPane = pane
+        if isSplit {
+            if let pane {
+                root.collapse(keeping: pane)
+            } else {
+                root.collapse(keeping: nil)
+                isTemporarilyCollapsed = false
+                updateNarrowLayout()
+            }
+        }
+        onPreviewMaximizeChanged?(pane != nil)
+    }
+
+    /// 画面を分ける・閉じる前に、プレビューの最大化をやめる
+    private func endPreviewMaximize() {
+        maximizedPane?.setPreviewMaximized(false)
+    }
+
     func toggleSplit() {
         if isSplit { closeOtherPanes() } else { split(.right) }
     }
@@ -229,6 +261,7 @@ final class PaneContainerViewController: NSViewController {
     @discardableResult
     func split(_ direction: PaneSplitDirection, at url: URL? = nil, focusNew: Bool = false) -> FileBrowserViewController? {
         guard canSplit, let group = root.group(containing: active) else { NSSound.beep(); return nil }
+        endPreviewMaximize()
         let pane = FileBrowserViewController(url: url ?? active.state.currentURL)
         pane.focusesOnFirstAppear = focusNew
         configure(pane)
@@ -275,6 +308,7 @@ final class PaneContainerViewController: NSViewController {
 
     func close(_ pane: FileBrowserViewController) {
         guard isSplit, let group = root.group(containing: pane) else { NSSound.beep(); return }
+        endPreviewMaximize()
         let all = panes
         let index = all.firstIndex { $0 === pane } ?? 0
         pane.tearDown()
@@ -297,6 +331,7 @@ final class PaneContainerViewController: NSViewController {
     /// 操作対象の画面だけを残して1画面に戻す（要件 P-07）
     func closeOtherPanes() {
         guard isSplit else { return }
+        endPreviewMaximize()
         for pane in panes where pane !== active { pane.tearDown() }
         root.removeAll()
         root.setVertical(true)
@@ -362,6 +397,8 @@ final class PaneContainerViewController: NSViewController {
     }
 
     func activate(_ pane: FileBrowserViewController, focus: Bool) {
+        // 最大化していない画面へ移ったら（Tab など）、最大化をやめる
+        if let maximizedPane, maximizedPane !== pane { maximizedPane.setPreviewMaximized(false) }
         let changed = pane !== active || model.activePane !== pane.state
         if pane !== active { previous = active }
         active = pane
@@ -386,7 +423,7 @@ final class PaneContainerViewController: NSViewController {
 
     /// ウィンドウが狭いときは、操作対象でない画面を一時的に隠す（要件 P-08）。
     private func updateNarrowLayout(force: Bool = false) {
-        guard isSplit else { return }
+        guard isSplit, maximizedPane == nil else { return }
         let narrow = view.bounds.width > 0 && view.bounds.width < Self.narrowWidth
         guard narrow != isTemporarilyCollapsed || force else { return }
         isTemporarilyCollapsed = narrow
