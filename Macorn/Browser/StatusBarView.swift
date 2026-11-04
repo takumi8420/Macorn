@@ -4,27 +4,9 @@ struct StatusBarView: View {
     var state: PaneState
     /// 「n 件の変更」を押したとき（変更のウィンドウを開く）
     var onShowChanges: () -> Void = {}
-    /// ターミナルのボタンを押したとき（ウィンドウの下にターミナルを出す・隠す）
-    var onToggleTerminal: () -> Void = {}
 
     var body: some View {
         HStack(spacing: 6) {
-            Button(action: onToggleTerminal) {
-                HStack(spacing: 3) {
-                    Image(systemName: "terminal")
-                    Text("ターミナル")
-                }
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .foregroundStyle(state.isTerminalVisible ? Color.accentColor : Color.secondary)
-                .background(
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(state.isTerminalVisible ? Color.accentColor.opacity(0.14) : Color.primary.opacity(0.06))
-                )
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help(state.isTerminalVisible ? "ターミナルを隠す（⌃`）" : "ウィンドウの下にターミナルを出す（⌃`）")
             Text(summary)
                 .lineLimit(1)
             Spacer()

@@ -97,11 +97,7 @@ final class FileBrowserViewController: NSViewController {
         pathBarHost = pathBar
         let statusBar = NSHostingView(rootView: StatusBarView(
             state: state,
-            onShowChanges: { [weak self] in self?.showChanges(nil) },
-            onToggleTerminal: { [weak self] in
-                guard let window = self?.view.window else { return }
-                ActionRouter.send(#selector(BrowserWindowController.toggleTerminalPanel(_:)), in: window)
-            }
+            onShowChanges: { [weak self] in self?.showChanges(nil) }
         ))
         statusBar.sizingOptions = []
         let messageHost = NSHostingView(rootView: PaneMessageView(state: state, onOpenSettings: Self.openPrivacySettings))
@@ -323,7 +319,21 @@ final class FileBrowserViewController: NSViewController {
                 guard let self, state.currentURL.isFileURL else { return false }
                 return PathCopier.copy([state.currentURL], style: .full)
             },
-            closePane: { [weak self] in self?.onClosePane?() }
+            closePane: { [weak self] in self?.onClosePane?() },
+            newFolder: { [weak self] in
+                self?.onActivate?()
+                self?.newFolder(nil)
+            },
+            newFile: { [weak self] in
+                self?.onActivate?()
+                self?.newFile(nil)
+            },
+            toggleFavorite: { [weak self] in
+                // この画面を操作対象にしてから、ウィンドウの「お気に入り」の切り替えを送る
+                guard let self, let window = view.window else { return }
+                onActivate?()
+                ActionRouter.send(#selector(BrowserWindowController.toggleFavoriteFolder(_:)), in: window)
+            }
         )
     }
 

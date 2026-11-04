@@ -13,6 +13,10 @@ struct PathBarActions {
     var copyCurrentPath: () -> Bool
     /// 画面を分けているとき、この画面を閉じる（パスバーの右端の「×」）
     var closePane: () -> Void
+    /// パスバーの右の、この画面で表示中のフォルダへの追加（新規フォルダ・新規ファイル・お気に入り）
+    var newFolder: () -> Void = {}
+    var newFile: () -> Void = {}
+    var toggleFavorite: () -> Void = {}
 }
 
 /// パンくずリスト（要件 N-06）と、パスの直接入力欄（要件 N-07）。
@@ -45,8 +49,21 @@ struct PathBarView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-            // 右端: Git のリポジトリのページを開くボタンと、分けているときはこの画面を閉じる「×」
+            // 右端: この画面への追加（新規フォルダ・新規ファイル・お気に入り）、Git のリポジトリのページを開くボタン、
+            // 分けているときはこの画面を閉じる「×」。ウィンドウ全体に関わるもの（分割・ターミナル）は上のツールバーに置く
             if !state.isEditingPath {
+                if state.currentURL.isFileURL {
+                    let isFavorite = SidebarStore.shared.containsFavorite(state.currentURL)
+                    HStack(spacing: 2) {
+                        PathBarIconButton(symbol: "folder.badge.plus", help: "このフォルダに、新しいフォルダを作る（⇧⌘N）", action: actions.newFolder)
+                        PathBarIconButton(symbol: "doc.badge.plus", help: "このフォルダに、新しいファイルを作る（⌥⌘N）", action: actions.newFile)
+                        PathBarIconButton(
+                            symbol: isFavorite ? "star.fill" : "star",
+                            help: isFavorite ? "このフォルダをお気に入りから外す" : "このフォルダをお気に入りに追加",
+                            action: actions.toggleFavorite
+                        )
+                    }
+                }
                 if let url = state.gitRemoteWebURL {
                     RepositoryWebButton(
                         url: url,
@@ -244,6 +261,29 @@ private struct RepositoryWebButton: View {
 }
 
 /// 画面を分けているときに、パスバーの右端に出す「×」。押すとこの画面を閉じる
+/// パスバーの右に並べる小さなアイコンのボタン（カーソルを乗せるとうすく塗る）
+private struct PathBarIconButton: View {
+    let symbol: String
+    let help: String
+    let action: () -> Void
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 13))
+                .foregroundStyle(isHovering ? Color.primary : .secondary)
+                .frame(width: 26, height: 22)
+                .background(RoundedRectangle(cornerRadius: 5).fill(isHovering ? Color.primary.opacity(0.08) : .clear))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+        .help(help)
+        .accessibilityLabel(help)
+    }
+}
+
 private struct ClosePaneButton: View {
     let close: () -> Void
     @State private var isHovering = false

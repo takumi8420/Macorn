@@ -11,10 +11,7 @@ extension NSToolbarItem.Identifier {
     static let forward = NSToolbarItem.Identifier("macorn.forward")
     static let parent = NSToolbarItem.Identifier("macorn.parent")
     static let split = NSToolbarItem.Identifier("macorn.split")
-    static let favorite = NSToolbarItem.Identifier("macorn.favorite")
-    static let newFolder = NSToolbarItem.Identifier("macorn.newFolder")
-    static let newFile = NSToolbarItem.Identifier("macorn.newFile")
-    static let copyPath = NSToolbarItem.Identifier("macorn.copyPath")
+    static let terminal = NSToolbarItem.Identifier("macorn.terminal")
 }
 
 /// 1つのウィンドウ（= 1つのタブ）。サイドバーと、1つまたは2つの画面を並べる。
@@ -154,7 +151,7 @@ final class BrowserWindowController: NSWindowController {
     @objc func placeTerminalAtLeft(_ sender: Any?) { workspace.move(to: .left) }
     @objc func placeTerminalAtRight(_ sender: Any?) { workspace.move(to: .right) }
 
-    /// ステータスバーのボタン: 出ていれば隠し、出ていなければ出す（フォーカスの有無にかかわらず）
+    /// 右上のツールバーのボタン: 出ていれば隠し、出ていなければ出す（フォーカスの有無にかかわらず）
     @objc func toggleTerminalPanel(_ sender: Any?) {
         if workspace.isTerminalVisible {
             hideTerminal()
@@ -169,12 +166,13 @@ final class BrowserWindowController: NSWindowController {
         syncTerminalState()
     }
 
-    /// ステータスバーのターミナルのボタンの見た目を、出しているかどうかに合わせる
+    /// 右上のターミナルのボタンの見た目を、出しているかどうかに合わせる
     private func syncTerminalState() {
         let visible = workspace.isTerminalVisible
         for pane in panes.panes where pane.state.isTerminalVisible != visible {
             pane.state.isTerminalVisible = visible
         }
+        window?.toolbar?.validateVisibleItems()
     }
 
     // MARK: - メニュー・ツールバーの操作
@@ -184,11 +182,6 @@ final class BrowserWindowController: NSWindowController {
     @objc func goToParent(_ sender: Any?) { browser.goToParent() }
     @objc func openSelection(_ sender: Any?) { browser.openSelection() }
     @objc func editPath(_ sender: Any?) { browser.beginEditingPath() }
-    /// ツールバーのボタン：操作対象の画面の、表示中のフォルダに作る（メニューの「新規フォルダ」「新規ファイル」と同じ）
-    @objc func createFolderFromToolbar(_ sender: Any?) { browser.newFolder(sender) }
-    /// ツールバーのボタン：選択中の項目（なければ表示中のフォルダ）のパスをコピー（⌥⌘C と同じ）
-    @objc func copyPathFromToolbar(_ sender: Any?) { browser.copyPath(sender) }
-    @objc func createFileFromToolbar(_ sender: Any?) { browser.newFile(sender) }
 
     @objc func goToHome(_ sender: Any?) { go(to: FileManager.default.homeDirectoryForCurrentUser) }
     @objc func goToDesktop(_ sender: Any?) { go(toDirectory: .desktopDirectory) }
@@ -201,7 +194,7 @@ final class BrowserWindowController: NSWindowController {
         toggleFavorites(favoriteTargets)
     }
 
-    /// ツールバーの ★: 表示中のフォルダをお気に入りに入れる・外す
+    /// パスバーの右の ★: 表示中のフォルダをお気に入りに入れる・外す
     @objc func toggleFavoriteFolder(_ sender: Any?) {
         toggleFavorites([browser.state.currentURL])
     }
@@ -297,7 +290,7 @@ final class BrowserWindowController: NSWindowController {
         case #selector(openSelection(_:)): browser.state.selectedCount > 0
         case #selector(addToSidebar(_:)):
             !favoriteTargets.isEmpty
-        case #selector(toggleFavoriteFolder(_:)), #selector(createFolderFromToolbar(_:)), #selector(createFileFromToolbar(_:)):
+        case #selector(toggleFavoriteFolder(_:)):
             // タグの一覧は実際のフォルダではないので、作れない
             browser.state.currentURL.isFileURL
         case #selector(copyToOtherPane(_:)), #selector(moveToOtherPane(_:)):
@@ -337,12 +330,11 @@ extension BrowserWindowController: NSMenuItemValidation, NSToolbarItemValidation
     }
 
     func validateToolbarItem(_ item: NSToolbarItem) -> Bool {
-        if item.itemIdentifier == .favorite {
-            // 表示中のフォルダがお気に入りなら塗りつぶしの ★ にする
-            let isFavorite = SidebarStore.shared.containsFavorite(browser.state.currentURL)
-            item.image = NSImage(systemSymbolName: isFavorite ? "star.fill" : "star", accessibilityDescription: "お気に入り")
-            item.label = isFavorite ? "お気に入りから外す" : "お気に入りに追加"
-            item.toolTip = isFavorite ? "表示中のフォルダをお気に入りから外す" : "表示中のフォルダをお気に入りに追加"
+        if item.itemIdentifier == .terminal {
+            // 出しているときは塗りつぶしのアイコンにする
+            let visible = workspace.isTerminalVisible
+            item.image = NSImage(systemSymbolName: visible ? "terminal.fill" : "terminal", accessibilityDescription: "ターミナル")
+            item.toolTip = visible ? "ターミナルを隠す（⌃`）" : "ターミナルを出す（⌃`）。置き場所は「表示」メニューの「ターミナルの位置」"
         }
         if item.itemIdentifier == .split {
             item.toolTip = panes.isSplit ? "1画面に戻す。操作中の画面だけを残す（⌘\\）" : "画面を左右2つに分ける（⌘\\）。さらに分けるには「表示」メニューの「右に分ける」「下に分ける」"
@@ -389,7 +381,7 @@ extension BrowserWindowController: NSWindowDelegate {
 
 extension BrowserWindowController: NSToolbarDelegate {
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.toggleSidebar, .sidebarTrackingSeparator, .back, .forward, .parent, .flexibleSpace, .copyPath, .newFolder, .newFile, .favorite, .split]
+        [.toggleSidebar, .sidebarTrackingSeparator, .back, .forward, .parent, .flexibleSpace, .split, .terminal]
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
@@ -408,14 +400,8 @@ extension BrowserWindowController: NSToolbarDelegate {
             makeItem(itemIdentifier, label: "進む", tip: "戻る前のフォルダへ進む（⌘]）", symbol: "chevron.right", action: #selector(goForward(_:)))
         case .parent:
             makeItem(itemIdentifier, label: "親フォルダ", tip: "1つ上のフォルダへ移動（⌘↑）", symbol: "arrow.up", action: #selector(goToParent(_:)))
-        case .copyPath:
-            makeItem(itemIdentifier, label: "パスをコピー", tip: "選んだ項目のパスをコピー。選んでいなければ表示中のフォルダのパス（⌥⌘C）", symbol: "doc.on.doc", action: #selector(copyPathFromToolbar(_:)))
-        case .newFolder:
-            makeItem(itemIdentifier, label: "新規フォルダ", tip: "表示中のフォルダに、新しいフォルダを作る（⇧⌘N）", symbol: "folder.badge.plus", action: #selector(createFolderFromToolbar(_:)))
-        case .newFile:
-            makeItem(itemIdentifier, label: "新規ファイル", tip: "表示中のフォルダに、新しいファイルを作る（⌥⌘N）", symbol: "doc.badge.plus", action: #selector(createFileFromToolbar(_:)))
-        case .favorite:
-            makeItem(itemIdentifier, label: "お気に入り", tip: "表示中のフォルダをお気に入りに追加", symbol: "star", action: #selector(toggleFavoriteFolder(_:)))
+        case .terminal:
+            makeItem(itemIdentifier, label: "ターミナル", tip: "ターミナルを出す（⌃`）", symbol: "terminal", action: #selector(toggleTerminalPanel(_:)))
         case .split:
             makeItem(itemIdentifier, label: "2画面表示", tip: "画面を左右2つに分ける（⌘\\）", symbol: "rectangle.split.2x1", action: #selector(toggleSplit(_:)))
         default:

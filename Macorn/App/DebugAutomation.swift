@@ -129,8 +129,16 @@ enum DebugAutomation {
             if let root = controller.window?.contentView?.superview { walk(root, depth: 0) }
         case "toolbarclick":
             // ツールバーのボタン（短い名前で指定）を押す
-            let item = controller.window?.toolbar?.items.first { $0.label == argument }
-            (item?.view as? NSButton)?.performClick(nil)
+            // 短い名前でも識別子（macorn.terminal など）でも指定できる
+            let item = controller.window?.toolbar?.items.first { $0.label == argument || $0.itemIdentifier.rawValue == argument }
+            controller.window?.toolbar?.validateVisibleItems()
+            if let button = item?.view as? NSButton {
+                button.performClick(nil)
+            } else if let item, item.isEnabled, let action = item.action {
+                NSApp.sendAction(action, to: item.target, from: item)
+            } else {
+                print("[debug] toolbarclick \(argument) not found")
+            }
         case "tabclose":
             // 指定した番号のタブの「×」を押す
             let group = controller.window?.tabGroup?.windows ?? []
@@ -454,8 +462,12 @@ enum DebugAutomation {
                     view.keyDown(with: event)
                 }
             }
+        case "termstate":
+            controller.window?.toolbar?.validateVisibleItems()
+            let item = controller.window?.toolbar?.items.first { $0.itemIdentifier == .terminal }
+            print("[debug] term visible=\(controller.workspace.isTerminalVisible) toolbar=\(item?.toolTip ?? "-")")
         case "termbutton":
-            // ステータスバーのターミナルのボタンを押したのと同じ
+            // 右上のツールバーのターミナルのボタンを押したのと同じ
             ActionRouter.send(#selector(BrowserWindowController.toggleTerminalPanel(_:)), in: controller.window)
             print("[debug] term button visible=\(controller.workspace.isTerminalVisible) paneState=\(controller.panes.panes.map(\.state.isTerminalVisible))")
         case "termpos":
@@ -538,7 +550,7 @@ enum DebugAutomation {
                 SidebarStore.shared.renameFavorite(item.url, to: parts[1])
             }
         case "toolbarclick":
-            // ツールバーのボタンを押す。引数は識別子（macorn.newFolder など）
+            // ツールバーのボタンを押す。引数は識別子（macorn.terminal など）
             if let item = controller.window?.toolbar?.items.first(where: { $0.itemIdentifier.rawValue == argument }) {
                 controller.window?.toolbar?.validateVisibleItems()
                 print("[debug] toolbarclick \(argument) enabled=\(item.isEnabled)")
@@ -548,8 +560,7 @@ enum DebugAutomation {
             }
         case "toolbar":
             controller.window?.toolbar?.validateVisibleItems()
-            let star = controller.window?.toolbar?.items.first { $0.itemIdentifier == .favorite }
-            print("[debug] star=\(star?.label ?? "-")")
+            print("[debug] toolbar=\(controller.window?.toolbar?.items.map(\.itemIdentifier.rawValue) ?? [])")
         case "pane":
             let panes = controller.panes
             print("[debug] pane split=\(panes.isSplit) active=\(panes.activeIndex) paths=\(panes.panes.map(\.state.currentURL.lastPathComponent)) selected=\(panes.panes.map { $0.selectedNodes.map(\.entry.name) }) title=\(controller.window?.title ?? "")")
