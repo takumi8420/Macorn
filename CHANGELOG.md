@@ -6,6 +6,15 @@
 
 ## 2026-11-06
 
+### Macorn：テキスト（.txt）もプレビューのまま編集できるようにする
+
+- **きっかけ**：konta の依頼（2026-11-06）「txt も md と同じようにプレビューと編集ができるようにして欲しいです」
+- **意図・方針**：それまで .txt はプレビューの対象外だった。Markdown と同じ Web の領域・保存の仕組み（手を止めて 0.4 秒ほどで自動保存、ほかのファイルへ移る前にも保存、自分の保存では表示し直さない、ファイルを置き換えず中身だけ書く、UTF-8 で読めないものは編集しない、CRLF を保つ、⌘⌫ などファイル操作のキーを文字の編集に使う）に載せた。テキストは Markdown として整形すると、保存したときに「*」などが書き換わってしまうので、整形はせず書いてあるとおりの改行・空白で見せ、書いたとおりに保存する（`contenteditable="plaintext-only"`。Enter は段落ではなく改行の文字で入れ、Tab はタブを入れる）。対象は .txt と .text。既定のアプリにする種類には足していない
+- 変更 `Macorn/Preview/FilePreviewController.swift` — 種類 `text` を足し、テキストを編集できる形で表示する
+- 変更 `Macorn/Preview/MarkdownEditor.swift` — テキスト用の編集（書いたとおりに読み出して保存する）と見た目を足す
+- 変更 `MacornTests/MarkdownRendererTests.swift` — .txt をテキストとして扱うことを確かめる
+- 変更 `AGENTS.md`・`docs/REQUIREMENTS.md`・`README.md` — テキストのプレビューと編集を書き足す
+
 ### Macorn：バージョン 0.3.21 を LP で公開する
 
 - **きっかけ**：konta の依頼（2026-11-06）「Commit and publish」（Markdown をプレビューのまま編集できるようにしたのを、手で試したあとに）

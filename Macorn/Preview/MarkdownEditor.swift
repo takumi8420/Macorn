@@ -1,6 +1,6 @@
 import WebKit
 
-/// Markdown のプレビューを、その場で書き換えられるようにする（Notion のように）
+/// Markdown のプレビューを、その場で書き換えられるようにする（Notion のように）。テキスト（.txt）も書いたとおりに書き換えられる
 ///
 /// - 表示中の Markdown のページに、編集用のスクリプトを差し込む。ファイルに書かれたスクリプトは止めたまま、
 ///   このスクリプトだけをアプリ専用の場所（WKContentWorld）で動かす
@@ -16,6 +16,12 @@ enum MarkdownEditor {
     static var userScript: WKUserScript {
         WKUserScript(source: script, injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: world)
     }
+
+    /// テキスト（.txt）の見た目。書いてあるとおりの改行・空白で見せる
+    static let plainStyle = """
+    #md-plain { white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 4; min-height: calc(100vh - 68px); outline: none; caret-color: var(--accent); }
+    #md-plain:empty::before { content: "ここに入力"; color: var(--muted); pointer-events: none; }
+    """
 
     /// 編集中の見た目（Markdown のページの style に足す）
     static let style = """
@@ -35,6 +41,70 @@ enum MarkdownEditor {
       const payload = JSON.parse(data.content);
       if (!payload.editable) return;
       window.__macornEditor = true;
+
+      // MARK: テキスト（.txt）。書いたとおりに保存する
+      if (payload.plain) {
+        const area = document.getElementById('md-plain');
+        if (!area) return;
+        const send = (message) => {
+          message.path = payload.path;
+          window.webkit.messageHandlers.macornEditor.postMessage(message);
+        };
+        area.contentEditable = 'plaintext-only';
+        area.spellcheck = false;
+        // 改行は文字のほか <br> や <div> で入ることもあるので、どれも改行として読む
+        const read = (node) => {
+          let out = '';
+          node.childNodes.forEach((child) => {
+            if (child.nodeType === 3) { out += child.nodeValue; return; }
+            if (child.nodeType !== 1) return;
+            if (child.nodeName === 'BR') { out += '\n'; return; }
+            if ((child.nodeName === 'DIV' || child.nodeName === 'P') && out && !out.endsWith('\n')) out += '\n';
+            out += read(child);
+          });
+          return out;
+        };
+        let lastSent = payload.document.tail;
+        let timer = null;
+        const save = () => {
+          clearTimeout(timer);
+          timer = null;
+          const text = read(area);
+          if (text === lastSent) return;
+          lastSent = text;
+          send({ type: 'save', text });
+        };
+        window.__macornEditorFlush = save;
+        window.__macornEditorSerialize = () => read(area);
+        window.addEventListener('pagehide', save);
+        area.addEventListener('focusout', save);
+        area.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(save, 400); });
+        area.addEventListener('keydown', (event) => {
+          if (event.isComposing || event.keyCode === 229) return;
+          // 改行は段落（<div>）ではなく、改行の文字で入れる
+          if (event.key === 'Enter' && !event.metaKey && !event.ctrlKey && !event.altKey) {
+            event.preventDefault();
+            document.execCommand('insertLineBreak');
+            return;
+          }
+          if (event.key === 'Tab' && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
+            event.preventDefault();
+            document.execCommand('insertText', false, '\t');
+          }
+        });
+        // 余白をクリックしても、文字の終わりから書けるようにする
+        document.addEventListener('mousedown', (event) => {
+          if (event.target !== document.body && event.target !== document.documentElement) return;
+          event.preventDefault();
+          area.focus();
+          const range = document.createRange();
+          range.selectNodeContents(area);
+          range.collapse(false);
+          window.getSelection().removeAllRanges();
+          window.getSelection().addRange(range);
+        });
+        return;
+      }
       const model = payload.document;
       const post = (message) => {
         message.path = payload.path;

@@ -87,6 +87,9 @@ struct FilePreviewKindTests {
         #expect(FilePreviewController.kind(for: URL(fileURLWithPath: "/a/index.html")) == .html)
         #expect(FilePreviewController.kind(for: URL(fileURLWithPath: "/a/page.HTM")) == .html)
         #expect(FilePreviewController.kind(for: URL(fileURLWithPath: "/a/app.swift")) == nil)
+        // テキストは書いてあるとおりに見せ、その場で書き換えられる
+        #expect(FilePreviewController.kind(for: URL(fileURLWithPath: "/a/memo.txt")) == .text)
+        #expect(FilePreviewController.kind(for: URL(fileURLWithPath: "/a/MEMO.TXT")) == .text)
     }
 }
 

@@ -11,6 +11,8 @@ import WebKit
 final class FilePreviewController: NSViewController {
     enum Kind: Equatable {
         case markdown, html
+        /// テキスト（.txt。書いてあるとおりに見せ、その場で書き換えられる）
+        case text
         /// CSV・TSV（表にして見せる）
         case csv
         /// 画像・PDF・動画・音声・書類など、目で見て確認するもの
@@ -44,6 +46,7 @@ final class FilePreviewController: NSViewController {
     static let markdownExtensions: Set<String> = ["md", "markdown", "mdown", "mkd", "mkdn"]
     static let htmlExtensions: Set<String> = ["html", "htm", "xhtml"]
     static let csvExtensions: Set<String> = ["csv", "tsv", "tab"]
+    static let textExtensions: Set<String> = ["txt", "text"]
 
     /// プレビューできるファイルの種類。できなければ nil
     /// 拡張子がほかの種類（動画など）と重なるソースコード
@@ -56,6 +59,7 @@ final class FilePreviewController: NSViewController {
         if markdownExtensions.contains(ext) { return .markdown }
         if htmlExtensions.contains(ext) { return .html }
         if csvExtensions.contains(ext) { return .csv }
+        if textExtensions.contains(ext) { return .text }
         if let type = UTType(filenameExtension: ext), visualTypes.contains(where: { type.conforms(to: $0) }) {
             return .visual
         }
@@ -63,6 +67,9 @@ final class FilePreviewController: NSViewController {
     }
 
     static func isMarkdown(_ url: URL) -> Bool { kind(for: url) == .markdown }
+
+    /// プレビューのまま書き換えられる種類（Markdown・テキスト）
+    var isEditableKind: Bool { kind == .markdown || kind == .text }
 
     private(set) var fileURL: URL?
     private(set) var kind: Kind = .markdown
@@ -281,7 +288,7 @@ final class FilePreviewController: NSViewController {
         titleLabel.stringValue = url.lastPathComponent
         titleLabel.toolTip = url.path
         // プレビューで編集して保存しただけなら、表示し直さない（一覧の更新で呼ばれても、カーソルを保つ）
-        if !switching, kind == .markdown, let saved = savedByEditor[url.path], (try? Data(contentsOf: url)) == saved { return }
+        if !switching, isEditableKind, let saved = savedByEditor[url.path], (try? Data(contentsOf: url)) == saved { return }
         reload(keepingScroll: false)
     }
 
@@ -448,9 +455,10 @@ final class FilePreviewController: NSViewController {
         let isHTML = kind == .html
         let isVisual = kind == .visual
         let isCSV = kind == .csv
-        let symbol = isVisual ? "eye" : isHTML ? "globe" : isCSV ? "tablecells" : "doc.richtext"
+        let isText = kind == .text
+        let symbol = isVisual ? "eye" : isHTML ? "globe" : isCSV ? "tablecells" : isText ? "doc.plaintext" : "doc.richtext"
         iconView.image = NSImage(systemSymbolName: symbol,
-                                 accessibilityDescription: isVisual ? "プレビュー" : isHTML ? "HTML" : isCSV ? "CSV" : "Markdown")
+                                 accessibilityDescription: isVisual ? "プレビュー" : isHTML ? "HTML" : isCSV ? "CSV" : isText ? "テキスト" : "Markdown")
         scriptButton?.isHidden = !isHTML
         // 拡大・縮小は、Markdown・HTML・PDF で使える
         zoomControls?.isHidden = !canZoom
@@ -500,22 +508,32 @@ final class FilePreviewController: NSViewController {
         } else {
             let text: String
             let data = try? Data(contentsOf: url)
-            // UTF-8 で読める Markdown だけを、プレビューで編集できるようにする（ほかの文字コードを書き換えないため）
+            // UTF-8 で読める Markdown・テキストだけを、プレビューで編集できるようにする（ほかの文字コードを書き換えないため）
             let strict = data.flatMap { String(data: $0, encoding: .utf8) }
             if let data {
                 text = strict ?? String(decoding: data, as: UTF8.self)
             } else {
-                text = "*「\(url.lastPathComponent)」を読めませんでした。*"
+                text = kind == .text ? "「\(url.lastPathComponent)」を読めませんでした。" : "*「\(url.lastPathComponent)」を読めませんでした。*"
             }
             let editable = strict != nil
-            let (body, document) = MarkdownRenderer.renderEditable(text)
-            let payload = EditorPayload(path: url.path, editable: editable, document: document)
+            let body: String
+            let document: MarkdownRenderer.EditableDocument
+            if kind == .text {
+                // テキストは書いてあるとおりに見せる（改行の形だけ LF にそろえ、保存のときに戻す）
+                let crlf = text.contains("\r\n")
+                let plain = text.replacingOccurrences(of: "\r\n", with: "\n")
+                body = "<div id=\"md-plain\">\(MarkdownRenderer.escape(plain))</div>"
+                document = MarkdownRenderer.EditableDocument(head: "", blocks: [], tail: plain, crlf: crlf)
+            } else {
+                (body, document) = MarkdownRenderer.renderEditable(text)
+            }
+            let payload = EditorPayload(path: url.path, editable: editable, plain: kind == .text, document: document)
             // スクリプトを止めたページでは <script> の要素が消えるので、属性で渡す
             let json = (try? JSONEncoder().encode(payload)).flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
             if editable { editablePaths.insert(url.path) }
             webView.claimsEditingKeys = editable
             html = Self.page(body: body, baseURL: url.deletingLastPathComponent(), title: url.lastPathComponent,
-                             extraStyle: editable ? MarkdownEditor.style : "",
+                             extraStyle: (kind == .text ? MarkdownEditor.plainStyle : "") + (editable ? MarkdownEditor.style : ""),
                              extraHead: "<meta name=\"macorn-md\" content=\"\(MarkdownRenderer.escape(json))\">")
         }
         lastHTMLLength = html.count
@@ -731,12 +749,14 @@ extension FilePreviewController {
     struct EditorPayload: Encodable {
         var path: String
         var editable: Bool
+        /// テキスト（Markdown の書き方を使わず、書いたとおりに保存する）
+        var plain: Bool
         var document: MarkdownRenderer.EditableDocument
     }
 
     /// 打ちかけの編集を、すぐに保存させる（ほかのファイルへ移る前など）
     func flushEditor() {
-        guard kind == .markdown, fileURL != nil else { return }
+        guard isEditableKind, fileURL != nil else { return }
         webView.evaluateJavaScript("window.__macornEditorFlush && window.__macornEditorFlush()", in: nil, in: MarkdownEditor.world) { _ in }
     }
 
