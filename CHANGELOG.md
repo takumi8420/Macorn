@@ -4,6 +4,16 @@
 
 2026-10-26 に運用を開始した。2026-10-26 の分（要件定義から v1.0 の実装まで）は、作業したセッションの会話をもとに後から記録した。それ以前の経緯はない（このリポジトリは 2026-10-26 に作った）。
 
+## 2026-11-06
+
+### Macorn：バージョン 0.3.21 を LP で公開する
+
+- **きっかけ**：konta の依頼（2026-11-06）「Commit and publish」（Markdown をプレビューのまま編集できるようにしたのを、手で試したあとに）
+- **意図・方針**：0.3.20 → 0.3.21（ビルド番号は 23 → 24）。`scripts/release.sh --publish` で署名・公証した DMG・LP の表記・`version.json` をまとめて差し替えた。リリースノートのいちばん上に 0.3.21 を足し、「最新」の印を付け替えた
+- 変更 `Macorn.xcodeproj/project.pbxproj` — 版を 0.3.21（ビルド 24）にする
+- 変更 `site/download/Macorn.dmg`・`site/index.html`・`site/version.json` — 0.3.21 に差し替える（release.sh が書く）
+- 変更 `site/releases/index.html` — 0.3.21 のリリースノートを足し、「最新」を付け替える
+
 ## 2026-11-05
 
 ### Macorn：Markdown をプレビューのまま、Notion のように編集できるようにする
