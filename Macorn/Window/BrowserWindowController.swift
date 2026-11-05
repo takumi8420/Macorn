@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import WebKit
 
 protocol BrowserWindowControllerDelegate: AnyObject {
     func windowControllerRequestsNewTab(_ controller: BrowserWindowController, url: URL)
@@ -23,6 +24,8 @@ final class BrowserWindowController: NSWindowController {
     let workspace: WorkspaceSplitViewController
     weak var appDelegate: BrowserWindowControllerDelegate?
     private let textUndoManager = UndoManager()
+    /// プレビューで Markdown を編集するときの取り消し
+    private let webUndoManager = UndoManager()
 
     /// 操作対象の画面（2画面のときは、最後にクリック・フォーカスした側）
     var browser: FileBrowserViewController { panes.activePane }
@@ -373,6 +376,9 @@ extension BrowserWindowController: NSWindowDelegate {
     /// ファイル操作の取り消しはアプリ全体で1つ。文字の入力中だけは入力欄の取り消しを使う。
     func windowWillReturnUndoManager(_ window: NSWindow) -> UndoManager? {
         if window.firstResponder is NSText { return textUndoManager }
+        // プレビューで Markdown を編集しているときは、その文字の取り消しを使う
+        // （Web の領域は、ウィンドウが返したものに編集の取り消しを積む。ファイル操作の取り消しに混ぜない）
+        if window.firstResponder is WKWebView { return webUndoManager }
         return FileOperationManager.shared.undoManager
     }
 }

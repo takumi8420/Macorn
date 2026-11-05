@@ -20,21 +20,92 @@ nonisolated enum MarkdownRenderer {
         return html + renderBlocks(lines, slugs: &slugs)
     }
 
+    // MARK: - プレビューでの編集
+
+    /// プレビューで編集するための HTML と、元の文章の切れ目
+    /// 文章は head + blocks[0].source + blocks[0].separator + … + blocks[n-1].source + tail で元どおりになる
+    struct EditableDocument: Encodable {
+        struct Block: Encodable {
+            var source: String
+            /// 次のブロックまでの空行など（最後のブロックでは空）
+            var separator: String
+        }
+        var head: String
+        var blocks: [Block]
+        var tail: String
+        /// 改行が CRLF だったか（保存するときに戻す）
+        var crlf: Bool
+    }
+
+    /// 一番外側のブロックを `<div class="md-block" data-i="番号">` で包んだ HTML と、元の文章の切れ目を返す
+    static func renderEditable(_ markdown: String) -> (html: String, document: EditableDocument) {
+        let crlf = markdown.contains("\r\n")
+        let normalized = markdown
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+        let original = normalized.components(separatedBy: "\n")
+        let lines = original.map { $0.replacingOccurrences(of: "\t", with: "    ") }
+        var html = ""
+        var offset = 0
+        if lines.first == "---", let end = lines.dropFirst().firstIndex(of: "---") {
+            let front = frontMatter(Array(lines[1..<end]))
+            if !front.isEmpty { html += "<div class=\"md-front\" contenteditable=\"false\">\(front)</div>\n" }
+            offset = end + 1
+        }
+        var ranges: [(start: Int, end: Int)] = []
+        var slugs: [String: Int] = [:]
+        _ = renderBlocks(Array(lines[offset...]), slugs: &slugs) { start, end, fragment, raw in
+            // 閉じていないコードブロックは、最後の行の先まで進んでいることがある
+            var end = min(end + offset, original.count)
+            let start = start + offset
+            // 後ろの空行はブロックに含めない
+            while end > start + 1, original[end - 1].trimmingCharacters(in: .whitespaces).isEmpty { end -= 1 }
+            let attributes = raw ? " data-raw contenteditable=\"false\"" : ""
+            html += "<div class=\"md-block\" data-i=\"\(ranges.count)\"\(attributes)>\n\(fragment)</div>\n"
+            ranges.append((start, end))
+        }
+        guard let first = ranges.first, let last = ranges.last else {
+            return (html, EditableDocument(head: normalized, blocks: [], tail: "", crlf: crlf))
+        }
+        let head = original[0..<first.start].map { $0 + "\n" }.joined()
+        var blocks: [EditableDocument.Block] = []
+        for (index, range) in ranges.enumerated() {
+            let source = original[range.start..<range.end].joined(separator: "\n")
+            var separator = ""
+            if index + 1 < ranges.count {
+                separator = "\n" + original[range.end..<ranges[index + 1].start].map { $0 + "\n" }.joined()
+            }
+            blocks.append(.init(source: source, separator: separator))
+        }
+        let tail = last.end < original.count ? "\n" + original[last.end...].joined(separator: "\n") : ""
+        return (html, EditableDocument(head: head, blocks: blocks, tail: tail, crlf: crlf))
+    }
+
     // MARK: - ブロック
 
-    private static func renderBlocks(_ lines: [String], slugs: inout [String: Int]) -> String {
+    /// 一番外側のブロックごとに、元の行の範囲（start..<end）と HTML を知らせる（プレビューでの編集用）
+    typealias BlockRecorder = (_ start: Int, _ end: Int, _ html: String, _ raw: Bool) -> Void
+
+    private static func renderBlocks(_ lines: [String], slugs: inout [String: Int], record: BlockRecorder? = nil) -> String {
         var html = ""
         var paragraph: [String] = []
+        var paragraphStart = 0
         var index = 0
+
+        func emit(_ start: Int, _ end: Int, _ fragment: String, raw: Bool = false) {
+            html += fragment
+            record?(start, end, fragment, raw)
+        }
 
         func flushParagraph() {
             guard !paragraph.isEmpty else { return }
-            html += "<p>" + inline(paragraph.joined(separator: "\n")) + "</p>\n"
+            emit(paragraphStart, paragraphStart + paragraph.count, "<p>" + inline(paragraph.joined(separator: "\n")) + "</p>\n")
             paragraph = []
         }
 
         while index < lines.count {
             let line = lines[index]
+            let blockStart = index
             let trimmed = line.trimmingCharacters(in: .whitespaces)
 
             if trimmed.isEmpty {
@@ -55,7 +126,7 @@ nonisolated enum MarkdownRenderer {
                 }
                 index += 1
                 let className = language.isEmpty ? "" : " class=\"language-\(escape(language.split(separator: " ").first.map(String.init) ?? ""))\""
-                html += "<pre><code\(className)>" + escape(code.joined(separator: "\n")) + "</code></pre>\n"
+                emit(blockStart, index, "<pre><code\(className)>" + escape(code.joined(separator: "\n")) + "</code></pre>\n")
                 continue
             }
 
@@ -64,16 +135,16 @@ nonisolated enum MarkdownRenderer {
                 flushParagraph()
                 let text = inline(heading.text)
                 let slug = uniqueSlug(heading.text, slugs: &slugs)
-                html += "<h\(heading.level) id=\"\(slug)\">\(text)</h\(heading.level)>\n"
                 index += 1
+                emit(blockStart, index, "<h\(heading.level) id=\"\(slug)\">\(text)</h\(heading.level)>\n")
                 continue
             }
 
             // 水平線
             if isHorizontalRule(trimmed) {
                 flushParagraph()
-                html += "<hr>\n"
                 index += 1
+                emit(blockStart, index, "<hr>\n")
                 continue
             }
 
@@ -94,7 +165,7 @@ nonisolated enum MarkdownRenderer {
                     }
                     index += 1
                 }
-                html += "<blockquote>\n" + renderBlocks(quoted, slugs: &slugs) + "</blockquote>\n"
+                emit(blockStart, index, "<blockquote>\n" + renderBlocks(quoted, slugs: &slugs) + "</blockquote>\n")
                 continue
             }
 
@@ -102,8 +173,8 @@ nonisolated enum MarkdownRenderer {
             if index + 1 < lines.count, line.contains("|"), isTableSeparator(lines[index + 1]) {
                 flushParagraph()
                 let (table, next) = renderTable(lines, start: index)
-                html += table
                 index = next
+                emit(blockStart, index, table)
                 continue
             }
 
@@ -111,8 +182,8 @@ nonisolated enum MarkdownRenderer {
             if listMarker(line) != nil {
                 flushParagraph()
                 let (list, next) = renderList(lines, start: index, slugs: &slugs)
-                html += list
                 index = next
+                emit(blockStart, index, list)
                 continue
             }
 
@@ -124,7 +195,7 @@ nonisolated enum MarkdownRenderer {
                     index += 1
                 }
                 while code.last?.trimmingCharacters(in: .whitespaces).isEmpty == true { code.removeLast() }
-                html += "<pre><code>" + escape(code.joined(separator: "\n")) + "</code></pre>\n"
+                emit(blockStart, index, "<pre><code>" + escape(code.joined(separator: "\n")) + "</code></pre>\n")
                 continue
             }
 
@@ -135,10 +206,11 @@ nonisolated enum MarkdownRenderer {
                     block.append(lines[index])
                     index += 1
                 }
-                html += block.joined(separator: "\n") + "\n"
+                emit(blockStart, index, block.joined(separator: "\n") + "\n", raw: true)
                 continue
             }
 
+            if paragraph.isEmpty { paragraphStart = index }
             paragraph.append(line.trimmingCharacters(in: .whitespaces) + (line.hasSuffix("  ") ? "  " : ""))
             index += 1
         }

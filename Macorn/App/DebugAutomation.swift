@@ -107,6 +107,14 @@ enum DebugAutomation {
                 let names = other.browser.selectedURLs.map(\.lastPathComponent).joined(separator: ",")
                 print("[debug] window \(index) path=\(other.browser.state.currentURL.path) selected=\(names) preview=\(other.browser.isFilePreviewVisible)")
             }
+        case "mdjs":
+            // プレビューの編集用スクリプトの場所で JavaScript を動かし、結果を出す（文字の入力は execCommand で代わりに行う）
+            let result: String = await withCheckedContinuation { continuation in
+                // 「;」を含む長いスクリプトは、ファイルのパスで渡す
+                let script = argument.hasPrefix("/") ? ((try? String(contentsOfFile: argument, encoding: .utf8)) ?? "") : argument
+                browser.filePreview.debugEditorEvaluate(script) { continuation.resume(returning: $0) }
+            }
+            print("[debug] mdjs=\(result)")
         case "front":
             // キーにはせず、手前にだけ出す（裏にあると描き直されないため）
             controller.window?.orderFrontRegardless()

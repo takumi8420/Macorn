@@ -78,11 +78,13 @@ final class FilePreviewController: NSViewController {
     /// プレビューの中のリンクから、別のプレビューできるファイル（Markdown・HTML）を開いたとき
     var onOpenPreviewable: ((URL) -> Void)?
 
-    private let webView: WKWebView = {
+    private let webView: PreviewWebView = {
         let configuration = WKWebViewConfiguration()
         // ファイルに書かれたスクリプトは初めは動かさない（スクロール位置の保存はアプリ側から行うので動く）
         configuration.defaultWebpagePreferences.allowsContentJavaScript = false
-        let webView = WKWebView(frame: .zero, configuration: configuration)
+        // Markdown をプレビューで編集するためのスクリプト（ページのスクリプトとは別の場所で動く）
+        configuration.userContentController.addUserScript(MarkdownEditor.userScript)
+        let webView = PreviewWebView(frame: .zero, configuration: configuration)
         webView.setValue(false, forKey: "drawsBackground")
         // トラックパッドの2本指で拡大・縮小できるようにする
         webView.allowsMagnification = true
@@ -132,6 +134,10 @@ final class FilePreviewController: NSViewController {
         .appendingPathComponent(UUID().uuidString, isDirectory: true)
     private var wordRenderID = UUID()
     private var watcher: DispatchSourceFileSystemObject?
+    /// プレビューでの編集で最後に保存した中身（自分で保存したときは表示し直さないため）
+    private var savedByEditor: [String: Data] = [:]
+    /// 編集できるように表示した Markdown（ほかのファイルへ移った直後に届いた保存も受け付けるため）
+    private var editablePaths: Set<String> = []
     private var pendingScrollY: Double?
     private let htmlFile = FileManager.default.temporaryDirectory
         .appendingPathComponent("macorn-preview", isDirectory: true)
@@ -190,6 +196,7 @@ final class FilePreviewController: NSViewController {
         separator.boxType = .separator
 
         webView.navigationDelegate = self
+        webView.configuration.userContentController.add(EditorMessageProxy(self), contentWorld: MarkdownEditor.world, name: MarkdownEditor.messageName)
         let quickLook: QLPreviewView = QLPreviewView(frame: .zero, style: .normal)
         quickLook.autostarts = false
         quickLook.isHidden = true
@@ -254,7 +261,9 @@ final class FilePreviewController: NSViewController {
     // MARK: - 表示
 
     func show(_ url: URL) {
-        if fileURL?.standardizedFileURL.path != url.standardizedFileURL.path {
+        let switching = fileURL?.standardizedFileURL.path != url.standardizedFileURL.path
+        if switching {
+            flushEditor()
             fileURL = url
             kind = Self.kind(for: url) ?? .markdown
             viewer = Self.viewer(for: url)
@@ -271,10 +280,13 @@ final class FilePreviewController: NSViewController {
         }
         titleLabel.stringValue = url.lastPathComponent
         titleLabel.toolTip = url.path
+        // プレビューで編集して保存しただけなら、表示し直さない（一覧の更新で呼ばれても、カーソルを保つ）
+        if !switching, kind == .markdown, let saved = savedByEditor[url.path], (try? Data(contentsOf: url)) == saved { return }
         reload(keepingScroll: false)
     }
 
     func stop() {
+        flushEditor()
         watcher?.cancel()
         watcher = nil
         fileURL = nil
@@ -471,6 +483,7 @@ final class FilePreviewController: NSViewController {
             renderVisual(url)
             return
         }
+        webView.claimsEditingKeys = false
         if kind == .html {
             lastHTMLLength = (try? Data(contentsOf: url).count) ?? 0
             // 同じフォルダの CSS・画像・スクリプトだけを読めるようにする
@@ -482,15 +495,28 @@ final class FilePreviewController: NSViewController {
             let body = (try? Data(contentsOf: url)).map {
                 CSVRenderer.render(CSVRenderer.table(from: $0, fileExtension: url.pathExtension))
             } ?? "<p>「\(MarkdownRenderer.escape(url.lastPathComponent))」を読めませんでした。</p>"
+            webView.claimsEditingKeys = false
             html = Self.page(body: body, baseURL: url.deletingLastPathComponent(), title: url.lastPathComponent, extraStyle: CSVRenderer.style)
         } else {
             let text: String
-            if let data = try? Data(contentsOf: url) {
-                text = String(data: data, encoding: .utf8) ?? String(decoding: data, as: UTF8.self)
+            let data = try? Data(contentsOf: url)
+            // UTF-8 で読める Markdown だけを、プレビューで編集できるようにする（ほかの文字コードを書き換えないため）
+            let strict = data.flatMap { String(data: $0, encoding: .utf8) }
+            if let data {
+                text = strict ?? String(decoding: data, as: UTF8.self)
             } else {
                 text = "*「\(url.lastPathComponent)」を読めませんでした。*"
             }
-            html = Self.page(body: MarkdownRenderer.render(text), baseURL: url.deletingLastPathComponent(), title: url.lastPathComponent)
+            let editable = strict != nil
+            let (body, document) = MarkdownRenderer.renderEditable(text)
+            let payload = EditorPayload(path: url.path, editable: editable, document: document)
+            // スクリプトを止めたページでは <script> の要素が消えるので、属性で渡す
+            let json = (try? JSONEncoder().encode(payload)).flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+            if editable { editablePaths.insert(url.path) }
+            webView.claimsEditingKeys = editable
+            html = Self.page(body: body, baseURL: url.deletingLastPathComponent(), title: url.lastPathComponent,
+                             extraStyle: editable ? MarkdownEditor.style : "",
+                             extraHead: "<meta name=\"macorn-md\" content=\"\(MarkdownRenderer.escape(json))\">")
         }
         lastHTMLLength = html.count
         do {
@@ -515,6 +541,20 @@ final class FilePreviewController: NSViewController {
         source.setEventHandler { [weak self] in
             MainActor.assumeIsolated {
                 guard let self, let url = self.fileURL else { return }
+                // プレビューでの編集を保存しただけなら、表示し直さない（打っている途中のカーソルを保つ）
+                // 書き込みの途中（中身を空にした直後）にも知らせが来るので、少し待ってから中身を比べる
+                if let saved = self.savedByEditor[url.path] {
+                    let events = source.data
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(150))
+                        guard self.fileURL?.path == url.path else { return }
+                        if events.contains(.rename) || events.contains(.delete) { self.startWatching(url) }
+                        if (try? Data(contentsOf: url)) == saved { return }
+                        self.savedByEditor[url.path] = nil
+                        self.reload(keepingScroll: true)
+                    }
+                    return
+                }
                 // エディタは「別名で書いてから置き換える」ことが多いので、監視し直す
                 if source.data.contains(.rename) || source.data.contains(.delete) {
                     Task { @MainActor in
@@ -602,7 +642,7 @@ final class FilePreviewController: NSViewController {
 
     // MARK: - HTML
 
-    static func page(body: String, baseURL: URL, title: String, extraStyle: String = "") -> String {
+    static func page(body: String, baseURL: URL, title: String, extraStyle: String = "", extraHead: String = "") -> String {
         let base = baseURL.absoluteString.hasSuffix("/") ? baseURL.absoluteString : baseURL.absoluteString + "/"
         let accent = Theme.accentHex
         return """
@@ -637,6 +677,7 @@ final class FilePreviewController: NSViewController {
         img { max-width: 100%; border-radius: 4px; }
         \(extraStyle)
         </style>
+        \(extraHead)
         </head>
         <body>
         \(body)
@@ -680,5 +721,90 @@ extension FilePreviewController: WKNavigationDelegate {
         guard let y = pendingScrollY else { return }
         pendingScrollY = nil
         webView.evaluateJavaScript("window.scrollTo(0, \(y))")
+    }
+}
+
+// MARK: - プレビューでの Markdown の編集
+
+extension FilePreviewController {
+    /// 編集用のスクリプトに渡すもの
+    struct EditorPayload: Encodable {
+        var path: String
+        var editable: Bool
+        var document: MarkdownRenderer.EditableDocument
+    }
+
+    /// 打ちかけの編集を、すぐに保存させる（ほかのファイルへ移る前など）
+    func flushEditor() {
+        guard kind == .markdown, fileURL != nil else { return }
+        webView.evaluateJavaScript("window.__macornEditorFlush && window.__macornEditorFlush()", in: nil, in: MarkdownEditor.world) { _ in }
+    }
+
+    func handleEditorMessage(_ body: Any) {
+        guard let message = body as? [String: Any], let type = message["type"] as? String else { return }
+        switch type {
+        case "save":
+            guard let path = message["path"] as? String, editablePaths.contains(path), let text = message["text"] as? String else { return }
+            saveEditedMarkdown(text, to: URL(fileURLWithPath: path))
+        case "open":
+            guard let href = message["href"] as? String, let url = URL(string: href) else { return }
+            if url.isFileURL, Self.kind(for: url) != nil {
+                onOpenPreviewable?(url)
+            } else {
+                NSWorkspace.shared.open(url)
+            }
+        default:
+            break
+        }
+    }
+
+    /// 編集した Markdown を保存する。改行の形（LF・CRLF）は元のファイルに合わせる
+    /// ファイルを置き換えず、中身だけを書き換える（タグなどが追いかけているファイルの同一性を保つため）
+    func saveEditedMarkdown(_ text: String, to url: URL) {
+        var text = text
+        if let current = try? Data(contentsOf: url), let original = String(data: current, encoding: .utf8), original.contains("\r\n") {
+            text = text.replacingOccurrences(of: "\n", with: "\r\n")
+        }
+        let data = Data(text.utf8)
+        if (try? Data(contentsOf: url)) == data { return }
+        savedByEditor[url.path] = data
+        do {
+            try data.write(to: url)
+        } catch {
+            savedByEditor[url.path] = nil
+            let alert = NSAlert()
+            alert.messageText = "「\(url.lastPathComponent)」を保存できませんでした"
+            alert.informativeText = error.localizedDescription
+            if let window = view.window { alert.beginSheetModal(for: window) } else { alert.runModal() }
+        }
+    }
+
+    #if DEBUG
+    /// 編集用のスクリプトの場所で JavaScript を動かす（自動操作での確認用）
+    func debugEditorEvaluate(_ script: String, completion: @escaping (String) -> Void) {
+        webView.evaluateJavaScript(script, in: nil, in: MarkdownEditor.world) { result in
+            MainActor.assumeIsolated {
+                switch result {
+                case .success(let value): completion(String(describing: value))
+                case .failure(let error): completion("error: \(error)")
+                }
+            }
+        }
+    }
+    #endif
+}
+
+/// スクリプトからの知らせを受けるもの（WKUserContentController が強く持つので、コントローラーは弱く持つ）
+private final class EditorMessageProxy: NSObject, WKScriptMessageHandler {
+    weak var controller: FilePreviewController?
+
+    init(_ controller: FilePreviewController) {
+        self.controller = controller
+    }
+
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        MainActor.assumeIsolated {
+            controller?.handleEditorMessage(message.body)
+        }
     }
 }
