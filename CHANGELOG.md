@@ -6,6 +6,14 @@
 
 ## 2026-11-06
 
+### Macorn：バージョン 0.3.22 を LP で公開する
+
+- **きっかけ**：konta の依頼（2026-11-06）「コミットして公開」（テキスト（.txt）をプレビューのまま編集できるようにしたのを受けて）
+- **意図・方針**：0.3.21 → 0.3.22（ビルド番号は 24 → 25）。`scripts/release.sh --publish` で署名・公証した DMG・LP の表記・`version.json` をまとめて差し替えた。リリースノートのいちばん上に 0.3.22 を足し、「最新」の印を付け替えた
+- 変更 `Macorn.xcodeproj/project.pbxproj` — 版を 0.3.22（ビルド 25）にする
+- 変更 `site/download/Macorn.dmg`・`site/index.html`・`site/version.json` — 0.3.22 に差し替える（release.sh が書く）
+- 変更 `site/releases/index.html` — 0.3.22 のリリースノートを足し、「最新」を付け替える
+
 ### Macorn：テキスト（.txt）もプレビューのまま編集できるようにする
 
 - **きっかけ**：konta の依頼（2026-11-06）「txt も md と同じようにプレビューと編集ができるようにして欲しいです」
