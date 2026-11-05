@@ -6,6 +6,14 @@
 
 ## 2026-11-05
 
+### Macorn：バージョン 0.3.20 を LP で公開する
+
+- **きっかけ**：konta の依頼（2026-11-05）「コミットして公開」（Word の書類のプレビューを幅に合わせて折り返すようにしたのを受けて）
+- **意図・方針**：0.3.19 → 0.3.20（ビルド番号は 22 → 23）。`scripts/release.sh --publish` で署名・公証した DMG・LP の表記・`version.json` をまとめて差し替えた。リリースノートのいちばん上に 0.3.20 を足し、「最新」の印を付け替えた
+- 変更 `Macorn.xcodeproj/project.pbxproj` — 版を 0.3.20（ビルド 23）にする
+- 変更 `site/download/Macorn.dmg`・`site/index.html`・`site/version.json` — 0.3.20 に差し替える（release.sh が書く）
+- 変更 `site/releases/index.html` — 0.3.20 のリリースノートを足し、「最新」を付け替える
+
 ### Macorn：Word の書類のプレビューを、幅に合わせて折り返す
 
 - **きっかけ**：konta の報告（2026-11-05）「word で開いたものに関して、幅をうまく変えられません」
