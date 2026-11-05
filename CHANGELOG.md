@@ -6,6 +6,16 @@
 
 ## 2026-11-05
 
+### Macorn：Word の書類のプレビューを、幅に合わせて折り返す
+
+- **きっかけ**：konta の報告（2026-11-05）「word で開いたものに関して、幅をうまく変えられません」
+- **意図・方針**：Word の書類（.docx・.doc）はクイックルック（QLPreviewView）で見せていた。クイックルックは書類をページの幅を決め打ち（600pt ほど）にした HTML にして表示するため、プレビューを狭めると行の右が切れ、広げても余白が増えるだけで、拡大・縮小もできなかった。変換は同じもの（macOS の `qlmanage`。見出し・表・画像はクイックルックと同じ見た目）を使い、ページの幅の決め打ちだけを外して、Markdown と同じ Web の領域に出すようにした。プレビューの幅で折り返し、画像・表ははみ出させず、⌘+ / ⌘− で拡大・縮小でき、保存すると表示し直す。変換できないときはこれまでどおりクイックルックで見せる。Excel・PowerPoint・Pages などはクイックルックのまま（ページ・シートの形が意味を持つため）
+- 追加 `Macorn/Preview/WordRenderer.swift` — Word の書類を `qlmanage -p -o` で HTML にし、ページの幅を外す指定を足す
+- 変更 `Macorn/Preview/FilePreviewController.swift` — Word の書類は Web の領域で表示し（表示の種類 `document`）、拡大・縮小と保存時の表示し直しを効かせる。作業場所はプレビューを閉じたら消す
+- 追加 `MacornTests/WordRendererTests.swift` — Word の書類の見分けと、幅の指定の足し方、実際の .docx の変換を確かめる
+- 変更 `Macorn/App/DebugAutomation.swift` — `front`（キーにせず手前に出す）と `winid`（ウィンドウ番号を出す。`screencapture -l` で撮るため）を足す
+- 変更 `AGENTS.md`・`docs/REQUIREMENTS.md`・`README.md` — Word の書類のプレビューのしかたを書き足す
+
 ### Macorn：バージョン 0.3.19 を LP で公開する
 
 - **きっかけ**：konta の依頼（2026-11-05）「デプロイまでお願いします」（一覧を畳むと境目の線が残る不具合を直したのを受けて）

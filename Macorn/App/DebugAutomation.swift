@@ -107,6 +107,12 @@ enum DebugAutomation {
                 let names = other.browser.selectedURLs.map(\.lastPathComponent).joined(separator: ",")
                 print("[debug] window \(index) path=\(other.browser.state.currentURL.path) selected=\(names) preview=\(other.browser.isFilePreviewVisible)")
             }
+        case "front":
+            // キーにはせず、手前にだけ出す（裏にあると描き直されないため）
+            controller.window?.orderFrontRegardless()
+        case "winid":
+            // ウィンドウの番号（screencapture -l で、ほかのアプリの裏にあっても撮るため）
+            print("[debug] winid=\(controller.window?.windowNumber ?? 0)")
         case "tabinfo":
             // タブの並びと、各タブの「×」が画面に載っているか
             let group = controller.window?.tabGroup?.windows ?? []

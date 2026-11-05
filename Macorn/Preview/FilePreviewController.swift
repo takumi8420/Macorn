@@ -19,11 +19,13 @@ final class FilePreviewController: NSViewController {
 
     /// 目で見て確認するもののうち、何で表示するか
     enum Viewer: Equatable {
-        case image, pdf, media, quickLook
+        /// document は Word の書類（クイックルックの HTML を、幅に合わせて折り返して Web の領域に出す）
+        case image, pdf, media, document, quickLook
     }
 
     static func viewer(for url: URL) -> Viewer {
         guard let type = UTType(filenameExtension: url.pathExtension.lowercased()) else { return .quickLook }
+        if WordRenderer.isWord(url) { return .document }
         if type.conforms(to: .pdf) { return .pdf }
         if type.conforms(to: .audiovisualContent) { return .media }
         if type.conforms(to: .image) { return .image }
@@ -124,6 +126,11 @@ final class FilePreviewController: NSViewController {
 
     /// 拡大・縮小の範囲と段階（ブラウザと同じくらい）
     static let zoomSteps: [Double] = [0.25, 0.33, 0.5, 0.67, 0.75, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0, 5.0]
+    /// Word の書類を HTML にする作業場所と、今の変換の印（古い変換の結果を出さないため）
+    private let wordDirectory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("macorn-word", isDirectory: true)
+        .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    private var wordRenderID = UUID()
     private var watcher: DispatchSourceFileSystemObject?
     private var pendingScrollY: Double?
     private let htmlFile = FileManager.default.temporaryDirectory
@@ -226,7 +233,7 @@ final class FilePreviewController: NSViewController {
             MainActor.assumeIsolated {
                 guard let self, event.window === self.view.window else { return }
                 self.updateZoomLabel()
-                if self.kind != .visual { Preferences.previewZoom = self.zoom }
+                if self.usesWebView { Preferences.previewZoom = self.zoom }
             }
             return event
         }
@@ -253,6 +260,8 @@ final class FilePreviewController: NSViewController {
             viewer = Self.viewer(for: url)
             scriptsEnabled = false
             clearVisualContent()
+            // Word の書類は変換を待つ間、前のファイルを見せない
+            if kind == .visual, viewer == .document { webView.loadHTMLString("", baseURL: nil) }
             webView.magnification = 1
             webView.pageZoom = CGFloat(Preferences.previewZoom)
             pdfView.autoScales = true
@@ -284,7 +293,7 @@ final class FilePreviewController: NSViewController {
     /// 表示し直す。keepingScroll なら、読んでいた位置に戻す
     func reload(keepingScroll: Bool) {
         guard let url = fileURL else { return }
-        if keepingScroll, kind != .visual {
+        if keepingScroll, usesWebView {
             webView.evaluateJavaScript("window.scrollY") { [weak self] value, _ in
                 MainActor.assumeIsolated {
                     self?.pendingScrollY = value as? Double
@@ -317,6 +326,27 @@ final class FilePreviewController: NSViewController {
                 playerView.player?.pause()
                 playerView.player = AVPlayer(url: url)
             }
+        case .document:
+            let id = UUID()
+            wordRenderID = id
+            Task {
+                let page = await WordRenderer.render(url, into: wordDirectory.appendingPathComponent(id.uuidString, isDirectory: true))
+                guard wordRenderID == id, fileURL?.path == url.path, viewer == .document else { return }
+                if let page {
+                    lastHTMLLength = (try? Data(contentsOf: page).count) ?? 0
+                    webView.loadFileURL(page, allowingReadAccessTo: page.deletingLastPathComponent())
+                    // 前の変換の作業場所を片付ける
+                    for old in (try? FileManager.default.contentsOfDirectory(at: wordDirectory, includingPropertiesForKeys: nil)) ?? []
+                    where old.lastPathComponent != id.uuidString {
+                        try? FileManager.default.removeItem(at: old)
+                    }
+                } else {
+                    // 変換できなければ、これまでどおりクイックルックで見せる
+                    viewer = .quickLook
+                    updateHeader()
+                    renderVisual(url)
+                }
+            }
         case .quickLook:
             guard let quickLookView else { return }
             if (quickLookView.previewItem as? NSURL)?.path == url.path {
@@ -332,6 +362,7 @@ final class FilePreviewController: NSViewController {
         case .image: "photo"
         case .pdf: "doc.text.image"
         case .media: "play.rectangle"
+        case .document: "doc.text"
         case .quickLook: "eye"
         }
     }
@@ -339,18 +370,24 @@ final class FilePreviewController: NSViewController {
     /// 見出しのアイコンとボタンを、ファイルの種類に合わせる
     deinit {
         if let magnifyMonitor { NSEvent.removeMonitor(magnifyMonitor) }
+        try? FileManager.default.removeItem(at: wordDirectory)
     }
 
     // MARK: - 拡大・縮小
 
-    /// 今のファイルで拡大・縮小できるか
-    var canZoom: Bool {
-        kind != .visual || viewer == .pdf
+    /// Web の領域で見せているか（Markdown・HTML・CSV・Word の書類）
+    var usesWebView: Bool {
+        kind != .visual || viewer == .document
     }
 
-    /// 今の倍率（Markdown・HTML はページの倍率、PDF は表示の倍率）
+    /// 今のファイルで拡大・縮小できるか
+    var canZoom: Bool {
+        usesWebView || viewer == .pdf
+    }
+
+    /// 今の倍率（Markdown・HTML・Word はページの倍率、PDF は表示の倍率）
     var zoom: Double {
-        if kind == .visual { return Double(pdfView.scaleFactor) }
+        if !usesWebView { return Double(pdfView.scaleFactor) }
         return Double(webView.pageZoom) * Double(webView.magnification)
     }
 
@@ -358,7 +395,7 @@ final class FilePreviewController: NSViewController {
     @objc func zoomOut(_ sender: Any?) { stepZoom(up: false) }
 
     @objc func resetZoom(_ sender: Any?) {
-        if kind == .visual {
+        if !usesWebView {
             pdfView.autoScales = true
         } else {
             webView.magnification = 1
@@ -374,7 +411,7 @@ final class FilePreviewController: NSViewController {
         let next = up
             ? Self.zoomSteps.first { $0 > current * 1.05 } ?? Self.zoomSteps.last!
             : Self.zoomSteps.last { $0 < current / 1.05 } ?? Self.zoomSteps.first!
-        if kind == .visual {
+        if !usesWebView {
             pdfView.autoScales = false
             pdfView.scaleFactor = CGFloat(next)
         } else {
@@ -411,7 +448,7 @@ final class FilePreviewController: NSViewController {
         browserButton?.image = NSImage(systemSymbolName: isHTML ? "safari" : "arrow.up.forward.app", accessibilityDescription: nil)
         browserButton?.toolTip = isHTML ? "ブラウザで開く" : isCSV ? "ほかのアプリで開く" : "既定のアプリで開く"
         editButton?.isHidden = isVisual
-        webView.isHidden = isVisual
+        webView.isHidden = !usesWebView
         quickLookView?.isHidden = !(isVisual && viewer == .quickLook)
         imageView.isHidden = !(isVisual && viewer == .image)
         pdfView.isHidden = !(isVisual && viewer == .pdf)
@@ -424,7 +461,8 @@ final class FilePreviewController: NSViewController {
             ? "スクリプトを動かしています（クリックで止める）"
             : "スクリプトは止めています（クリックで、このファイルに限って動かす）"
         // HTML は白い背景を前提に作られていることが多いので、背景を描く。Markdown は画面の背景になじませる
-        webView.setValue(isHTML, forKey: "drawsBackground")
+        // Word の書類も白い紙を前提にしているので、背景を描く
+        webView.setValue(isHTML || (isVisual && viewer == .document), forKey: "drawsBackground")
     }
 
     private func render(_ url: URL) {
