@@ -33,6 +33,8 @@ final class PaneState {
     var gitChangeCount = 0
     /// 絞り込み（要件 S-04）
     var isFiltering = false
+    /// 絞り込みの欄をいつも出している（設定）
+    var isFilterBarAlwaysShown = Preferences.alwaysShowFilterBar
     var filterText = ""
     var visibleCount = 0
     /// 絞り込みで、サブフォルダの中も探す

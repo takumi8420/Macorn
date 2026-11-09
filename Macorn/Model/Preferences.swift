@@ -27,6 +27,16 @@ enum Preferences {
         static let previousFileHandlers = "previousFileHandlers"
         static let terminalPosition = "terminalPosition"
         static let filterIncludesSubfolders = "filterIncludesSubfolders"
+        static let alwaysShowFilterBar = "alwaysShowFilterBar"
+    }
+
+    /// 絞り込みの欄を、使っていないときも一覧の上に出しておく（要件 S-04）。初めはオン
+    static var alwaysShowFilterBar: Bool {
+        get { defaults.object(forKey: Key.alwaysShowFilterBar) as? Bool ?? true }
+        set {
+            defaults.set(newValue, forKey: Key.alwaysShowFilterBar)
+            NotificationCenter.default.post(name: .macornDisplayPreferencesChanged, object: nil)
+        }
     }
 
     /// 絞り込みで、サブフォルダの中も探す（要件 S-04）。最後に選んだ方を覚えておく

@@ -8,16 +8,26 @@ extension FileBrowserViewController {
         onActivate?()
         guard let filterBar = filterBarHeight?.firstItem as? NSView else { return }
         state.isFiltering = true
-        filterBar.isHidden = false
-        filterBarHeight?.constant = 28
+        updateFilterBarVisibility()
         // すでに開いているときは入力欄にフォーカスを戻す
         if let field = filterBar.firstTextField() {
             view.window?.makeFirstResponder(field)
         }
     }
 
+    /// 絞り込みの欄を出すか。設定で「いつも出す」なら、使っていないときも出しておく
+    func updateFilterBarVisibility() {
+        guard let filterBar = filterBarHeight?.firstItem as? NSView else { return }
+        state.isFilterBarAlwaysShown = Preferences.alwaysShowFilterBar
+        let shows = state.isFilterBarAlwaysShown || state.isFiltering
+        filterBar.isHidden = !shows
+        filterBarHeight?.constant = shows ? 28 : 0
+    }
+
     func setFilter(_ text: String) {
         state.filterText = text
+        // いつも出している欄を直接クリックして打ったときも、絞り込み中として扱う（別のフォルダへ移ったら解く）
+        if !text.isEmpty { state.isFiltering = true }
         applyFilter()
     }
 
@@ -143,8 +153,7 @@ extension FileBrowserViewController {
             state.isSubfolderSearchTruncated = false
             filteredRootChildren = nil
             state.visibleCount = state.itemCount
-            filterBarHeight?.constant = 0
-            (filterBarHeight?.firstItem as? NSView)?.isHidden = true
+            updateFilterBarVisibility()
             outlineView.reloadItem(nil, reloadChildren: true)
             select(selected)
         } else if state.filterText.isEmpty {

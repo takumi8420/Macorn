@@ -130,6 +130,10 @@ private struct GeneralSettingsView: View {
                     NotificationCenter.default.post(name: .macornDisplayPreferencesChanged, object: nil)
                 }
             ))
+            Toggle("絞り込みの欄をいつも一覧の上に出す（⌘F・/ で入力）", isOn: Binding(
+                get: { Preferences.alwaysShowFilterBar },
+                set: { Preferences.alwaysShowFilterBar = $0 }
+            ))
             Toggle("フォルダのアイコンをタグの色で塗る", isOn: $colorFoldersByTag)
                 .onChange(of: colorFoldersByTag) { _, _ in
                     NotificationCenter.default.post(name: .macornDisplayPreferencesChanged, object: nil)

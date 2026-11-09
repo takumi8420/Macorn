@@ -378,6 +378,8 @@ enum DebugAutomation {
             let item = NSMenuItem()
             item.representedObject = browser.selectedURLs
             browser.openEnclosingFolder(item)
+        case "filterbar":
+            print("[debug] filterbar height=\(browser.filterBarHeight?.constant ?? -1) filtering=\(browser.state.isFiltering) firstResponder=\(controller.window.flatMap { $0.firstResponder.map { String(describing: type(of: $0)) } } ?? "-")")
         case "subfolders":
             browser.setFilterIncludesSubfolders(argument == "on")
         case "results":

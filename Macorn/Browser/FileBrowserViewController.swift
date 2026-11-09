@@ -183,6 +183,7 @@ final class FileBrowserViewController: NSViewController {
         height.isActive = true
         filterBarHeight = height
         filterBar.isHidden = true
+        updateFilterBarVisibility()
 
         view = container
     }
@@ -714,6 +715,7 @@ final class FileBrowserViewController: NSViewController {
         }
 
         // フォルダの色分けの切り替えなど、見た目だけの設定はその場で描き直す
+        updateFilterBarVisibility()
         reloadVisibleRows()
         updateFilePreview()
 
