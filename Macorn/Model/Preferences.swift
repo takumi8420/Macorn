@@ -26,6 +26,13 @@ enum Preferences {
         static let suppressMoveToApplications = "suppressMoveToApplications"
         static let previousFileHandlers = "previousFileHandlers"
         static let terminalPosition = "terminalPosition"
+        static let filterIncludesSubfolders = "filterIncludesSubfolders"
+    }
+
+    /// 絞り込みで、サブフォルダの中も探す（要件 S-04）。最後に選んだ方を覚えておく
+    static var filterIncludesSubfolders: Bool {
+        get { defaults.bool(forKey: Key.filterIncludesSubfolders) }
+        set { defaults.set(newValue, forKey: Key.filterIncludesSubfolders) }
     }
 
     /// 内蔵ターミナルを置く場所（下・左・右）

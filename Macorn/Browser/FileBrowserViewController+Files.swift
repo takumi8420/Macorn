@@ -261,6 +261,9 @@ extension FileBrowserViewController {
             return !isEditingText && !selectedNodes.isEmpty
         case #selector(paste(_:)), #selector(moveHere(_:)):
             return !isEditingText && !isTagView && state.error == nil && FileClipboard.hasFiles
+        case #selector(toggleFilterSubfolders(_:)):
+            item.state = state.filterIncludesSubfolders ? .on : .off
+            return canSearchSubfolders
         case #selector(newFolder(_:)), #selector(newFile(_:)):
             // タグの一覧には「ここ」に当たるフォルダがない
             return !isEditingText && !isTagView && state.error == nil

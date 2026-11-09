@@ -53,7 +53,11 @@ struct StatusBarView: View {
     }
 
     private var summary: String {
-        var parts = [state.filterText.isEmpty ? "\(state.itemCount) 項目" : "\(state.visibleCount) / \(state.itemCount) 項目（絞り込み中）"]
+        var parts = [
+            state.filterText.isEmpty ? "\(state.itemCount) 項目"
+                : state.isShowingSubfolderResults ? "\(state.visibleCount)\(state.isSubfolderSearchTruncated ? " 件以上" : " 件")（サブフォルダも含めて絞り込み中）"
+                : "\(state.visibleCount) / \(state.itemCount) 項目（絞り込み中）",
+        ]
         if state.selectedCount > 0 {
             parts[0] += " / \(state.selectedCount) 項目を選択中"
         }

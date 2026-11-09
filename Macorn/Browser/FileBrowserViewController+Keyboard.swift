@@ -21,22 +21,112 @@ extension FileBrowserViewController {
         applyFilter()
     }
 
-    /// 表示中のフォルダの項目を、名前に入力した文字を含むものだけにする（大文字・小文字は区別しない）
+    /// 表示中のフォルダの項目を、名前に入力した文字を含むものだけにする（大文字・小文字は区別しない）。
+    /// 「サブフォルダも」がオンなら、サブフォルダの中まで探した結果を出す
     func applyFilter() {
         let text = state.filterText
-        let previous = filteredRootChildren
-        if text.isEmpty {
-            filteredRootChildren = nil
-        } else {
-            filteredRootChildren = (root.children ?? []).filter {
-                $0.entry.name.range(of: text, options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive]) != nil
-            }
+        guard !text.isEmpty, state.filterIncludesSubfolders, canSearchSubfolders else {
+            cancelSubfolderSearch()
+            state.isShowingSubfolderResults = false
+            state.isSubfolderSearchTruncated = false
+            showFilterResults(text.isEmpty ? nil : (root.children ?? []).filter {
+                SubfolderSearch.matches($0.entry.name, query: text)
+            }, keepSelection: false)
+            return
         }
-        state.visibleCount = filteredRootChildren?.count ?? state.itemCount
-        guard previous?.map(ObjectIdentifier.init) != filteredRootChildren?.map(ObjectIdentifier.init) else { return }
+        // 探し終わるまでは、直下の一致だけを先に出しておく（全部の項目が出たままにしない）
+        if !state.isShowingSubfolderResults {
+            showFilterResults((root.children ?? []).filter { SubfolderSearch.matches($0.entry.name, query: text) }, keepSelection: false)
+        }
+        searchSubfolders(for: text, keepSelection: false)
+    }
+
+    /// サブフォルダも探せるか（タグの一覧は、いろいろな場所の項目の集まりなので対象外）
+    var canSearchSubfolders: Bool { !isTagView && root.url.isFileURL }
+
+    /// 「サブフォルダも」を切り替える。選んだ方は次からも使う
+    func setFilterIncludesSubfolders(_ on: Bool) {
+        guard state.filterIncludesSubfolders != on else { return }
+        state.filterIncludesSubfolders = on
+        Preferences.filterIncludesSubfolders = on
+        applyFilter()
+    }
+
+    @objc func toggleFilterSubfolders(_ sender: Any?) {
+        if !state.isFiltering { beginFilter(sender) }
+        setFilterIncludesSubfolders(!state.filterIncludesSubfolders)
+    }
+
+    /// サブフォルダの中まで探す。打つたびに走らないよう、少し待ってから探し、前の検索はやめる
+    func searchSubfolders(for text: String, keepSelection: Bool) {
+        subfolderSearchTask?.cancel()
+        subfolderRefreshPending = false
+        let url = root.url
+        let includeHidden = Preferences.showHiddenFiles
+        // 変更による探し直しは、前回かかった時間の倍（0.3〜30 秒）待つ。ホームのように変更が多くて大きいフォルダで、
+        // ずっと探し続けないように
+        let delay = keepSelection ? min(max(0.3, lastSubfolderSearchDuration * 2), 30) : 0.15
+        subfolderSearchTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard !Task.isCancelled, let self else { return }
+            self.state.isSearchingSubfolders = true // 待っている間は「探しています」を出さない
+            let started = Date()
+            let result = await SubfolderSearch.searchInBackground(in: url, query: text, includeHidden: includeHidden)
+            guard !Task.isCancelled, self.state.filterText == text, self.root.url == url else { return }
+            self.lastSubfolderSearchDuration = Date().timeIntervalSince(started)
+            self.state.isSearchingSubfolders = false
+            self.state.isSubfolderSearchTruncated = result.isTruncated
+            self.state.isShowingSubfolderResults = true
+            let nodes = self.root.makeChildren(result.entries, sort: Preferences.sort, reusing: self.filteredRootChildren ?? [])
+            self.showFilterResults(nodes, keepSelection: keepSelection)
+            self.subfolderSearchTask = nil
+            if self.subfolderRefreshPending { self.refreshSubfolderResults() }
+        }
+    }
+
+    func cancelSubfolderSearch() {
+        subfolderSearchTask?.cancel()
+        subfolderSearchTask = nil
+        subfolderRefreshPending = false
+        state.isSearchingSubfolders = false
+    }
+
+    /// サブフォルダまで探した結果を出しているとき、フォルダの中身が変わったら探し直す（選択はそのまま）。
+    /// `changedPaths` を渡すと、探さない場所の中の変更だけなら探し直さない。
+    /// 探している最中なら、やめずに終わってからもう1回探す（大きいフォルダで、変更のたびにやめて終わらなくならないように）
+    func refreshSubfolderResults(changedPaths: [String]? = nil) {
+        guard state.isShowingSubfolderResults, !state.filterText.isEmpty else { return }
+        if let changedPaths {
+            let includeHidden = Preferences.showHiddenFiles
+            let relevant = changedPaths.contains { path in
+                SubfolderSearch.isRelevantChange(path, root: root.url, includeHidden: includeHidden)
+                    || SubfolderSearch.isRelevantChange(path, root: URL(fileURLWithPath: Self.realPath(root.path)), includeHidden: includeHidden)
+            }
+            guard relevant else { return }
+        }
+        if subfolderSearchTask != nil {
+            subfolderRefreshPending = true
+            return
+        }
+        searchSubfolders(for: state.filterText, keepSelection: true)
+    }
+
+    /// 絞り込んだ項目を一覧に出す。nil なら絞り込まずに全部出す
+    private func showFilterResults(_ nodes: [FileNode]?, keepSelection: Bool) {
+        let previous = filteredRootChildren
+        filteredRootChildren = nodes
+        state.visibleCount = nodes?.count ?? state.itemCount
+        guard previous?.map(ObjectIdentifier.init) != nodes?.map(ObjectIdentifier.init) else {
+            // 同じ項目のままでも、中身（更新日など）は変わっているかもしれない
+            if keepSelection { reloadVisibleRows() }
+            return
+        }
+        let selected = selectedURLs
         outlineView.reloadItem(nil, reloadChildren: true)
-        // 絞り込んだら先頭を選んでおき、Enter・↓ ですぐ操作できるようにする
-        if !text.isEmpty, outlineView.numberOfRows > 0 {
+        if keepSelection {
+            if !selected.isEmpty { select(selected, scroll: false) }
+        } else if nodes?.isEmpty == false, outlineView.numberOfRows > 0 {
+            // 絞り込んだら先頭を選んでおき、Enter・↓ ですぐ操作できるようにする
             outlineView.selectRowIndexes([0], byExtendingSelection: false)
             outlineView.scrollRowToVisible(0)
         }
@@ -46,8 +136,11 @@ extension FileBrowserViewController {
     func endFilter(clear: Bool, focus: Bool = true) {
         if clear {
             let selected = selectedURLs
+            cancelSubfolderSearch()
             state.filterText = ""
             state.isFiltering = false
+            state.isShowingSubfolderResults = false
+            state.isSubfolderSearchTruncated = false
             filteredRootChildren = nil
             state.visibleCount = state.itemCount
             filterBarHeight?.constant = 0

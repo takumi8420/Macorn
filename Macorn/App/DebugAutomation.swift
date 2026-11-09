@@ -370,7 +370,19 @@ enum DebugAutomation {
         case "git":
             print("[debug] git branch=\(browser.state.gitBranch ?? "-") changes=\(browser.state.gitChangeCount) statuses=\(browser.selectedNodes.map { "\($0.entry.name)=\(String(describing: browser.gitSnapshot?.status(for: $0.url)))" })")
         case "filter":
+            // 絞り込みの欄も開く（キー入力は奪わない。makeFirstResponder はウィンドウをキーにしない）
+            if !argument.isEmpty, !browser.state.isFiltering { browser.beginFilter(nil) }
             browser.setFilter(argument)
+        case "enclosing":
+            // 右クリックの「含まれているフォルダを開く」と同じ（選んでいる項目があるフォルダへ移る）
+            let item = NSMenuItem()
+            item.representedObject = browser.selectedURLs
+            browser.openEnclosingFolder(item)
+        case "subfolders":
+            browser.setFilterIncludesSubfolders(argument == "on")
+        case "results":
+            let rows = (0..<browser.outlineView.numberOfRows).compactMap { browser.outlineView.item(atRow: $0) as? FileNode }
+            print("[debug] results subfolders=\(browser.state.isShowingSubfolderResults) searching=\(browser.state.isSearchingSubfolders) truncated=\(browser.state.isSubfolderSearchTruncated) count=\(browser.state.visibleCount) rows=\(rows.map { SubfolderSearch.relativeLocation(of: $0.url, from: browser.state.currentURL) + "/" + $0.entry.name }) selected=\(browser.selectedNodes.map(\.entry.name))")
         case "vim":
             Preferences.vimKeyBindings = argument == "on"
         case "sizes":

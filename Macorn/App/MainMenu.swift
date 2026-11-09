@@ -117,6 +117,7 @@ enum MainMenu {
         menu.addItem(item("ここに移動", #selector(FileBrowserViewController.moveHere(_:)), "v", [.command, .option]))
         menu.addItem(item("すべてを選択", #selector(NSResponder.selectAll(_:)), "a"))
         menu.addItem(item("絞り込み", #selector(FileBrowserViewController.beginFilter(_:)), "f"))
+        menu.addItem(item("絞り込みでサブフォルダも探す", #selector(FileBrowserViewController.toggleFilterSubfolders(_:)), "f", [.command, .option]))
         menu.addItem(.separator())
         menu.addItem(item("パスをコピー", #selector(FileBrowserViewController.copyPath(_:)), "c", [.command, .option]))
         menu.addItem(item("パスをコピー（~ 形式）", #selector(FileBrowserViewController.copyTildePath(_:)), "c", [.command, .option, .shift]))

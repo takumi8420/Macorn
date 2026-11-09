@@ -22,8 +22,14 @@ final class FileBrowserViewController: NSViewController {
     let scrollView = NSScrollView()
     private var messageHost: NSHostingView<PaneMessageView>?
     var filterBarHeight: NSLayoutConstraint?
-    /// 絞り込み中の、表示中のフォルダの項目
+    /// 絞り込み中の、表示中のフォルダの項目（サブフォルダも探すときは、その結果）
     var filteredRootChildren: [FileNode]?
+    /// サブフォルダも探す絞り込みの、実行中の検索
+    var subfolderSearchTask: Task<Void, Never>?
+    /// 探し直している最中に、また変更があった（終わってからもう1回探す）
+    var subfolderRefreshPending = false
+    /// 前回サブフォルダを探すのにかかった時間（大きいフォルダほど、探し直すまでの間を空ける）
+    var lastSubfolderSearchDuration: TimeInterval = 0
     /// Vim 風のキー操作で「g」を1回押した状態
     var pendingG = false
     var resortForSizesScheduled = false
@@ -115,7 +121,11 @@ final class FileBrowserViewController: NSViewController {
         let filterBar = NSHostingView(rootView: FilterBarView(
             state: state,
             onChange: { [weak self] text in self?.setFilter(text) },
-            onFinish: { [weak self] clear in self?.endFilter(clear: clear) }
+            onFinish: { [weak self] clear in self?.endFilter(clear: clear) },
+            onToggleSubfolders: { [weak self] on in
+                self?.setFilterIncludesSubfolders(on)
+                self?.beginFilter(nil) // 入力欄に戻り、続けて打てるようにする
+            }
         ))
         filterBar.sizingOptions = []
         filterBar.clipsToBounds = true
@@ -538,7 +548,10 @@ final class FileBrowserViewController: NSViewController {
                 state.itemCount = entries.count
                 setError(nil)
             }
-            if isRoot, state.isFiltering { applyFilter() }
+            if isRoot, state.isFiltering {
+                // サブフォルダまで探した結果は、選択を保ったまま探し直す
+                if state.isShowingSubfolderResults { refreshSubfolderResults() } else { applyFilter() }
+            }
             requestFolderSizes(in: node)
         case .failure(let error):
             node.children = []
@@ -680,6 +693,8 @@ final class FileBrowserViewController: NSViewController {
             }
         }
         targets.values.forEach(load)
+        // サブフォルダの中の変更（結果の項目の削除・名前の変更など）も反映する
+        refreshSubfolderResults(changedPaths: paths)
         refreshGitStatus()
     }
 
@@ -692,6 +707,8 @@ final class FileBrowserViewController: NSViewController {
             isApplyingSort = false
             preservingSelection {
                 root.resort(sort)
+                // 絞り込んだ項目（サブフォルダまで探した結果を含む）も並べ直す
+                filteredRootChildren?.sort { sort.areInIncreasingOrder($0.entry, $1.entry) }
                 outlineView.reloadItem(nil, reloadChildren: true)
             }
         }
@@ -780,7 +797,8 @@ extension FileBrowserViewController: NSOutlineViewDelegate {
             gitStatus: gitSnapshot?.status(for: node.url),
             tags: column == .tags ? TagStore.shared.tags(for: node.url) : [],
             folderColor: column == .name && node.entry.isFolder ? TagStore.shared.folderColor(for: node.url) : nil,
-            showsLocation: isTagView && node.parent === root
+            showsLocation: (isTagView || state.isShowingSubfolderResults) && node.parent === root,
+            locationBase: state.isShowingSubfolderResults ? root.url : nil
         )
         // 名前の右の M・U などの印を押したら、その差分を開く
         if column == .name, let snapshot = gitSnapshot, Self.diffPath(of: node, in: snapshot) != nil {
@@ -876,6 +894,10 @@ extension FileBrowserViewController: NSMenuDelegate {
         let folders = nodes.filter(\.entry.isFolder).map(\.url)
 
         menu.addItem(menuItem("開く", #selector(openFromMenu(_:)), urls))
+        // サブフォルダまで探した結果やタグの一覧から、その項目があるフォルダへ移る
+        if nodes.count == 1, Self.comparablePath(urls[0].deletingLastPathComponent()) != Self.comparablePath(state.currentURL) {
+            menu.addItem(menuItem("含まれているフォルダを開く", #selector(openEnclosingFolder(_:)), urls))
+        }
 
         if nodes.count == 1, !nodes[0].entry.isFolder {
             menu.addItem(openWithMenuItem(for: nodes[0].url))
@@ -953,6 +975,12 @@ extension FileBrowserViewController: NSMenuDelegate {
         for item in menu.items where item.target == nil && item.action != nil {
             item.target = self
         }
+    }
+
+    /// 項目があるフォルダへ移り、その項目を選ぶ
+    @objc func openEnclosingFolder(_ sender: NSMenuItem) {
+        guard let url = (sender.representedObject as? [URL])?.first else { return }
+        navigate(to: url.deletingLastPathComponent(), selecting: url)
     }
 
     private func menuItem(_ title: String, _ action: Selector, _ urls: [URL]) -> NSMenuItem {

@@ -4,6 +4,30 @@
 
 2026-10-26 に運用を開始した。2026-10-26 の分（要件定義から v1.0 の実装まで）は、作業したセッションの会話をもとに後から記録した。それ以前の経緯はない（このリポジトリは 2026-10-26 に作った）。
 
+## 2026-11-10
+
+### Macorn：絞り込みで、サブフォルダの中も探せるようにする
+
+- **きっかけ**：konta の依頼（2026-11-09）「開いているフォルダ内の検索機能が不十分なので実装して欲しい」→ どこを強化するかの確認に「サブフォルダを含む検索もオプションとしてできるようにして欲しい」
+- **意図・方針**：これまでの絞り込み（⌘F・`/`）は表示中のフォルダの直下だけを名前で絞っていた。入力欄に「サブフォルダも」の切り替え（⌥⌘F・メニュー・コマンドパレット）を足し、オンなら裏でサブフォルダをたどって名前の合う項目を一覧に出す。名前の後ろに表示中のフォルダからの場所を添える。オフのときはこれまでどおり。選んだ方は設定として覚える。外部ライブラリなしの前提に合わせ、Spotlight（S-06）ではなく自前でたどる
+  - 一致の基準は直下の絞り込みと同じ（大文字・小文字、濁点、全角・半角を区別しない）
+  - node_modules・.git・.build・DerivedData などは中をたどらない。ホームのライブラリ・.app などのパッケージの中もたどらない。1000 件か 30 万項目で打ち切り、「件以上」と出す
+  - 外での変更（削除・名前の変更など）は探し直して反映し、選択は保つ。探さない場所の中の変更では探し直さない。探し直しは前回かかった時間の倍（0.3〜30 秒）待ってから行う。ホームのように大きくて変更の多いフォルダで、ずっと探し続けないため
+  - 結果の項目やタグの一覧の項目から、その場所へ移れるよう、右クリックに「含まれているフォルダを開く」を足した
+  - あわせて、並べ替えを変えたときに絞り込んだ一覧が並べ直されていなかったのを直した
+- 追加 `Macorn/Model/SubfolderSearch.swift` — サブフォルダをたどって名前で探す・取り消し・変更の判定・場所の相対パス
+- 変更 `Macorn/Browser/FileBrowserViewController+Keyboard.swift` — 絞り込みを、直下だけとサブフォルダまでの2通りにする。探し直し・取り消し
+- 変更 `Macorn/Browser/FileBrowserViewController.swift` — 検索の状態を持つ。外での変更・並べ替えを結果に反映する。結果の行に場所を添える。右クリックに「含まれているフォルダを開く」
+- 変更 `Macorn/Browser/FilterBarView.swift` — 「サブフォルダも」の切り替え・探している最中の表示・件数
+- 変更 `Macorn/Browser/FileCellView.swift` — 場所を、表示中のフォルダからの相対パスで出せるようにする
+- 変更 `Macorn/Browser/PaneState.swift`・`Macorn/Model/Preferences.swift` — 「サブフォルダも」の状態と、その設定
+- 変更 `Macorn/Browser/StatusBarView.swift` — 結果の件数を「n 件（サブフォルダも含めて絞り込み中）」と出す
+- 変更 `Macorn/Model/FileNode.swift` — 自分の中身にせずに子の項目を作る処理を分ける
+- 変更 `Macorn/App/MainMenu.swift`・`Macorn/Palette/CommandCatalog.swift`・`Macorn/Browser/FileBrowserViewController+Files.swift` — 編集 › 絞り込みでサブフォルダも探す（⌥⌘F）と、パレットでの英語の呼び名・チェックの表示
+- 変更 `Macorn/App/DebugAutomation.swift` — 自動操作の手順 `subfolders`・`results`・`enclosing` を足し、`filter` で入力欄も開くようにする
+- 追加 `MacornTests/SubfolderSearchTests.swift` — サブフォルダの検索のテスト
+- 変更 `docs/REQUIREMENTS.md` — S-04 とキー操作の表に、サブフォルダも探す絞り込みを足す
+
 ## 2026-11-09
 
 ### Macorn：バージョン 0.3.23 を LP で公開する

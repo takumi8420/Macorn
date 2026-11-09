@@ -35,6 +35,14 @@ final class PaneState {
     var isFiltering = false
     var filterText = ""
     var visibleCount = 0
+    /// 絞り込みで、サブフォルダの中も探す
+    var filterIncludesSubfolders = Preferences.filterIncludesSubfolders
+    /// サブフォルダを探している最中
+    var isSearchingSubfolders = false
+    /// 見つかった数などが上限に達し、途中で探すのをやめた
+    var isSubfolderSearchTruncated = false
+    /// 今の絞り込みが、サブフォルダまで探した結果を出している
+    var isShowingSubfolderResults = false
 
     var currentURL: URL { history.current }
 

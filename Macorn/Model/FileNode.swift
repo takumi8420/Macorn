@@ -63,8 +63,14 @@ final class FileNode {
 
     /// 読み込んだ中身を反映する。同じパスの子は使い回す。
     func setChildren(_ entries: [FileEntry], sort: FileSort) {
+        children = makeChildren(entries, sort: sort, reusing: children ?? [])
+    }
+
+    /// 子の項目を作って並べる（自分の中身にはしない）。`reusing` の中に同じパスの項目があれば使い回す。
+    /// サブフォルダも探す絞り込みで、表示中のフォルダの中身とは別に結果を並べるのに使う
+    func makeChildren(_ entries: [FileEntry], sort: FileSort, reusing previous: [FileNode]) -> [FileNode] {
         var existing: [String: FileNode] = [:]
-        for child in children ?? [] {
+        for child in previous where child.parent === self {
             existing[child.path] = child
         }
         // 計算済みのフォルダサイズがあれば入れておく（並べ替えにも使う）
@@ -81,7 +87,7 @@ final class FileNode {
             tagged.tagSortKey = TagStore.shared.sortKey(for: entry.url)
             return tagged
         }
-        children = sort.sorted(tagged).map { entry in
+        return sort.sorted(tagged).map { entry in
             if let node = existing[entry.path] {
                 node.update(entry)
                 return node

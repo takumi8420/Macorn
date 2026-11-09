@@ -104,6 +104,7 @@ enum CommandCatalog {
         "openRepositoryInEditor:": "Open Repository Root in Editor",
         "copyPath:": "Copy Path",
         "beginFilter:": "Filter Find Search",
+        "toggleFilterSubfolders:": "Filter Find Search Subfolders Recursive",
         "editTags:": "Edit Tags Label",
         "zoomInPreview:": "Zoom In Preview",
         "zoomOutPreview:": "Zoom Out Preview",

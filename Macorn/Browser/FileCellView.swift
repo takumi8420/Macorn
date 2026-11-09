@@ -322,7 +322,8 @@ final class FileCellView: NSTableCellView, NSGestureRecognizerDelegate {
         return text
     }
 
-    func configure(with node: FileNode, gitStatus: GitFileStatus? = nil, tags: [Tag] = [], folderColor: String? = nil, showsLocation: Bool = false) {
+    /// `locationBase` を渡すと、場所をそのフォルダからの相対パスで出す（サブフォルダも探す絞り込み）
+    func configure(with node: FileNode, gitStatus: GitFileStatus? = nil, tags: [Tag] = [], folderColor: String? = nil, showsLocation: Bool = false, locationBase: URL? = nil) {
         if isEditingName { endEditing() }
         let entry = node.entry
         repositoryURL = column == .name ? entry.gitRemoteWebURL : nil
@@ -369,7 +370,9 @@ final class FileCellView: NSTableCellView, NSGestureRecognizerDelegate {
             textField?.attributedStringValue = text
             if badge?.toolTip == nil { badge?.toolTip = "Git リポジトリ（ブランチ \(branch.isEmpty ? "不明" : branch)）" }
         }
-        // タグの一覧では、いろいろなフォルダの項目が並ぶので、名前の後ろに場所を添える
+        // タグの一覧やサブフォルダも探す絞り込みでは、いろいろなフォルダの項目が並ぶので、名前の後ろに場所を添える
+        let location = locationBase.map { SubfolderSearch.relativeLocation(of: entry.url, from: $0) }
+            ?? PathCompletion.abbreviate(entry.url.deletingLastPathComponent().path)
         if column == .name, showsLocation {
             // 1行に収め、はみ出したら場所の方（後ろ）を省略する
             let paragraph = NSMutableParagraphStyle()
@@ -380,7 +383,7 @@ final class FileCellView: NSTableCellView, NSGestureRecognizerDelegate {
                 .paragraphStyle: paragraph,
             ])
             text.append(NSAttributedString(
-                string: "  " + PathCompletion.abbreviate(entry.url.deletingLastPathComponent().path),
+                string: location.isEmpty ? "" : "  " + location,
                 attributes: [.foregroundColor: NSColor.secondaryLabelColor, .font: NSFont.systemFont(ofSize: 11), .paragraphStyle: paragraph]
             ))
             if let branch = entry.gitBranch {
