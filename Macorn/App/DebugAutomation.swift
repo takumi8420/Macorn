@@ -535,6 +535,14 @@ enum DebugAutomation {
         case "dragstate": browser.debugDragState(argument)
         case "dragstuck": browser.outlineView.debugMarkDragEntered()
         case "listinfo": print("[debug] list \(browser.debugListInfo())")
+        case "order":
+            // order … 一覧の並び（先頭の項目名）と、見出しの並べ替えの印
+            for each in controllers() {
+                let list = each.browser.outlineView
+                let names = (0..<min(list.numberOfRows, 5)).compactMap { (list.item(atRow: $0) as? FileNode)?.entry.name }
+                let header = list.sortDescriptors.first.map { "\($0.key ?? "-") \($0.ascending ? "昇順" : "降順")" } ?? "なし"
+                print("[debug] order 見出し=\(header) 設定=\(Preferences.sort.key.rawValue) \(Preferences.sort.ascending ? "昇順" : "降順") 並び=\(names)")
+            }
         case "repolink":
             // repolink: 一覧の名前の欄で「持ち主/リポジトリ」の押せる範囲（ウィンドウの座標）
             for cell in browser.view.allDescendants(of: FileCellView.self) {

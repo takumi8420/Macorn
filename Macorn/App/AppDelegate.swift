@@ -19,7 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ShortcutStore.apply(to: NSApp.mainMenu)
         guard !isRunningTests else { return }
         // 自動操作では前回のウィンドウを開かない（利用者のフォルダを映さず、毎回同じ状態から始めるため）
-        if DebugFlags.isAutomating || !restoreSession() {
+        if (DebugFlags.isAutomating && ProcessInfo.processInfo.environment["MACORN_DEBUG_RESTORE"] == nil) || !restoreSession() {
             openWindow(at: homeURL)
         }
         // DMG の中などから開いたら「アプリケーション」へ移すかを尋ねる（移すなら開き直すので、ほかは何もしない）

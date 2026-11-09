@@ -250,11 +250,13 @@ final class FileBrowserViewController: NSViewController {
             if column == .name { outlineView.outlineTableColumn = tableColumn }
         }
 
-        // 列の幅・順番・表示状態はアプリ全体で保存する
+        // 列の幅・順番・表示状態はアプリ全体で保存する。
+        // 保存した列を読むときに AppKit が古い並べ替えも戻してくるが、それで設定（Preferences.sort）を
+        // 書き換えないよう、読む間は並べ替えの知らせを無視し、最後に設定の並べ替えを当て直す。
+        // 書き換えると、前回のタブをいくつも開き直すたびに並べ替えが名前順へ戻っていた
+        isApplyingSort = true
         outlineView.autosaveName = "macorn.FileList"
         outlineView.autosaveTableColumns = true
-
-        isApplyingSort = true
         outlineView.sortDescriptors = [Preferences.sort.descriptor]
         isApplyingSort = false
 

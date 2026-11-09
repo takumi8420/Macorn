@@ -127,6 +127,7 @@ MACORN_DEBUG_OUT=/tmp/shots MACORN_HISTORY_PATH=/tmp/history.sqlite MACORN_DEBUG
 | `MACORN_HISTORY_PATH` | フォルダ履歴の保存先（普段の履歴を汚さないため） |
 | `MACORN_TAGS_PATH` | タグの保存先（普段のタグを汚さないため） |
 | `MACORN_DEFAULTS_SUITE` | 設定の保存先（UserDefaults のスイート名。お気に入りの並び・表示の設定など、普段の設定を汚さないため） |
+| `MACORN_DEBUG_RESTORE` | 自動操作でも前回のウィンドウ・タブを開き直す（起動時の復元の確認用。終了時の保存はしないので、普段の状態は書き換えない） |
 | `MACORN_DEBUG_LAUNCH_LOG` | ターミナル・エディタを実際には起動せず、起動しようとした内容をこのファイルに書く |
 | `MACORN_MOVE_DEST` / `MACORN_MOVE_ANSWER` | 「アプリケーションへ移動」の確認用。移す先を差し替え（Debug でもこれがあれば尋ねる）、`move` / `skip` で尋ねずに答える |
 | `MACORN_UPDATE_URL` | 新しい版を確かめる先（既定は https://macorn.app/version.json。`file://` も可） |
