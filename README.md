@@ -1,5 +1,23 @@
 # Macorn
 
+**A file manager for macOS, built for developers.** Keep your folders where they are, and organize files across as many virtual dimensions as you need — tags (nestable like `work/client-a`) and sidebar sections — without moving anything. Use it alongside Finder, not instead of it.
+
+- Split the window into up to 6 panes, and copy or move between them with F5 / F6
+- Command palette (⌘K) with fuzzy search
+- Built-in terminal that follows the folder you are viewing, plus "open in terminal / editor"
+- Git branch and status in the list, and a read-only diff window
+- Preview for Markdown, text, HTML, CSV, images, PDF, video and documents; edit Markdown and text right in the preview
+- Filter the current folder by name, optionally including subfolders (⌘F, ⌥⌘F)
+- No third-party dependencies (Swift 6, AppKit + SwiftUI). macOS 15 or later
+
+Download the signed and notarized app from **https://macorn.app**. The app and documents are in Japanese.
+
+**Build from source:** open `Macorn.xcodeproj` in Xcode 26 or later and press ⌘R. Debug builds are ad-hoc signed, so no Apple developer account is needed.
+
+Licensed under the [MIT License](LICENSE). The name "Macorn" and its icon and logo (`Branding/`, `Macorn/Assets.xcassets`) are not covered by the license; please don't use them when you distribute your own builds or forks.
+
+---
+
 開発者向けに作り変えた macOS のファイルマネージャー。旧名は noxy（2026-10-26 に改名）。要件は [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) を参照。
 
 ## 進捗
@@ -13,7 +31,7 @@
 | M5 ターミナル・エディタ連携 | 完了（MVP 完成） |
 | M6 v1.0 の残り | 完了 |
 
-v1.x 以降（内蔵ターミナル、カスタムコマンド、ワークスペース保存など）は未着手。詳しくは要件定義書の「13. 実装状況」を参照。
+v1.x 以降（カスタムコマンド、ワークスペース保存など）は、内蔵ターミナルの最初の版を除いて未着手。詳しくは要件定義書の「13. 実装状況」を参照。
 
 ## 主な操作
 
@@ -62,7 +80,7 @@ xcodebuild -project Macorn.xcodeproj -scheme Macorn -derivedDataPath build/Deriv
 open build/DerivedData/Build/Products/Debug/Macorn.app
 ```
 
-テスト（139 件）:
+テスト（約 200 件）:
 
 ```bash
 xcodebuild -project Macorn.xcodeproj -scheme Macorn -derivedDataPath build/DerivedData test
@@ -72,7 +90,7 @@ xcodebuild -project Macorn.xcodeproj -scheme Macorn -derivedDataPath build/Deriv
 
 ## 配布用の DMG
 
-Developer ID で署名し、Apple の公証を通した DMG を作る。ほかの Mac でも警告なしに開ける。
+Developer ID で署名し、Apple の公証を通した DMG を作る。ほかの Mac でも警告なしに開ける。作者（配布する人）の証明書と公証の資格情報が要るので、作者だけが使う。自分で使うだけなら、上の「ビルドと起動」で足りる。
 
 ```bash
 bash scripts/release.sh
@@ -156,3 +174,9 @@ git push   # main に site/ の変更を push すると、GitHub Actions が LP 
 画面のロック中・ディスプレイのスリープ中はウィンドウを撮れない。
 
 GitHub Actions での公開には、リポジトリの Secrets に `VERCEL_TOKEN`（Vercel の Account Settings › Tokens で作る）・`VERCEL_ORG_ID`・`VERCEL_PROJECT_ID`（`site/.vercel/project.json` の値）が必要。手元から直接公開するときは `cd site && vercel deploy --prod`。
+
+## ライセンス
+
+[MIT License](LICENSE)。コードは自由に使ってよい。ただし「Macorn」の名前と、アイコン・ロゴ（`Branding/`・`Macorn/Assets.xcassets`）はライセンスの対象外で、自分でビルドしたものやフォークを配るときには使わないでほしい。
+
+セキュリティの問題は、公開の Issue ではなく [SECURITY.md](SECURITY.md) の方法で知らせてほしい。

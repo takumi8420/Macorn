@@ -34,6 +34,7 @@
 | `Macorn.xcodeproj/` | Xcode プロジェクト（フォルダ同期形式。`Macorn/` に置いたファイルは自動でビルド対象になる） |
 | `Macorn.entitlements` | 署名の権限（iTerm2 連携用の Apple Events） |
 | `Macorn-Info.plist` | Xcode が作る Info.plist に足す項目（フォルダを開けるアプリとしての申告） |
+| `LICENSE`・`SECURITY.md` | MIT ライセンスの本文と、脆弱性の非公開の報告先 |
 | `Branding/` | Macorn のアイコン・ロゴ・カラー（[Branding/README.md](Branding/README.md)） |
 | `scripts/release.sh` | 配布用の DMG を作る（Developer ID 署名・公証。出力は `build/release/`）。DMG の背景と配置は `scripts/dmg/` |
 | `promo/` | 紹介動画（Remotion）と、その撮影・LP 用の画像づくり（[promo/video/README.md](promo/video/README.md)） |
@@ -116,6 +117,10 @@
   - App Store への申請はしない。DMG は LP から配る（`site/download/Macorn.dmg`。`bash scripts/release.sh --publish` で差し替えて main に push する）（根拠：ユーザーの判断 2026-10-27「一旦申請は不要なので LP から公開する方針で」）
   - LP は「Finder の代わり」で検索されることを狙う。トップのタイトル・説明・ヒーローの一言に「Finder の代わり」を入れ、Finder との比較・よくある質問の節を置き、専用のページ `site/finder-alternative/` を設ける。ページを足したら `site/sitemap.xml` にも載せる（根拠：ユーザーの依頼 2026-11-04「mac finder 代わり などで検索したときに出るようにしたい」「SEO 対策も講じて欲しい」）
   - 新しい版を公開するときは、LP のリリースノート（`site/releases/index.html`、https://macorn.app/releases/）のいちばん上にその版を足し、「最新」の印を付け替える。書くのは利用者に見える変化だけ（新機能・改善・修正）（根拠：ユーザーの依頼 2026-11-04「LP において、リリースノートを作成して欲しい」）
+- **ソースは MIT ライセンスで OSS にする（準備済み・リポジトリはまだ非公開）**（根拠：ユーザーの依頼・選択 2026-11-10「oss にしようかと考えています」→「MIT で準備して」）
+  - 「Macorn」の名前とアイコン・ロゴ（`Branding/`・`Macorn/Assets.xcassets`）はライセンスの対象外で、ビルドやフォークを配るときには使わないでもらう（README に明記）
+  - README の冒頭に英語の紹介を置く。脆弱性は GitHub の非公開の報告で受ける（`SECURITY.md`）
+  - 公開すると、ソース・CHANGELOG・AGENTS.md（依頼の文面を含む）が誰でも読める。秘密情報（トークンなど）はコードにも履歴にも入れない。Vercel のトークンは GitHub の Secrets に置く
 - **macOS 15 以降、Swift 6（MainActor を既定）、外部ライブラリなし**（根拠：`docs/REQUIREMENTS.md` 0章 D4、10章、`Macorn.xcodeproj` の設定）
 - **実装は最後まで自走し、確認は要件に関わるときだけ**（根拠：ユーザーの指示 2026-10-26）
   - 実装 → ビルド → テスト → アプリを動かして確認 → 直す、を繰り返してから次へ進む
