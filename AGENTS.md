@@ -37,10 +37,9 @@
 | `LICENSE`・`SECURITY.md` | MIT ライセンスの本文と、脆弱性の非公開の報告先 |
 | `Branding/` | Macorn のアイコン・ロゴ・カラー（[Branding/README.md](Branding/README.md)） |
 | `scripts/release.sh` | 配布用の DMG を作る（Developer ID 署名・公証。出力は `build/release/`）。DMG の背景と配置は `scripts/dmg/` |
-| `promo/` | 紹介動画（Remotion）と、その撮影・LP 用の画像づくり（[promo/video/README.md](promo/video/README.md)） |
-| `site/` | LP（静的な HTML）。Vercel の `kontas-projects/macorn` に公開（https://macorn.app）。main に `site/` の変更を push すると GitHub Actions が本番に公開する。配布用の DMG も `site/download/` に置く |
 | `build/` | ビルドの出力（git 管理外。読まない） |
 
+- LP（https://macorn.app）・紹介動画・Zenn の記事の原稿・配布用の DMG の置き場は、別の非公開のリポジトリ `takumi8420/macorn-site`（手元では隣のフォルダ `../macorn-site`）にある。2026-11-10 に分けた。LP に関わる前提はそちらの AGENTS.md にある
 - 2026-10-26 に noxy から Macorn へ改名した。コード・プロジェクト名・バンドル ID（`dev.macorn.Macorn`）も Macorn にそろえてある
 
 ---
@@ -49,7 +48,7 @@
 
 - **コンセプトの核は「実際のパスとは関係のない、仮想的な構造での整理（セクション・タグ）を、必要なだけ次元を重ねて行えること」**（前提の変更。根拠：ユーザーの指示 2026-10-31「実際のパスとは関係のない仮想的な構造整理がコアになる」「単に一次元の整理ではなく、必要に応じて次元数を増やして整理できることがコンセプト」、`docs/REQUIREMENTS.md` 0章 D7）
   - ファイルは動かさず、整理の次元（案件・進み具合・テーマなど。タグの階層ごと）を必要なだけ足して束ねる。同じファイルがいくつもの次元に同時に並ぶ
-  - LP もこれを主役にする（ヒーローは「フォルダはそのまま。整理は、いくつもの次元で。」と、次元を重ねた回せる立体図。コンセプトの節に次元が増えていく3段階の図。どちらも `site/dims.js`）
+  - LP もこれを主役にする（LP のリポジトリ `macorn-site`）
 - **開発者向けで、操作の軸は「2画面表示・コマンドパレット・ターミナル連携」**（根拠：`docs/REQUIREMENTS.md` 0章 D1・D2）
   - 画面は2つに限らず、右・下に自由に分けて入れ子にできる（最大6画面）。「反対側」（F5・F6 の送り先など）は直前に操作対象だった画面。分けているときは各画面のパスバーの右端に、その画面を閉じる「×」を出す（前提の変更。根拠：ユーザーの依頼・選択 2026-11-01「4画面構成なども柔軟に」→「自由に分割」「直前の画面へ」）
   - 「ターミナルと同じ感覚で、キーボードだけで速く操作できる Finder」。Finder は置き換えず併用する
@@ -108,19 +107,18 @@
 - **DMG はドラッグを促す見た目にし、アプリは「アプリケーション」の外から起動したら移動を尋ねる**（根拠：ユーザーの依頼 2026-10-27「インストール時にアプリケーションフォルダに入らず、ドラッグも促さない」）
   - 背景は `scripts/dmg/make-background.swift`、配置は `scripts/dmg/layout.applescript`（release.sh から呼ぶ）。移動は `Macorn/App/AppMover.swift`（配布用の Release ビルドだけで尋ねる）
 - **新しい版の通知と入れ替えは自前（外部ライブラリなし）。「今すぐ更新」で自動で入れ替えて開き直す**（前提の変更。根拠：ユーザーの依頼 2026-10-31「更新を押したら勝手に更新されてアプリが再起動するようにできないのか」→「作る」。それまでは「入れ替えは手動」（2026-10-27））
-  - アプリは LP の `site/version.json` を読んで今の版と比べる（`Macorn/App/UpdateChecker.swift`）。確かめる先は 0.3.9 から https://macorn.app。0.3.8 までは https://macorn.vercel.app を見に行くので、旧ドメインは消さない（根拠：ユーザーの依頼 2026-11-01「macorn.app で切り替える」）。`version.json` は `scripts/release.sh --publish` が書く。Sparkle は使わない
+  - アプリは LP の `version.json`（https://macorn.app/version.json。LP のリポジトリの `site/version.json`）を読んで今の版と比べる（`Macorn/App/UpdateChecker.swift`）。確かめる先は 0.3.9 から https://macorn.app。0.3.8 までは https://macorn.vercel.app を見に行くので、旧ドメインは消さない（根拠：ユーザーの依頼 2026-11-01「macorn.app で切り替える」）。`version.json` は `scripts/release.sh --publish` が書く。Sparkle は使わない
   - 入れ替えは `Macorn/App/UpdateInstaller.swift`。DMG をダウンロードし、中の Macorn が「Apple が認めた Developer ID で、今の Macorn と同じチーム・同じアプリ ID・知らされた版」かを確かめてから、Macorn を終えて今の場所の Macorn と入れ替え、開き直す
   - 配布用の署名がない（開発用ビルド）・今の場所に書き込めない・確かめられないときは入れ替えず、これまでどおりブラウザでのダウンロードに戻す
 - **配布は Mac App Store ではなく、Developer ID 署名で直接配布する**（根拠：`docs/REQUIREMENTS.md` 9.4）
   - サンドボックスではフォルダに自由にアクセスできないため
   - 普段の開発ビルドは簡易署名（`-`）のまま。配布用の DMG は `scripts/release.sh` が Developer ID（チーム TAKUMI KON・`Q9Q29NW29B`）で署名し、公証（キーチェーンのプロファイル `macorn-notary`）を通して作る（根拠：ユーザーの依頼 2026-10-27）
-  - App Store への申請はしない。DMG は LP から配る（`site/download/Macorn.dmg`。`bash scripts/release.sh --publish` で差し替えて main に push する）（根拠：ユーザーの判断 2026-10-27「一旦申請は不要なので LP から公開する方針で」）
-  - LP は「Finder の代わり」で検索されることを狙う。トップのタイトル・説明・ヒーローの一言に「Finder の代わり」を入れ、Finder との比較・よくある質問の節を置き、専用のページ `site/finder-alternative/` を設ける。ページを足したら `site/sitemap.xml` にも載せる（根拠：ユーザーの依頼 2026-11-04「mac finder 代わり などで検索したときに出るようにしたい」「SEO 対策も講じて欲しい」）
-  - 新しい版を公開するときは、LP のリリースノート（`site/releases/index.html`、https://macorn.app/releases/）のいちばん上にその版を足し、「最新」の印を付け替える。書くのは利用者に見える変化だけ（新機能・改善・修正）（根拠：ユーザーの依頼 2026-11-04「LP において、リリースノートを作成して欲しい」）
-- **ソースは MIT ライセンスで OSS にする（準備済み・リポジトリはまだ非公開）**（根拠：ユーザーの依頼・選択 2026-11-10「oss にしようかと考えています」→「MIT で準備して」）
+  - App Store への申請はしない。DMG は LP から配る（根拠：ユーザーの判断 2026-10-27「一旦申請は不要なので LP から公開する方針で」）
+  - 新しい版の公開：このリポジトリで版を上げて `bash scripts/release.sh --publish` を実行すると、隣の LP のリポジトリ（`../macorn-site/site`、違う場所なら `MACORN_SITE_DIR`）の DMG・版の表記・`version.json`・`sitemap.xml` が差し替わる。そのあと LP のリポジトリでリリースノートを足し、main に push する（手順は LP のリポジトリの README）
+- **ソースは MIT ライセンスで OSS にする。公開するのはアプリのリポジトリだけで、LP のリポジトリは非公開のまま**（根拠：ユーザーの依頼・選択 2026-11-10「oss にしようかと考えています」→「MIT で準備して」→「アプリの方を新しいレポジトリにして OSS 用に整理したい」）
   - 「Macorn」の名前とアイコン・ロゴ（`Branding/`・`Macorn/Assets.xcassets`）はライセンスの対象外で、ビルドやフォークを配るときには使わないでもらう（README に明記）
   - README の冒頭に英語の紹介を置く。脆弱性は GitHub の非公開の報告で受ける（`SECURITY.md`）
-  - 公開すると、ソース・CHANGELOG・AGENTS.md（依頼の文面を含む）が誰でも読める。秘密情報（トークンなど）はコードにも履歴にも入れない。Vercel のトークンは GitHub の Secrets に置く
+  - ソース・CHANGELOG・AGENTS.md（依頼の文面を含む）は誰でも読める。秘密情報（トークンなど）・勤め先の名前・実在の顧客名や個人のファイル名は、コードにも履歴にも書かない
 - **macOS 15 以降、Swift 6（MainActor を既定）、外部ライブラリなし**（根拠：`docs/REQUIREMENTS.md` 0章 D4、10章、`Macorn.xcodeproj` の設定）
 - **実装は最後まで自走し、確認は要件に関わるときだけ**（根拠：ユーザーの指示 2026-10-26）
   - 実装 → ビルド → テスト → アプリを動かして確認 → 直す、を繰り返してから次へ進む
@@ -137,8 +135,8 @@
 
 ## 関連リンク
 
-- リモートリポジトリ：https://github.com/takumi8420/Macorn （`origin`、ブランチは `main`）
-- LP：https://macorn.app（2026-11-01 から。旧 https://macorn.vercel.app も残している。Vercel のチーム「konta's projects」のプロジェクト `macorn`。デプロイは GitHub Actions（`.github/workflows/vercel-*.yml`）が Vercel の CLI で行う。Vercel 側の Git 連携による自動デプロイは止めている）
+- リモートリポジトリ：https://github.com/takumi8420/Macorn （`origin`、ブランチは `main`）。2026-11-10 に、それまでのアプリと LP を1つにしていたリポジトリ（今の `takumi8420/macorn-site`）から、アプリのファイルの履歴だけを取り出して作った
+- LP：https://macorn.app（LP のリポジトリ https://github.com/takumi8420/macorn-site 、非公開）
 
 ---
 

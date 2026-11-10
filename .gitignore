@@ -3,5 +3,3 @@ build/
 DerivedData/
 *.xcuserstate
 xcuserdata/
-promo/video/node_modules/
-promo/video/out/

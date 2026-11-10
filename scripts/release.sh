@@ -9,12 +9,14 @@
 # 使い方（リポジトリのルートで）
 #   bash scripts/release.sh            # 署名・公証まで行う
 #   bash scripts/release.sh --no-notarize   # 公証を省く（手元での確認用。他の Mac では警告が出る）
-#   bash scripts/release.sh --publish       # 公証まで行い、LP（site/download/Macorn.dmg）も差し替える
+#   bash scripts/release.sh --publish       # 公証まで行い、LP の DMG（site/download/Macorn.dmg）も差し替える
 #
 # 出力：build/release/Macorn-<バージョン>.dmg
-# --publish のときは、site/index.html のバージョンとサイズ（data-release の箇所と構造化データ）、site/sitemap.xml の更新日と、
-# アプリが新しい版を確かめるための site/version.json も書き換える。
-# LP への公開は、そのあと main に push すると GitHub Actions が行う。
+# LP は別のリポジトリ（作者だけが使う非公開の macorn-site）にある。既定では隣のフォルダ ../macorn-site/site を使い、
+# 違う場所なら MACORN_SITE_DIR で指定する。
+# --publish のときは、そこの index.html のバージョンとサイズ（data-release の箇所と構造化データ）、sitemap.xml の更新日と、
+# アプリが新しい版を確かめるための version.json も書き換える。
+# LP への公開は、そのあと LP のリポジトリで main に push すると GitHub Actions が行う。
 set -euo pipefail
 
 TEAM_ID="${MACORN_TEAM_ID:-Q9Q29NW29B}"
@@ -35,6 +37,11 @@ if [[ $PUBLISH == 1 && $NOTARIZE == 0 ]]; then
 fi
 
 cd "$(dirname "$0")/.."
+SITE="${MACORN_SITE_DIR:-$PWD/../macorn-site/site}"
+if [[ $PUBLISH == 1 && ! -f "$SITE/index.html" ]]; then
+  echo "LP のフォルダが見つかりません: $SITE（MACORN_SITE_DIR で指定してください）" >&2
+  exit 1
+fi
 OUT="build/release"
 DERIVED="$OUT/DerivedData"
 APP="$DERIVED/Build/Products/Release/Macorn.app"
@@ -95,13 +102,13 @@ echo "できました: $DMG"
 
 if [[ $PUBLISH == 1 ]]; then
   echo "== 7. LP の DMG とバージョンの表記を差し替える"
-  mkdir -p site/download
-  cp "$DMG" site/download/Macorn.dmg
+  mkdir -p "$SITE/download"
+  cp "$DMG" "$SITE/download/Macorn.dmg"
   SIZE=$(python3 -c "import os,sys; print(f'{os.path.getsize(sys.argv[1])/1000/1000:.1f} MB')" "$DMG")
-  python3 - "$VERSION" "$SIZE" "$BUILD" <<'PY'
-import json, re, sys
-version, size, build = sys.argv[1], sys.argv[2], int(sys.argv[3])
-path = "site/index.html"
+  python3 - "$VERSION" "$SIZE" "$BUILD" "$SITE" <<'PY'
+import json, os, re, sys
+version, size, build, site = sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4]
+path = os.path.join(site, "index.html")
 html = open(path, encoding="utf-8").read()
 html = re.sub(r'(<span[^>]*data-release="version"[^>]*>)[^<]*(</span>)', rf"\g<1>{version}\g<2>", html)
 html = re.sub(r'(<span[^>]*data-release="size"[^>]*>)[^<]*(</span>)', rf"\g<1>{size}\g<2>", html)
@@ -109,8 +116,8 @@ html = re.sub(r'(<span[^>]*data-release="size"[^>]*>)[^<]*(</span>)', rf"\g<1>{s
 html = re.sub(r'("softwareVersion": ")[^"]*(")', rf"\g<1>{version}\g<2>", html)
 import datetime
 today = datetime.date.today().isoformat()
-sitemap = open("site/sitemap.xml", encoding="utf-8").read()
-open("site/sitemap.xml", "w", encoding="utf-8").write(re.sub(r"<lastmod>[^<]*</lastmod>", f"<lastmod>{today}</lastmod>", sitemap))
+sitemap = open(os.path.join(site, "sitemap.xml"), encoding="utf-8").read()
+open(os.path.join(site, "sitemap.xml"), "w", encoding="utf-8").write(re.sub(r"<lastmod>[^<]*</lastmod>", f"<lastmod>{today}</lastmod>", sitemap))
 open(path, "w", encoding="utf-8").write(html)
 # アプリの「アップデートを確認…」が読む（Macorn/App/UpdateChecker.swift）
 info = {
@@ -119,9 +126,9 @@ info = {
     "download": "https://macorn.app/download/Macorn.dmg",
     "page": "https://macorn.app/#get",
 }
-with open("site/version.json", "w", encoding="utf-8") as f:
+with open(os.path.join(site, "version.json"), "w", encoding="utf-8") as f:
     json.dump(info, f, ensure_ascii=False, indent=2)
     f.write("\n")
 PY
-  echo "LP を更新しました（バージョン $VERSION・$SIZE）。main に push すると公開されます"
+  echo "LP を更新しました（$SITE、バージョン $VERSION・$SIZE）。LP のリポジトリで main に push すると公開されます"
 fi

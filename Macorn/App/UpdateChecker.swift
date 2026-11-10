@@ -1,6 +1,6 @@
 import AppKit
 
-/// LP に置いた最新版の情報（site/version.json。scripts/release.sh --publish が書く）
+/// LP に置いた最新版の情報（https://macorn.app/version.json。LP のリポジトリの site/version.json を scripts/release.sh --publish が書く）
 struct ReleaseInfo: Decodable, Equatable {
     var version: String
     var build: Int?

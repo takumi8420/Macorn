@@ -50,10 +50,20 @@ struct UpdateCheckerTests {
         }
     }
 
-    @Test func siteFeedMatchesAppVersion() throws {
-        // LP に置いている version.json は、アプリのバージョンとそろっている（release.sh --publish で書き直す）
+    /// LP の version.json（別のリポジトリ macorn-site。既定は隣のフォルダ）。手元に無ければ nil
+    nonisolated static var siteFeedURL: URL? {
         let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-        let data = try Data(contentsOf: repo.appendingPathComponent("site/version.json"))
+        let site = ProcessInfo.processInfo.environment["MACORN_SITE_DIR"].map(URL.init(fileURLWithPath:))
+            ?? repo.deletingLastPathComponent().appendingPathComponent("macorn-site/site")
+        let url = site.appendingPathComponent("version.json")
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    }
+
+    /// LP のリポジトリを隣に置いているときだけ確かめる（アプリだけを取り出した人の手元では飛ばす）
+    @Test(.enabled(if: siteFeedURL != nil, "LP のリポジトリ（macorn-site）が隣に無い"))
+    func siteFeedMatchesAppVersion() throws {
+        // LP に置いている version.json は、アプリのバージョンとそろっている（release.sh --publish で書き直す）
+        let data = try Data(contentsOf: try #require(Self.siteFeedURL))
         let info = try JSONDecoder().decode(ReleaseInfo.self, from: data)
         #expect(!UpdateChecker.isNewer(info.version, than: UpdateChecker.currentVersion))
     }

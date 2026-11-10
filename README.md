@@ -103,11 +103,10 @@ bash scripts/release.sh
 - DMG を開くと、背景の矢印の左右に Macorn と「アプリケーション」が並び、ドラッグを促す。背景は `scripts/dmg/make-background.swift` で描き（`swift scripts/dmg/make-background.swift scripts/dmg`）、配置は `scripts/dmg/layout.applescript` で Finder に設定させる。初回は「Finder を操作する」許可を求められることがある
 - 公証の結果は DMG に添付する。DMG から取り出したアプリは、初めて開くときに macOS がネットで公証を確かめる
 
-LP から配る DMG を新しくするときは `--publish` を付ける。`site/download/Macorn.dmg` を差し替え、LP のバージョンとサイズの表記（`data-release` の箇所）と、アプリが新しい版を確かめる `site/version.json` も書き換える。バージョンは先に Xcode の `MARKETING_VERSION`（と `CURRENT_PROJECT_VERSION`）を上げておく。そのあと main に push すると、GitHub Actions が LP ごと公開する。
+LP（https://macorn.app）から配る DMG を新しくするときは `--publish` を付ける。LP は別の非公開のリポジトリ（作者だけが使う `macorn-site`）にあり、既定では隣のフォルダ `../macorn-site/site` に書き込む（違う場所なら `MACORN_SITE_DIR`）。DMG（`download/Macorn.dmg`）を差し替え、LP のバージョンとサイズの表記と、アプリが新しい版を確かめる `version.json` も書き換える。バージョンは先に Xcode の `MARKETING_VERSION`（と `CURRENT_PROJECT_VERSION`）を上げておく。そのあと LP のリポジトリで main に push すると、GitHub Actions が LP ごと公開する。
 
 ```bash
 bash scripts/release.sh --publish
-git add site && git commit -m "Macorn <バージョン> を公開する" && git push
 ```
 
 ## フォルダ構成
@@ -154,26 +153,7 @@ MACORN_DEBUG_OUT=/tmp/shots MACORN_HISTORY_PATH=/tmp/history.sqlite MACORN_DEBUG
 
 ## 紹介動画と LP
 
-| 場所 | 内容 |
-|---|---|
-| `promo/sample/make-sample.sh` | 撮影に使う架空のフォルダ一式を `/Users/Shared/MacornDemo` に作る |
-| `promo/capture/` | Debug ビルドを自動操作して画面を撮る（`capture.py` と手順の `steps.txt`） |
-| `promo/video/` | 紹介動画（Remotion）。場面は `src/Flow.tsx` |
-| `promo/build-site-assets.sh` | LP 用の画像・動画を `site/assets/` に作る |
-| `site/` | LP（静的な HTML）。https://macorn.app に公開している。ヒーローの立体図（実際のフォルダの上に整理の次元を重ねる。ドラッグで回せる）と、コンセプトの節の3段階の図は `site/dims.js` が描く |
-| `.github/workflows/vercel-*.yml` | LP の公開（main への push で本番、ほかのブランチでプレビュー。`site/` に変更があるときだけ） |
-
-```bash
-bash promo/sample/make-sample.sh
-python3 promo/capture/capture.py promo/capture/steps.txt promo/video/public/flow
-(cd promo/video && npm install && npm run render)
-bash promo/build-site-assets.sh
-git push   # main に site/ の変更を push すると、GitHub Actions が LP を本番に公開する
-```
-
-画面のロック中・ディスプレイのスリープ中はウィンドウを撮れない。
-
-GitHub Actions での公開には、リポジトリの Secrets に `VERCEL_TOKEN`（Vercel の Account Settings › Tokens で作る）・`VERCEL_ORG_ID`・`VERCEL_PROJECT_ID`（`site/.vercel/project.json` の値）が必要。手元から直接公開するときは `cd site && vercel deploy --prod`。
+LP（https://macorn.app）・紹介動画・宣伝用の画面の撮影は、別の非公開のリポジトリ（`macorn-site`）で扱う。撮影はこのリポジトリの Debug ビルドを自動操作して行う（上の「開発用の自動操作」）。
 
 ## ライセンス
 
