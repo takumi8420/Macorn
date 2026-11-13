@@ -752,7 +752,12 @@ final class PaneContainerViewController: NSViewController {
             pane.state.isActive = pane === active
             pane.state.isInSplit = split
         }
-        for group in tabGroups { group.isActiveGroup = group.contains(active) }
+        for group in tabGroups {
+            let isActive = group.contains(active)
+            // 分けているときだけ、操作対象の画面の選んだタブに色の線を引く。ほかの画面は文字を一段落とす
+            group.isActiveGroup = split && isActive
+            group.tabBar.isInSplit = split
+        }
         model.activePane = active.state
     }
 

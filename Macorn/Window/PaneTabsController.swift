@@ -196,8 +196,10 @@ final class PaneTabsController: NSViewController {
 // MARK: - タブの列
 
 /// 画面の上のタブの列。タブを押すと選び、「×」・中クリックで閉じ、ドラッグでほかの画面や画面の端へ動かせる。
+/// 地はすりガラス。選んだタブは中身と同じ地の平らな面で、下の中身とつながる（枠も影も付けない）。
+/// マウスを乗せたタブはうすく塗る。
 final class PaneTabBarView: NSView {
-    static let height: CGFloat = 30
+    static let height: CGFloat = 36
 
     struct Item: Equatable {
         var title: String
@@ -209,7 +211,10 @@ final class PaneTabBarView: NSView {
     /// （押している最中のタブを外すと、そのあとのドラッグが届かなくなるため）
     var items: [Item] = [] { didSet { sync() } }
     var selectedIndex = 0 { didSet { if selectedIndex != oldValue { updateAppearance() } } }
+    /// 分けているときの、操作対象の画面か（選んだタブの上の端に色の線を引く）
     var isActiveGroup = false { didSet { if isActiveGroup != oldValue { updateAppearance() } } }
+    /// 画面を分けているか
+    var isInSplit = false { didSet { if isInSplit != oldValue { updateAppearance() } } }
 
     var onSelect: ((Int) -> Void)?
     var onClose: ((Int) -> Void)?
@@ -219,16 +224,32 @@ final class PaneTabBarView: NSView {
     var onNewTab: (() -> Void)?
 
     private var itemViews: [PaneTabItemView] = []
+    /// 地のすりガラス（後ろがうっすら透ける）と、下の区切り線。タブより奥に置く
+    private let material: NSVisualEffectView = {
+        let view = NSVisualEffectView()
+        view.material = .titlebar
+        view.blendingMode = .behindWindow
+        view.state = .followsWindowActiveState
+        return view
+    }()
+    private let separator = SeparatorLineView()
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        addSubview(material)
+        addSubview(separator)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
     /// 最後のタブのすぐ右の「＋」（Chrome と同じ）。押すと、この画面に新しいタブ
-    private lazy var addButton: NSButton = {
-        let button = NSButton()
-        button.image = NSImage(systemSymbolName: "plus", accessibilityDescription: "新しいタブ")?
-            .withSymbolConfiguration(.init(pointSize: 11, weight: .semibold))
-        button.isBordered = false
-        button.bezelStyle = .regularSquare
-        button.imagePosition = .imageOnly
-        button.contentTintColor = .secondaryLabelColor
+    private lazy var addButton: HoverIconButton = {
+        let button = HoverIconButton(symbol: "plus", pointSize: 11, cornerRadius: 6)
         button.toolTip = "新しいタブ（⌘T）"
+        button.setAccessibilityLabel("新しいタブ")
         button.target = self
         button.action = #selector(addClicked(_:))
         addSubview(button)
@@ -236,29 +257,38 @@ final class PaneTabBarView: NSView {
     }()
 
     static let addButtonSize: CGFloat = 24
-
-    static let maxTabWidth: CGFloat = 200
-    static let minTabWidth: CGFloat = 70
+    static let maxTabWidth: CGFloat = 190
+    static let minTabWidth: CGFloat = 76
+    /// 左端の余白と、タブどうしの間
+    private static let inset: CGFloat = 6
+    private static let gap: CGFloat = 3
+    /// タブの上の余白（タブは下の端まで伸ばし、中身とつなげる）
+    private static let topInset: CGFloat = 6
 
     override var isFlipped: Bool { true }
 
     override func layout() {
         super.layout()
-        var x: CGFloat = 0
+        material.frame = bounds
+        separator.frame = NSRect(x: 0, y: bounds.height - 1, width: bounds.width, height: 1)
         let width = tabWidth
+        // 下の区切り線にもかぶせて、選んだタブが中身とつながって見えるようにする
+        let height = bounds.height - Self.topInset
+        var x = Self.inset
         for view in itemViews {
-            view.frame = NSRect(x: x, y: 0, width: width, height: bounds.height - 1)
-            x += width
+            view.frame = NSRect(x: x, y: Self.topInset, width: width, height: height)
+            x += width + Self.gap
         }
         let size = Self.addButtonSize
-        addButton.frame = NSRect(x: x + 4, y: ((bounds.height - 1) - size) / 2, width: size, height: size)
+        addButton.frame = NSRect(x: x + 1, y: Self.topInset + (height - 1 - size) / 2, width: size, height: size)
     }
 
     /// タブ1つの幅。「＋」の分を空けて、収まらなければ縮める
     private var tabWidth: CGFloat {
         guard !itemViews.isEmpty else { return 0 }
-        let available = bounds.width - Self.addButtonSize - 8
-        return min(Self.maxTabWidth, max(Self.minTabWidth, available / CGFloat(itemViews.count)))
+        let count = CGFloat(itemViews.count)
+        let available = bounds.width - Self.inset * 2 - Self.addButtonSize - Self.gap * count
+        return min(Self.maxTabWidth, max(Self.minTabWidth, available / count))
     }
 
     @objc private func addClicked(_ sender: Any?) { onNewTab?() }
@@ -294,19 +324,20 @@ final class PaneTabBarView: NSView {
         for (index, view) in itemViews.enumerated() {
             view.isSelected = index == selectedIndex
             view.isActiveGroup = isActiveGroup
+            view.isInSplit = isInSplit
         }
     }
 
     /// x（このビューの座標）に置いたときの、タブの並びでの位置
     func insertionIndex(atX x: CGFloat) -> Int {
-        let width = tabWidth
-        guard width > 0 else { return 0 }
-        return min(max(Int((x / width).rounded()), 0), itemViews.count)
+        let step = tabWidth + Self.gap
+        guard step > Self.gap else { return 0 }
+        return min(max(Int(((x - Self.inset) / step).rounded()), 0), itemViews.count)
     }
 
     /// 並びの位置 index の境目の x（このビューの座標）
     func insertionX(for index: Int) -> CGFloat {
-        tabWidth * CGFloat(index)
+        Self.inset + (tabWidth + Self.gap) * CGFloat(index) - Self.gap / 2
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -314,11 +345,13 @@ final class PaneTabBarView: NSView {
         if event.clickCount == 2 { onDoubleClickEmpty?() }
     }
 
-    override func draw(_ dirtyRect: NSRect) {
-        NSColor.windowBackgroundColor.setFill()
-        bounds.fill()
-        NSColor.separatorColor.setFill()
-        NSRect(x: 0, y: bounds.height - 1, width: bounds.width, height: 1).fill()
+}
+
+/// 1px の区切り線（ライト・ダークに追従）
+final class SeparatorLineView: NSView {
+    override var wantsUpdateLayer: Bool { true }
+    override func updateLayer() {
+        layer?.backgroundColor = NSColor.separatorColor.cgColor
     }
 }
 
@@ -328,14 +361,18 @@ final class PaneTabItemView: NSView {
     var onClose: (() -> Void)?
     var onBeginDrag: ((NSEvent) -> Void)?
 
-    var isSelected = false { didSet { updateAppearance() } }
-    var isActiveGroup = false { didSet { updateAppearance() } }
+    var isSelected = false { didSet { if isSelected != oldValue { updateAppearance() } } }
+    var isActiveGroup = false { didSet { if isActiveGroup != oldValue { updateAppearance() } } }
+    /// 画面を分けているか（分けていないときは、選んだタブをいつも濃く出す）
+    var isInSplit = false { didSet { if isInSplit != oldValue { updateAppearance() } } }
 
     private let iconView = NSImageView()
     private let label = NSTextField(labelWithString: "")
-    private let closeButton = NSButton()
-    private var hovering = false { didSet { updateAppearance() } }
+    private let closeButton = HoverIconButton(symbol: "xmark", pointSize: 8.5, cornerRadius: 8)
+    private var hovering = false { didSet { if hovering != oldValue { updateAppearance() } } }
     private var mouseDownPoint: NSPoint?
+
+    private static let cornerRadius: CGFloat = 7
 
     init() {
         super.init(frame: .zero)
@@ -343,28 +380,23 @@ final class PaneTabItemView: NSView {
         label.font = .systemFont(ofSize: 12)
         label.lineBreakMode = .byTruncatingMiddle
         label.cell?.truncatesLastVisibleLine = true
-        closeButton.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "タブを閉じる")?
-            .withSymbolConfiguration(.init(pointSize: 9, weight: .semibold))
-        closeButton.isBordered = false
-        closeButton.bezelStyle = .regularSquare
-        closeButton.imagePosition = .imageOnly
-        closeButton.contentTintColor = .secondaryLabelColor
         closeButton.target = self
         closeButton.action = #selector(closeClicked(_:))
         closeButton.toolTip = "タブを閉じる（⌘W）"
+        closeButton.setAccessibilityLabel("タブを閉じる")
         for view in [iconView, label, closeButton] as [NSView] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
         NSLayoutConstraint.activate([
-            iconView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
+            iconView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 9),
             iconView.centerYAnchor.constraint(equalTo: centerYAnchor),
             iconView.widthAnchor.constraint(equalToConstant: 14),
             iconView.heightAnchor.constraint(equalToConstant: 14),
             label.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 6),
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
-            label.trailingAnchor.constraint(lessThanOrEqualTo: closeButton.leadingAnchor, constant: -4),
-            closeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
+            label.trailingAnchor.constraint(lessThanOrEqualTo: closeButton.leadingAnchor, constant: -3),
+            closeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
             closeButton.centerYAnchor.constraint(equalTo: centerYAnchor),
             closeButton.widthAnchor.constraint(equalToConstant: 16),
             closeButton.heightAnchor.constraint(equalToConstant: 16),
@@ -375,6 +407,11 @@ final class PaneTabItemView: NSView {
         updateAppearance()
     }
 
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
     /// タブの名前・アイコンを入れ替える（部品はそのまま）
     func apply(_ item: PaneTabBarView.Item) {
         iconView.image = item.icon
@@ -383,17 +420,14 @@ final class PaneTabItemView: NSView {
         setAccessibilityLabel(item.title)
     }
 
-    @available(*, unavailable)
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
     override var isFlipped: Bool { true }
 
     private func updateAppearance() {
-        label.textColor = isSelected ? .labelColor : .secondaryLabelColor
-        label.font = .systemFont(ofSize: 12, weight: isSelected && isActiveGroup ? .semibold : .regular)
+        // 操作対象の画面の選んだタブだけを濃く。ほかの画面の選んだタブは一段落とす（半透明にはしない）
+        label.textColor = isSelected && (isActiveGroup || !isInSplit) ? .labelColor : .secondaryLabelColor
+        label.font = .systemFont(ofSize: 12, weight: isSelected ? .medium : .regular)
         closeButton.isHidden = !(isSelected || hovering)
+        setAccessibilityValue(isSelected)
         needsDisplay = true
     }
 
@@ -433,19 +467,71 @@ final class PaneTabItemView: NSView {
     @objc private func closeClicked(_ sender: Any?) { onClose?() }
 
     override func draw(_ dirtyRect: NSRect) {
+        let radius = Self.cornerRadius
         if isSelected {
+            // 選んだタブ：中身と同じ地の平らな面。上の角だけを丸め、下は中身へそのままつなげる
+            let path = NSBezierPath()
+            path.move(to: NSPoint(x: 0, y: bounds.maxY))
+            path.line(to: NSPoint(x: 0, y: radius))
+            path.appendArc(withCenter: NSPoint(x: radius, y: radius), radius: radius, startAngle: 180, endAngle: 270)
+            path.line(to: NSPoint(x: bounds.maxX - radius, y: 0))
+            path.appendArc(withCenter: NSPoint(x: bounds.maxX - radius, y: radius), radius: radius, startAngle: 270, endAngle: 360)
+            path.line(to: NSPoint(x: bounds.maxX, y: bounds.maxY))
+            path.close()
             NSColor.controlBackgroundColor.setFill()
-            bounds.fill()
+            path.fill()
+            // 分けているときは、操作対象の画面の選んだタブの上の端に、アクセントの色の線
             if isActiveGroup {
+                NSGraphicsContext.saveGraphicsState()
+                path.addClip()
                 Theme.shared.accentColor.setFill()
                 NSRect(x: 0, y: 0, width: bounds.width, height: 2).fill()
+                NSGraphicsContext.restoreGraphicsState()
             }
         } else if hovering {
-            NSColor.labelColor.withAlphaComponent(0.05).setFill()
-            bounds.fill()
+            let rect = NSRect(x: 0, y: 1, width: bounds.width, height: bounds.height - 5)
+            NSColor.labelColor.withAlphaComponent(0.07).setFill()
+            NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
         }
-        // タブの右の区切り線
-        NSColor.separatorColor.setFill()
-        NSRect(x: bounds.width - 1, y: 6, width: 1, height: bounds.height - 12).fill()
+    }
+}
+
+/// 記号だけの小さなボタン。マウスを乗せると、角の丸い背景をうすく出す（タブの「×」・「＋」）
+final class HoverIconButton: NSButton {
+    private let cornerRadius: CGFloat
+    private var hovering = false { didSet { if hovering != oldValue { needsDisplay = true } } }
+
+    init(symbol: String, pointSize: CGFloat, cornerRadius: CGFloat) {
+        self.cornerRadius = cornerRadius
+        super.init(frame: .zero)
+        image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
+            .withSymbolConfiguration(.init(pointSize: pointSize, weight: .semibold))
+        isBordered = false
+        bezelStyle = .regularSquare
+        imagePosition = .imageOnly
+        contentTintColor = .secondaryLabelColor
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach(removeTrackingArea)
+        addTrackingArea(NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+                                       owner: self, userInfo: nil))
+    }
+
+    override func mouseEntered(with event: NSEvent) { hovering = true }
+    override func mouseExited(with event: NSEvent) { hovering = false }
+
+    override func draw(_ dirtyRect: NSRect) {
+        if hovering || isHighlighted {
+            NSColor.labelColor.withAlphaComponent(isHighlighted ? 0.14 : 0.08).setFill()
+            NSBezierPath(roundedRect: bounds, xRadius: cornerRadius, yRadius: cornerRadius).fill()
+        }
+        super.draw(dirtyRect)
     }
 }

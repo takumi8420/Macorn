@@ -83,17 +83,18 @@ struct PathBarView: View {
         .padding(.trailing, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
-        .opacity(isDimmed ? 0.55 : 1)
-        .background(isHighlighted ? Theme.shared.accent.opacity(0.10) : .clear)
+        // 分けているときは、操作対象の画面のパスバーをうすいアクセントの色で染め、下に色の線を引く（要件 P-03）。
+        // ほかの画面は文字を一段落とす（半透明にはしない）
+        .foregroundStyle(isDimmed ? .secondary : .primary)
+        .background(isHighlighted ? Theme.shared.accent.opacity(0.08) : .clear)
         .contentShape(Rectangle())
         // 空いている所を1回クリックすると、パスを直接入力できる（⌘L と同じ）
         .onTapGesture { startEditing() }
         .overlay(alignment: .bottom) {
-            // 2画面のときは、操作対象の画面の下に色付きの線を引いて区別する（要件 P-03）
             if isHighlighted {
-                Rectangle().fill(Theme.shared.accent).frame(height: 2)
+                Rectangle().fill(Theme.shared.accent.opacity(0.55)).frame(height: 1)
             } else {
-                Divider()
+                Divider().opacity(0.6)
             }
         }
     }
