@@ -21,7 +21,7 @@ extension FileBrowserViewController {
         state.isFilterBarAlwaysShown = Preferences.alwaysShowFilterBar
         let shows = state.isFilterBarAlwaysShown || state.isFiltering
         filterBar.isHidden = !shows
-        filterBarHeight?.constant = shows ? 28 : 0
+        filterBarHeight?.constant = shows ? 34 : 0
     }
 
     func setFilter(_ text: String) {

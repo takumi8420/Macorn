@@ -52,7 +52,7 @@ struct PathBarView: View {
             // 右端: この画面への追加（新規フォルダ・新規ファイル・お気に入り）、Git のリポジトリのページを開くボタン、
             // 分けているときはこの画面を閉じる「×」。ウィンドウ全体に関わるもの（分割・ターミナル）は上のツールバーに置く
             if !state.isEditingPath {
-                HStack(spacing: 2) {
+                HStack(spacing: 0) {
                     if state.currentURL.isFileURL {
                         PathBarIconButton(symbol: "folder.badge.plus", help: "このフォルダに、新しいフォルダを作る（⇧⌘N）", action: actions.newFolder)
                         PathBarIconButton(symbol: "doc.badge.plus", help: "このフォルダに、新しいファイルを作る（⌥⌘N）", action: actions.newFile)
@@ -66,6 +66,9 @@ struct PathBarView: View {
                         )
                     }
                 }
+                // このフォルダへの操作は、ガラスのカプセルにまとめる（ツールバーのボタンと同じ見た目）
+                .padding(.horizontal, 3)
+                .glassCapsule()
                 if let url = state.gitRemoteWebURL {
                     RepositoryWebButton(
                         url: url,
@@ -83,23 +86,13 @@ struct PathBarView: View {
         .padding(.trailing, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
-        // 分けているときは、操作対象の画面のパスバーをうすいアクセントの色で染め、下に色の線を引く（要件 P-03）。
-        // ほかの画面は文字を一段落とす（半透明にはしない）
+        // 分けているときは、操作対象でない画面の文字を一段落とす（操作対象はタブの下の色の線で示す。要件 P-03）
         .foregroundStyle(isDimmed ? .secondary : .primary)
-        .background(isHighlighted ? Theme.shared.accent.opacity(0.08) : .clear)
         .contentShape(Rectangle())
         // 空いている所を1回クリックすると、パスを直接入力できる（⌘L と同じ）
         .onTapGesture { startEditing() }
-        .overlay(alignment: .bottom) {
-            if isHighlighted {
-                Rectangle().fill(Theme.shared.accent.opacity(0.55)).frame(height: 1)
-            } else {
-                Divider().opacity(0.6)
-            }
-        }
     }
 
-    private var isHighlighted: Bool { state.isInSplit && state.isActive }
     private var isDimmed: Bool { state.isInSplit && !state.isActive }
 
     /// タグの一覧を開いているときは、パンくずの代わりにタグの名前を出す
@@ -276,8 +269,8 @@ private struct PathBarIconButton: View {
             Image(systemName: symbol)
                 .font(.system(size: 13))
                 .foregroundStyle(isHovering ? Color.primary : .secondary)
-                .frame(width: 26, height: 22)
-                .background(RoundedRectangle(cornerRadius: 5).fill(isHovering ? Color.primary.opacity(0.08) : .clear))
+                .frame(width: 28, height: 24)
+                .background(Capsule().fill(isHovering ? Color.primary.opacity(0.08) : .clear))
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

@@ -151,7 +151,7 @@ final class FileBrowserViewController: NSViewController {
             pathBar.topAnchor.constraint(equalTo: container.safeAreaLayoutGuide.topAnchor),
             pathBar.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             pathBar.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            pathBar.heightAnchor.constraint(equalToConstant: 30),
+            pathBar.heightAnchor.constraint(equalToConstant: 34),
 
             filterBar.topAnchor.constraint(equalTo: pathBar.bottomAnchor),
             filterBar.leadingAnchor.constraint(equalTo: container.leadingAnchor),
@@ -234,8 +234,9 @@ final class FileBrowserViewController: NSViewController {
     private func configureOutlineView() {
         outlineView.dataSource = self
         outlineView.delegate = self
-        outlineView.style = .fullWidth
-        outlineView.usesAlternatingRowBackgroundColors = true
+        // 縞模様は付けず、選んだ行は角の丸い帯で見せる（いまの Finder と同じ）
+        outlineView.style = .inset
+        outlineView.usesAlternatingRowBackgroundColors = false
         outlineView.allowsMultipleSelection = true
         outlineView.allowsEmptySelection = true
         outlineView.allowsColumnReordering = true
@@ -298,20 +299,48 @@ final class FileBrowserViewController: NSViewController {
     }
 
     @objc private func columnDidResize(_ notification: Notification) {
-        // 名前以外の列の幅を変えたら、名前の列で残りを埋める
-        let column = notification.userInfo?["NSTableColumn"] as? NSTableColumn
-        if column?.identifier != FileColumn.name.identifier { fitNameColumn() }
+        // 名前以外の列の幅を変えたら、それを好みの幅として覚え、名前の列で残りを埋める
+        guard !isFittingColumns, let column = notification.userInfo?["NSTableColumn"] as? NSTableColumn,
+              column.identifier != FileColumn.name.identifier else { return }
+        Self.preferredColumnWidths[column.identifier.rawValue] = column.width
+        fitNameColumn()
     }
 
-    /// 名前の列の幅を「一覧の幅 − ほかの列の幅」にする。狭いときは最小幅で止め、横スクロールにする。
+    /// 名前以外の列の、利用者が決めた幅（画面が狭いあいだ縮めても、広がれば戻す。アプリ全体で共有）
+    private static var preferredColumnWidths: [String: CGFloat] = [:]
+    /// 列の幅を合わせている最中（そのあいだの幅の変化は、好みの幅として覚えない）
+    private var isFittingColumns = false
+
+    /// 名前の列の幅を「一覧の幅 − ほかの列の幅」にする。
+    /// 画面が狭く名前の列が細くなりすぎるときは、ほかの列を同じ割合で縮めて、名前が読める幅を残す
     func fitNameColumn() {
-        guard let name = outlineView.tableColumn(withIdentifier: FileColumn.name.identifier) else { return }
+        guard !isFittingColumns, let name = outlineView.tableColumn(withIdentifier: FileColumn.name.identifier) else { return }
         let visible = outlineView.tableColumns.filter { !$0.isHidden }
-        let others = visible.filter { $0 !== name }.reduce(0) { $0 + $1.width }
+        let others = visible.filter { $0 !== name }
         let spacing = outlineView.intercellSpacing.width * CGFloat(visible.count)
-        let available = scrollView.contentView.bounds.width
+        // inset の見た目では、行の左右に余白が付く
+        let available = outlineView.rect(ofColumn: 0).minX > 0
+            ? scrollView.contentView.bounds.width - outlineView.rect(ofColumn: 0).minX * 2
+            : scrollView.contentView.bounds.width
         guard available > 0 else { return }
-        let width = max(name.minWidth, floor(available - others - spacing))
+        isFittingColumns = true
+        defer { isFittingColumns = false }
+        let preferred = others.map { column in
+            Self.preferredColumnWidths[column.identifier.rawValue] ?? {
+                Self.preferredColumnWidths[column.identifier.rawValue] = column.width
+                return column.width
+            }()
+        }
+        let nameFloor = min(320, max(name.minWidth, available * 0.5))
+        let room = available - spacing - nameFloor
+        let total = preferred.reduce(0, +)
+        let scale = total > room && total > 0 ? max(room, 0) / total : 1
+        for (column, width) in zip(others, preferred) {
+            let fitted = max(FileColumn(rawValue: column.identifier.rawValue)?.compactWidth ?? column.minWidth,
+                             min(width, floor(width * scale)))
+            if abs(column.width - fitted) > 0.5 { column.width = fitted }
+        }
+        let width = max(name.minWidth, floor(available - others.reduce(0) { $0 + $1.width } - spacing))
         if abs(name.width - width) > 0.5 { name.width = width }
     }
 

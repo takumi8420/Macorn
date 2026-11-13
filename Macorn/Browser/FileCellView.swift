@@ -44,6 +44,17 @@ enum FileColumn: String, CaseIterable {
     var minWidth: CGFloat {
         self == .name ? 120 : 50
     }
+
+    /// 画面が狭いときに縮める下限（日付が「…」で切れない程度は残す）
+    var compactWidth: CGFloat {
+        switch self {
+        case .name: 120
+        case .dateModified: 112
+        case .size: 56
+        case .kind: 64
+        case .tags: 44
+        }
+    }
 }
 
 extension NSAttributedString.Key {

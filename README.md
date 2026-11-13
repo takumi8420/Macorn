@@ -151,6 +151,9 @@ MACORN_DEBUG_OUT=/tmp/shots MACORN_HISTORY_PATH=/tmp/history.sqlite MACORN_DEBUG
 | `MACORN_UPDATE_TEAM` | 自動更新で受け入れる署名のチーム（開発用ビルドは簡易署名でチームがないため、確認のときに渡す。例 `Q9Q29NW29B`）。Debug ビルドだけで効く |
 | `MACORN_DEBUG_COPY_DELAY_US` | コピーをわざと遅くする（進み具合の表示と中止の確認用） |
 
+- `snap:` の画像は画面の中身を描き直したもので、リキッドグラス（ツールバー・サイドバー・タブの列など）は写らない（ダークでは白い塊になる）。ガラスの見た目を確かめるときは、自動操作の最中にそのウィンドウを `screencapture -l <ウィンドウ番号>` で撮る
+- 新しい保存先（`MACORN_DEFAULTS_SUITE`）で起動すると、初めの起動のお気に入りの移し替えで、書類やデスクトップなどへのアクセスの確認が出て止まることがある。先に `defaults write <スイート名> sidebarFavorites -array` でお気に入りを空にしておく
+
 ## 紹介動画と LP
 
 LP（https://macorn.app）・紹介動画・宣伝用の画面の撮影は、別の非公開のリポジトリ（`macorn-site`）で扱う。撮影はこのリポジトリの Debug ビルドを自動操作して行う（上の「開発用の自動操作」）。

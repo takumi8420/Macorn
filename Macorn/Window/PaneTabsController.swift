@@ -199,7 +199,7 @@ final class PaneTabsController: NSViewController {
 /// 地はすりガラス。選んだタブは中身と同じ地の平らな面で、下の中身とつながる（枠も影も付けない）。
 /// マウスを乗せたタブはうすく塗る。
 final class PaneTabBarView: NSView {
-    static let height: CGFloat = 36
+    static let height: CGFloat = 42
 
     struct Item: Equatable {
         var title: String
@@ -211,7 +211,7 @@ final class PaneTabBarView: NSView {
     /// （押している最中のタブを外すと、そのあとのドラッグが届かなくなるため）
     var items: [Item] = [] { didSet { sync() } }
     var selectedIndex = 0 { didSet { if selectedIndex != oldValue { updateAppearance() } } }
-    /// 分けているときの、操作対象の画面か（選んだタブの上の端に色の線を引く）
+    /// 分けているときの、操作対象の画面か（選んだタブをアクセントの色で灯す）
     var isActiveGroup = false { didSet { if isActiveGroup != oldValue { updateAppearance() } } }
     /// 画面を分けているか
     var isInSplit = false { didSet { if isInSplit != oldValue { updateAppearance() } } }
@@ -224,20 +224,21 @@ final class PaneTabBarView: NSView {
     var onNewTab: (() -> Void)?
 
     private var itemViews: [PaneTabItemView] = []
-    /// 地のすりガラス（後ろがうっすら透ける）と、下の区切り線。タブより奥に置く
-    private let material: NSVisualEffectView = {
-        let view = NSVisualEffectView()
-        view.material = .titlebar
-        view.blendingMode = .behindWindow
-        view.state = .followsWindowActiveState
-        return view
-    }()
-    private let separator = SeparatorLineView()
+    /// 各タブの位置（ドラッグで置く場所を求めるのに使う）
+    private var tabFrames: [NSRect] = []
+    /// タブと「＋」をまとめて入れる、ガラスのカプセル（Safari のタブの列と同じ形）
+    private let glass = Glass.makeView(cornerRadius: PaneTabBarView.capsuleHeight / 2)
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
-        addSubview(material)
-        addSubview(separator)
+        wantsLayer = true
+        addSubview(glass)
+    }
+
+    override var wantsUpdateLayer: Bool { true }
+    override func updateLayer() {
+        // 地は一覧と同じ色にして、帯に見せない。タブはガラスのカプセルに浮かべる
+        layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
     }
 
     @available(*, unavailable)
@@ -247,7 +248,7 @@ final class PaneTabBarView: NSView {
 
     /// 最後のタブのすぐ右の「＋」（Chrome と同じ）。押すと、この画面に新しいタブ
     private lazy var addButton: HoverIconButton = {
-        let button = HoverIconButton(symbol: "plus", pointSize: 11, cornerRadius: 6)
+        let button = HoverIconButton(symbol: "plus", pointSize: 11, cornerRadius: PaneTabBarView.addButtonSize / 2)
         button.toolTip = "新しいタブ（⌘T）"
         button.setAccessibilityLabel("新しいタブ")
         button.target = self
@@ -256,39 +257,49 @@ final class PaneTabBarView: NSView {
         return button
     }()
 
-    static let addButtonSize: CGFloat = 24
-    static let maxTabWidth: CGFloat = 190
-    static let minTabWidth: CGFloat = 76
-    /// 左端の余白と、タブどうしの間
-    private static let inset: CGFloat = 6
-    private static let gap: CGFloat = 3
-    /// タブの上の余白（タブは下の端まで伸ばし、中身とつなげる）
-    private static let topInset: CGFloat = 6
+    static let addButtonSize: CGFloat = 26
+    static let maxTabWidth: CGFloat = 200
+    static let minTabWidth: CGFloat = 72
+    /// ガラスのカプセルの高さと、その中のタブの札の高さ
+    static let capsuleHeight: CGFloat = 32
+    static let tabHeight: CGFloat = 26
+    /// カプセルの中の余白
+    private static let padding: CGFloat = 3
+    /// 左端の余白（カプセルの左の端まで）と、タブどうしの間
+    private static let inset: CGFloat = 8 + padding
+    private static let gap: CGFloat = 2
 
     override var isFlipped: Bool { true }
 
     override func layout() {
         super.layout()
-        material.frame = bounds
-        separator.frame = NSRect(x: 0, y: bounds.height - 1, width: bounds.width, height: 1)
-        let width = tabWidth
-        // 下の区切り線にもかぶせて、選んだタブが中身とつながって見えるようにする
-        let height = bounds.height - Self.topInset
+        let widths = tabWidths
+        let height = Self.tabHeight
+        let capsuleY = ((bounds.height - Self.capsuleHeight) / 2).rounded()
+        let y = capsuleY + (Self.capsuleHeight - height) / 2
         var x = Self.inset
-        for view in itemViews {
-            view.frame = NSRect(x: x, y: Self.topInset, width: width, height: height)
+        tabFrames = []
+        for (view, width) in zip(itemViews, widths) {
+            let frame = NSRect(x: x, y: y, width: width, height: height)
+            view.frame = frame
+            tabFrames.append(frame)
             x += width + Self.gap
         }
         let size = Self.addButtonSize
-        addButton.frame = NSRect(x: x + 1, y: Self.topInset + (height - 1 - size) / 2, width: size, height: size)
+        addButton.frame = NSRect(x: x, y: y + (height - size) / 2, width: size, height: size)
+        let capsuleX = Self.inset - Self.padding
+        glass.frame = NSRect(x: capsuleX, y: capsuleY,
+                             width: addButton.frame.maxX + Self.padding - capsuleX, height: Self.capsuleHeight)
     }
 
-    /// タブ1つの幅。「＋」の分を空けて、収まらなければ縮める
-    private var tabWidth: CGFloat {
-        guard !itemViews.isEmpty else { return 0 }
-        let count = CGFloat(itemViews.count)
-        let available = bounds.width - Self.inset * 2 - Self.addButtonSize - Self.gap * count
-        return min(Self.maxTabWidth, max(Self.minTabWidth, available / count))
+    /// 各タブの幅。名前の長さに合わせ（ブラウザや VS Code と同じ）、収まらなければ同じ割合で縮める
+    private var tabWidths: [CGFloat] {
+        let natural = itemViews.map { min(Self.maxTabWidth, max(Self.minTabWidth, $0.naturalWidth)) }
+        let available = bounds.width - Self.inset * 2 - Self.addButtonSize - Self.padding - Self.gap * CGFloat(natural.count)
+        let total = natural.reduce(0, +)
+        guard total > available, total > 0 else { return natural }
+        let scale = max(available, 0) / total
+        return natural.map { max(Self.minTabWidth, ($0 * scale).rounded(.down)) }
     }
 
     @objc private func addClicked(_ sender: Any?) { onNewTab?() }
@@ -330,14 +341,13 @@ final class PaneTabBarView: NSView {
 
     /// x（このビューの座標）に置いたときの、タブの並びでの位置
     func insertionIndex(atX x: CGFloat) -> Int {
-        let step = tabWidth + Self.gap
-        guard step > Self.gap else { return 0 }
-        return min(max(Int(((x - Self.inset) / step).rounded()), 0), itemViews.count)
+        tabFrames.filter { $0.midX < x }.count
     }
 
     /// 並びの位置 index の境目の x（このビューの座標）
     func insertionX(for index: Int) -> CGFloat {
-        Self.inset + (tabWidth + Self.gap) * CGFloat(index) - Self.gap / 2
+        if index < tabFrames.count { return tabFrames[index].minX - Self.gap / 2 }
+        return (tabFrames.last?.maxX ?? Self.inset) + Self.gap / 2
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -345,14 +355,6 @@ final class PaneTabBarView: NSView {
         if event.clickCount == 2 { onDoubleClickEmpty?() }
     }
 
-}
-
-/// 1px の区切り線（ライト・ダークに追従）
-final class SeparatorLineView: NSView {
-    override var wantsUpdateLayer: Bool { true }
-    override func updateLayer() {
-        layer?.backgroundColor = NSColor.separatorColor.cgColor
-    }
 }
 
 /// タブ1つ。フォルダのアイコン・名前・「×」
@@ -372,10 +374,18 @@ final class PaneTabItemView: NSView {
     private var hovering = false { didSet { if hovering != oldValue { updateAppearance() } } }
     private var mouseDownPoint: NSPoint?
 
-    private static let cornerRadius: CGFloat = 7
+    private static let cornerRadius: CGFloat = PaneTabBarView.tabHeight / 2
+
+    /// 選んだタブの札の色（ガラスの上で一段明るく）
+    private static let selectedColor = NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? NSColor(white: 1, alpha: 0.16)
+            : NSColor(white: 1, alpha: 0.95)
+    }
 
     init() {
         super.init(frame: .zero)
+        clipsToBounds = false // 札のごく薄い影を外へ出す
         iconView.imageScaling = .scaleProportionallyDown
         label.font = .systemFont(ofSize: 12)
         label.lineBreakMode = .byTruncatingMiddle
@@ -396,7 +406,7 @@ final class PaneTabItemView: NSView {
             label.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 6),
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
             label.trailingAnchor.constraint(lessThanOrEqualTo: closeButton.leadingAnchor, constant: -3),
-            closeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
+            closeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -5),
             closeButton.centerYAnchor.constraint(equalTo: centerYAnchor),
             closeButton.widthAnchor.constraint(equalToConstant: 16),
             closeButton.heightAnchor.constraint(equalToConstant: 16),
@@ -415,12 +425,21 @@ final class PaneTabItemView: NSView {
     /// タブの名前・アイコンを入れ替える（部品はそのまま）
     func apply(_ item: PaneTabBarView.Item) {
         iconView.image = item.icon
-        if label.stringValue != item.title { label.stringValue = item.title }
+        if label.stringValue != item.title {
+            label.stringValue = item.title
+            superview?.needsLayout = true
+        }
         if toolTip != item.toolTip { toolTip = item.toolTip }
         setAccessibilityLabel(item.title)
     }
 
     override var isFlipped: Bool { true }
+
+    /// 名前がすべて見えるときの幅（アイコン・名前・「×」と余白）
+    var naturalWidth: CGFloat {
+        let text = (label.stringValue as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 12, weight: .medium)])
+        return (9 + 14 + 6 + text.width + 4 + 16 + 5).rounded(.up)
+    }
 
     private func updateAppearance() {
         // 操作対象の画面の選んだタブだけを濃く。ほかの画面の選んだタブは一段落とす（半透明にはしない）
@@ -468,30 +487,25 @@ final class PaneTabItemView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         let radius = Self.cornerRadius
-        if isSelected {
-            // 選んだタブ：中身と同じ地の平らな面。上の角だけを丸め、下は中身へそのままつなげる
-            let path = NSBezierPath()
-            path.move(to: NSPoint(x: 0, y: bounds.maxY))
-            path.line(to: NSPoint(x: 0, y: radius))
-            path.appendArc(withCenter: NSPoint(x: radius, y: radius), radius: radius, startAngle: 180, endAngle: 270)
-            path.line(to: NSPoint(x: bounds.maxX - radius, y: 0))
-            path.appendArc(withCenter: NSPoint(x: bounds.maxX - radius, y: radius), radius: radius, startAngle: 270, endAngle: 360)
-            path.line(to: NSPoint(x: bounds.maxX, y: bounds.maxY))
-            path.close()
-            NSColor.controlBackgroundColor.setFill()
-            path.fill()
-            // 分けているときは、操作対象の画面の選んだタブの上の端に、アクセントの色の線
-            if isActiveGroup {
-                NSGraphicsContext.saveGraphicsState()
-                path.addClip()
-                Theme.shared.accentColor.setFill()
-                NSRect(x: 0, y: 0, width: bounds.width, height: 2).fill()
-                NSGraphicsContext.restoreGraphicsState()
-            }
+        let pill = NSBezierPath(roundedRect: bounds, xRadius: radius, yRadius: radius)
+        if isSelected && isActiveGroup {
+            // 分けているときの、操作対象の画面の選んだタブ：アクセントの色をうすく灯したカプセル（要件 P-03）
+            Theme.shared.accentColor.withAlphaComponent(0.20).setFill()
+            pill.fill()
+        } else if isSelected {
+            // 選んだタブ：ガラスの上に浮かぶ明るいカプセル（ごく薄い影）
+            NSGraphicsContext.saveGraphicsState()
+            let shadow = NSShadow()
+            shadow.shadowColor = NSColor.black.withAlphaComponent(0.12)
+            shadow.shadowBlurRadius = 2
+            shadow.shadowOffset = NSSize(width: 0, height: -0.5)
+            shadow.set()
+            Self.selectedColor.setFill()
+            pill.fill()
+            NSGraphicsContext.restoreGraphicsState()
         } else if hovering {
-            let rect = NSRect(x: 0, y: 1, width: bounds.width, height: bounds.height - 5)
             NSColor.labelColor.withAlphaComponent(0.07).setFill()
-            NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
+            pill.fill()
         }
     }
 }

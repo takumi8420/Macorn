@@ -51,10 +51,14 @@ struct FilterBarView: View {
                 .help("絞り込みをやめる（Esc）")
             }
         }
-        .padding(.horizontal, 14)
+        // 帯ではなく、ガラスのカプセルの検索欄として見せる（区切りの線を重ねない）
+        .padding(.horizontal, 11)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .glassCapsule()
+        .padding(.horizontal, 10)
+        .padding(.top, 2)
+        .padding(.bottom, 6)
         .background(Color(nsColor: .controlBackgroundColor))
-        .overlay(alignment: .bottom) { Divider() }
     }
 
     /// タグの一覧では、サブフォルダは探さない
