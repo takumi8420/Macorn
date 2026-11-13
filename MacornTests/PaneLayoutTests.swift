@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Testing
 @testable import Macorn
@@ -79,5 +80,131 @@ struct PaneLayoutTests {
         #expect(afterVertical)
         #expect(after.map(\.paths) == [["/"], ["/tmp"]])
         container.panes.forEach { $0.tearDown() }
+    }
+
+    /// ドラッグの置き場所：真ん中の四角は入れ替え、それ以外はいちばん近い辺
+    @Test func dropZoneIsNearestEdgeOrCenter() {
+        #expect(PaneDropZone.zone(x: 0.1, yFromTop: 0.5) == .left)
+        #expect(PaneDropZone.zone(x: 0.9, yFromTop: 0.4) == .right)
+        #expect(PaneDropZone.zone(x: 0.5, yFromTop: 0.05) == .top)
+        #expect(PaneDropZone.zone(x: 0.6, yFromTop: 0.95) == .bottom)
+        #expect(PaneDropZone.zone(x: 0.5, yFromTop: 0.5) == .center)
+        #expect(PaneDropZone.zone(x: 0.35, yFromTop: 0.65) == .center)
+        // 色を付ける範囲は、置いたあとにその画面が来る半分（左下が原点）
+        let rect = NSRect(x: 0, y: 0, width: 200, height: 100)
+        #expect(PaneDropZone.top.highlight(in: rect) == NSRect(x: 0, y: 50, width: 200, height: 50))
+        #expect(PaneDropZone.right.highlight(in: rect) == NSRect(x: 100, y: 0, width: 100, height: 100))
+    }
+
+    /// 並びから、大きさの割合を除いた形（"|" は左右、"-" は上下、"[a *b]" はタブ。* は選んでいるタブ）
+    private func shape(_ tree: PaneTreeLayout?) -> String {
+        switch tree {
+        case .pane(let path)?: String(path.dropFirst())
+        case .tabs(let paths, let selected)?:
+            "[" + paths.enumerated().map { ($0.offset == selected ? "*" : "") + String($0.element.dropFirst()) }.joined(separator: " ") + "]"
+        case .group(let vertical, let children, _)?:
+            "(" + children.map { shape($0) }.joined(separator: vertical ? "|" : "-") + ")"
+        case nil: "nil"
+        }
+    }
+
+    /// タブのある画面の保存・消えたフォルダの除き方
+    @Test func tabsLayoutPrunesAndRoundTrips() throws {
+        let tree = PaneTreeLayout.group(vertical: true, children: [
+            .tabs(paths: ["/a", "/b", "/c"], selected: 2),
+            .pane(path: "/d"),
+        ], fractions: nil)
+        #expect(tree.paths == ["/c", "/d"])
+        #expect(tree.allPaths == ["/a", "/b", "/c", "/d"])
+        let layout = PaneLayout(paths: [], activeIndex: 1, tree: tree)
+        #expect(try JSONDecoder().decode(PaneLayout.self, from: JSONEncoder().encode(layout)) == layout)
+        // 選んでいたタブが消えたら、最初のタブを選ぶ。1つになったら、ふつうの画面に戻す
+        #expect(shape(tree.pruned { $0 != "/c" }) == "([*a b]|d)")
+        #expect(shape(tree.pruned { $0 != "/a" }) == "([b *c]|d)")
+        #expect(shape(tree.pruned { $0 == "/b" || $0 == "/d" }) == "(b|d)")
+    }
+
+    /// VS Code のように、タブをほかの画面のタブの列や、画面の上下左右へ動かす
+    @MainActor @Test func movesTabsLikeVSCode() {
+        let tree = PaneTreeLayout.tabs(paths: ["/a", "/b"], selected: 0)
+        let container = PaneContainerViewController(layout: PaneLayout(paths: [], activeIndex: 0, tree: tree))
+        _ = container.view
+        defer { container.allBrowsers.forEach { $0.tearDown() } }
+        func tab(_ path: String) -> FileBrowserViewController {
+            container.allBrowsers.first { $0.state.currentURL.path == path }!
+        }
+        #expect(shape(container.layout.tree) == "[*a b]")
+        #expect(!container.isSplit)
+
+        // タブ b を、画面の下へ → 上下2画面になる
+        #expect(container.moveTab(tab("/b"), to: .split(container.tabGroups[0], .bottom)))
+        #expect(shape(container.layout.tree) == "(a-b)")
+        #expect(container.activePane === tab("/b"))
+
+        // 1つしかないタブを自分の画面の端へ置いても変わらない
+        #expect(!container.moveTab(tab("/b"), to: .split(container.tabGroups[1], .left)))
+
+        // 新しいタブを下の画面に足して、上の画面のタブの列の先頭へ動かす
+        let c = container.openTab(at: URL(fileURLWithPath: "/usr"))
+        #expect(container.tabGroups[1].tabs.count == 2)
+        #expect(container.moveTab(c, to: .insert(container.tabGroups[0], 0)))
+        #expect(shape(container.layout.tree) == "([*usr a]-b)")
+
+        // 下の画面の最後のタブを、上の画面の真ん中へ → 下の画面はなくなり、上の画面のタブになる
+        #expect(container.moveTab(tab("/b"), to: .insert(container.tabGroups[0], 2)))
+        #expect(shape(container.layout.tree) == "[usr a *b]")
+        #expect(!container.isSplit)
+
+        // 同じ画面の中で並べ替える
+        #expect(container.moveTab(tab("/b"), to: .insert(container.tabGroups[0], 0)))
+        #expect(shape(container.layout.tree) == "[*b usr a]")
+
+        // タブを閉じると隣のタブを選び、最後の1つは閉じない
+        #expect(container.closeTab(tab("/b")))
+        #expect(shape(container.layout.tree) == "[*usr a]")
+        #expect(container.closeTab(tab("/a")))
+        #expect(!container.closeTab(tab("/usr")))
+    }
+
+    /// タブを押して選び直しても、タブの部品は作り直さない（作り直すと、押したタブからドラッグを始められない）
+    @MainActor @Test func tabBarKeepsItemViewsWhenReloaded() {
+        let tree = PaneTreeLayout.tabs(paths: ["/a", "/b"], selected: 0)
+        let container = PaneContainerViewController(layout: PaneLayout(paths: [], activeIndex: 0, tree: tree))
+        _ = container.view
+        defer { container.allBrowsers.forEach { $0.tearDown() } }
+        let bar = container.tabGroups[0].tabBar
+        let before = bar.subviews.compactMap { $0 as? PaneTabItemView }
+        #expect(before.count == 2)
+        container.activate(container.allBrowsers[1], focus: false)
+        container.tabGroups[0].reloadTabBar()
+        let after = bar.subviews.compactMap { $0 as? PaneTabItemView }
+        #expect(after.count == 2)
+        #expect(zip(before, after).allSatisfy { $0 === $1 })
+    }
+
+    /// 隣のタブへの切り替えと、選んでいないタブを操作対象にしたとき
+    @MainActor @Test func selectsAdjacentTabs() {
+        let tree = PaneTreeLayout.tabs(paths: ["/a", "/b", "/c"], selected: 0)
+        let container = PaneContainerViewController(layout: PaneLayout(paths: [], activeIndex: 0, tree: tree))
+        _ = container.view
+        defer { container.allBrowsers.forEach { $0.tearDown() } }
+        container.selectAdjacentTab(-1)
+        #expect(container.activePane.state.currentURL.path == "/c")
+        container.selectAdjacentTab(1)
+        #expect(container.activePane.state.currentURL.path == "/a")
+        container.activate(container.allBrowsers[1], focus: false)
+        #expect(shape(container.layout.tree) == "[a *b c]")
+    }
+
+    /// 縦・横の切り替え：2画面なら左右 ⇄ 上下
+    @MainActor @Test func rotatesActiveGroup() {
+        let tree = PaneTreeLayout.group(vertical: true, children: [.pane(path: "/a"), .pane(path: "/b")], fractions: nil)
+        let container = PaneContainerViewController(layout: PaneLayout(paths: [], activeIndex: 1, tree: tree))
+        _ = container.view
+        defer { container.panes.forEach { $0.tearDown() } }
+        container.rotateActiveGroup()
+        #expect(shape(container.layout.tree) == "(a-b)")
+        container.rotateActiveGroup()
+        #expect(shape(container.layout.tree) == "(a|b)")
     }
 }

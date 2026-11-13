@@ -15,6 +15,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 旧名 noxy の設定・履歴を引き継ぐ（メニューのショートカットの変更も含むので、メニューを作る前に行う）
         if !isRunningTests && !DebugFlags.isAutomating { LegacyMigration.runIfNeeded() }
         Theme.shared.apply()
+        // タブは画面ごとに持つので、macOS 標準のウィンドウのタブ（表示メニューの「タブバーを表示」など）は使わない
+        NSWindow.allowsAutomaticWindowTabbing = false
         NSApp.mainMenu = MainMenu.build()
         ShortcutStore.apply(to: NSApp.mainMenu)
         guard !isRunningTests else { return }
@@ -75,31 +77,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return controller
     }
 
+    /// host のウィンドウの、操作対象の画面に新しいタブを開いて選ぶ
     @discardableResult
     private func openTab(at url: URL, besides host: BrowserWindowController) -> BrowserWindowController {
-        let controller = makeController(url: url)
-        guard let hostWindow = host.window, let window = controller.window else { return controller }
-        hostWindow.addTabbedWindow(window, ordered: .above)
-        window.makeKeyAndOrderFront(nil)
-        return controller
+        host.panes.openTab(at: url)
+        host.window?.makeKeyAndOrderFront(nil)
+        return host
     }
 
     /// ほかのアプリから渡されたフォルダを、今のウィンドウの新しいタブ（ウィンドウがなければ新しいウィンドウ）で開く。
-    /// そのフォルダをすでに表示しているタブがあれば、新しいタブは作らずにそれを前に出す
+    /// そのフォルダをすでに表示しているタブがあれば、新しいタブは作らずにそれを選ぶ
     private func openFromOutside(_ folder: URL) -> BrowserWindowController {
         let wanted = FileBrowserViewController.comparablePath(folder)
-        if let existing = controllers.first(where: { FileBrowserViewController.comparablePath($0.browser.state.currentURL) == wanted }) {
-            existing.window?.makeKeyAndOrderFront(nil)
-            return existing
+        for controller in controllers {
+            if let tab = controller.panes.allBrowsers.first(where: { FileBrowserViewController.comparablePath($0.state.currentURL) == wanted }) {
+                controller.panes.activate(tab, focus: true)
+                controller.window?.makeKeyAndOrderFront(nil)
+                return controller
+            }
         }
         if let host = keyController ?? controllers.last {
             return openTab(at: folder, besides: host)
         }
         return openWindow(at: folder)
-    }
-
-    private func makeController(url: URL) -> BrowserWindowController {
-        makeController(layout: PaneLayout(paths: [url.path]))
     }
 
     private func makeController(layout: PaneLayout) -> BrowserWindowController {
@@ -191,7 +191,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private struct SavedWindow: Codable {
         var frame: String
-        /// タブごとの画面構成（2画面の左右のフォルダ・操作対象の側）
+        /// ウィンドウの画面構成（画面の並びと、各画面のタブ）。
+        /// 以前は macOS 標準のタブごとに1つずつ持っていた（2つ目からは、復元するときに操作対象の画面のタブにする）
         var tabs: [PaneLayout]
         var selectedIndex: Int
     }
@@ -203,14 +204,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         var seen = Set<ObjectIdentifier>()
         // 奥のウィンドウから順に保存し、復元時に最前面のウィンドウが一番上に来るようにする
         for window in NSApp.orderedWindows.reversed() {
-            guard window.windowController is BrowserWindowController,
-                  !seen.contains(ObjectIdentifier(window)) else { continue }
-            let group = window.tabGroup?.windows ?? [window]
-            group.forEach { seen.insert(ObjectIdentifier($0)) }
-            let tabs = group.compactMap { ($0.windowController as? BrowserWindowController)?.panes.layout }
-            guard !tabs.isEmpty else { continue }
-            let selected = window.tabGroup?.selectedWindow.flatMap { group.firstIndex(of: $0) } ?? 0
-            saved.append(SavedWindow(frame: NSStringFromRect(window.frame), tabs: tabs, selectedIndex: selected))
+            guard let controller = window.windowController as? BrowserWindowController,
+                  seen.insert(ObjectIdentifier(window)).inserted else { continue }
+            saved.append(SavedWindow(frame: NSStringFromRect(window.frame), tabs: [controller.panes.layout], selectedIndex: 0))
         }
         if let data = try? JSONEncoder().encode(saved) {
             UserDefaults.standard.set(data, forKey: Self.sessionKey)
@@ -228,16 +224,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let first = layouts.first else { continue }
 
             let host = openWindow(layout: first, frame: NSRectFromString(savedWindow.frame))
-            var tabControllers = [host]
+            // 以前の形式（macOS 標準のタブが2つ以上）は、2つ目からを操作対象の画面のタブにする
             for layout in layouts.dropFirst() {
-                let controller = makeController(layout: layout)
-                if let hostWindow = host.window, let window = controller.window {
-                    hostWindow.addTabbedWindow(window, ordered: .above)
-                    tabControllers.append(controller)
+                for path in layout.resolvedTree.allPaths {
+                    host.panes.openTab(at: TagLocation.location(from: path), select: false)
                 }
             }
-            let index = min(max(savedWindow.selectedIndex, 0), tabControllers.count - 1)
-            tabControllers[index].window?.makeKeyAndOrderFront(nil)
+            host.window?.makeKeyAndOrderFront(nil)
             restoredAny = true
         }
         return restoredAny
@@ -247,8 +240,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 // MARK: - BrowserWindowControllerDelegate
 
 extension AppDelegate: BrowserWindowControllerDelegate {
-    func windowControllerRequestsNewTab(_ controller: BrowserWindowController, url: URL) {
-        openTab(at: url, besides: controller)
+    func windowController(_ controller: BrowserWindowController, didCloseTabAt url: URL) {
+        closedTabs.append(url)
     }
 
     func windowControllerDidClose(_ controller: BrowserWindowController) {

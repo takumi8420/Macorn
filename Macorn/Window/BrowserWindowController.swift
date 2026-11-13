@@ -3,8 +3,21 @@ import SwiftUI
 import WebKit
 
 protocol BrowserWindowControllerDelegate: AnyObject {
-    func windowControllerRequestsNewTab(_ controller: BrowserWindowController, url: URL)
     func windowControllerDidClose(_ controller: BrowserWindowController)
+    /// タブを閉じたとき（「閉じたタブを開く」のため）
+    func windowController(_ controller: BrowserWindowController, didCloseTabAt url: URL)
+}
+
+/// Macorn のウィンドウ。⌘W（メニューの「閉じる」）はタブを閉じ、最後のタブのときだけウィンドウを閉じる。
+/// 左上の赤いボタンは、いつもウィンドウを閉じる。
+final class BrowserWindow: NSWindow {
+    /// タブを閉じられたら true（ウィンドウの最後のタブなら false）
+    var closeTab: (() -> Bool)?
+
+    override func performClose(_ sender: Any?) {
+        if !(sender is NSButton), closeTab?() == true { return }
+        super.performClose(sender)
+    }
 }
 
 extension NSToolbarItem.Identifier {
@@ -15,9 +28,9 @@ extension NSToolbarItem.Identifier {
     static let terminal = NSToolbarItem.Identifier("macorn.terminal")
 }
 
-/// 1つのウィンドウ（= 1つのタブ）。サイドバーと、1つまたは2つの画面を並べる。
+/// 1つのウィンドウ。サイドバーと、タブを持つ画面をいくつか並べる。
+/// タブは macOS 標準のウィンドウのタブではなく、画面ごとに持つ（VS Code と同じ。PaneTabsController）。
 final class BrowserWindowController: NSWindowController {
-    static let tabbingIdentifier = "macorn.browser"
 
     let panes: PaneContainerViewController
     /// 画面と、その下の内蔵ターミナル
@@ -40,23 +53,26 @@ final class BrowserWindowController: NSWindowController {
         panes = PaneContainerViewController(layout: layout)
         workspace = WorkspaceSplitViewController(panes: panes)
 
-        let window = NSWindow(
+        let window = BrowserWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1000, height: 640),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.minSize = NSSize(width: 560, height: 320)
-        window.tabbingIdentifier = Self.tabbingIdentifier
-        window.tabbingMode = .automatic
+        // タブは画面ごとに持つので、macOS 標準のウィンドウのタブは使わない
+        window.tabbingMode = .disallowed
         window.isRestorable = false
         window.toolbarStyle = .unified
-        // タブの「×」をいつも見せる（標準ではカーソルを乗せたときしか出ない）
-        window.tab.accessoryView = TabCloseButton(window: window)
 
         super.init(window: window)
 
         panes.setPaneDelegate(self)
+        window.closeTab = { [weak self] in self?.panes.closeActiveTab() ?? false }
+        panes.onTabClosed = { [weak self] url in
+            guard let self else { return }
+            appDelegate?.windowController(self, didCloseTabAt: url)
+        }
         panes.onPreviewMaximizeChanged = { [weak self] maximized in self?.collapseSidebarForPreview(maximized) }
         panes.onActivePaneChanged = { [weak self] in
             guard let self else { return }
@@ -172,7 +188,7 @@ final class BrowserWindowController: NSWindowController {
     /// 右上のターミナルのボタンの見た目を、出しているかどうかに合わせる
     private func syncTerminalState() {
         let visible = workspace.isTerminalVisible
-        for pane in panes.panes where pane.state.isTerminalVisible != visible {
+        for pane in panes.allBrowsers where pane.state.isTerminalVisible != visible {
             pane.state.isTerminalVisible = visible
         }
         window?.toolbar?.validateVisibleItems()
@@ -258,6 +274,11 @@ final class BrowserWindowController: NSWindowController {
     @objc func splitRight(_ sender: Any?) { panes.split(.right, focusNew: true) }
     @objc func splitDown(_ sender: Any?) { panes.split(.down, focusNew: true) }
     @objc func closePane(_ sender: Any?) { panes.closeActivePane() }
+    @objc func rotatePanes(_ sender: Any?) { panes.rotateActiveGroup() }
+    /// ⌘T：操作対象の画面に、同じフォルダの新しいタブを開く
+    @objc func newTab(_ sender: Any?) { panes.openTab(at: browser.state.currentURL) }
+    @objc func selectNextTab(_ sender: Any?) { panes.selectAdjacentTab(1) }
+    @objc func selectPreviousTab(_ sender: Any?) { panes.selectAdjacentTab(-1) }
     @objc func switchPane(_ sender: Any?) { panes.switchActivePane() }
     @objc func copyToOtherPane(_ sender: Any?) { panes.transferSelectionToOtherPane(mode: .copy) }
     @objc func moveToOtherPane(_ sender: Any?) { panes.transferSelectionToOtherPane(mode: .move) }
@@ -273,7 +294,7 @@ final class BrowserWindowController: NSWindowController {
     }
 
     override func newWindowForTab(_ sender: Any?) {
-        appDelegate?.windowControllerRequestsNewTab(self, url: browser.state.currentURL)
+        newTab(sender)
     }
 
     private func go(toDirectory directory: FileManager.SearchPathDirectory) {
@@ -298,8 +319,11 @@ final class BrowserWindowController: NSWindowController {
             browser.state.currentURL.isFileURL
         case #selector(copyToOtherPane(_:)), #selector(moveToOtherPane(_:)):
             panes.isSplit && !browser.selectedNodes.isEmpty && !(window?.firstResponder is NSText)
-        case #selector(switchPane(_:)), #selector(syncOtherPane(_:)), #selector(swapPanes(_:)), #selector(closePane(_:)):
+        case #selector(switchPane(_:)), #selector(syncOtherPane(_:)), #selector(swapPanes(_:)), #selector(closePane(_:)),
+             #selector(rotatePanes(_:)):
             panes.isSplit
+        case #selector(selectNextTab(_:)), #selector(selectPreviousTab(_:)):
+            panes.activeTabCount > 1
         case #selector(splitRight(_:)), #selector(splitDown(_:)):
             panes.canSplit
         default: true
@@ -354,8 +378,9 @@ extension BrowserWindowController: FileBrowserDelegate {
         if browser === self.browser { updateTitle(for: url) }
     }
 
+    /// 「新しいタブで開く」：その画面に、新しいタブとして開く
     func browser(_ browser: FileBrowserViewController, openInNewTab url: URL) {
-        appDelegate?.windowControllerRequestsNewTab(self, url: url)
+        panes.openTab(at: url, in: panes.tabGroup(of: browser))
     }
 }
 
@@ -368,7 +393,7 @@ extension BrowserWindowController: NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
-        panes.panes.forEach { $0.tearDown() }
+        panes.allBrowsers.forEach { $0.tearDown() }
         workspace.terminal.tearDown()
         appDelegate?.windowControllerDidClose(self)
     }

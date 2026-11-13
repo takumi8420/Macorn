@@ -114,7 +114,7 @@ bash scripts/release.sh --publish
 | 場所 | 内容 |
 |---|---|
 | `Macorn/App` | 起動処理・メニューバー・ウィンドウとタブの管理・開発用の自動操作 |
-| `Macorn/Window` | 1つのウィンドウ（サイドバー＋1〜2画面＋ツールバー）と2画面表示、Git の変更（差分）のウィンドウ |
+| `Macorn/Window` | 1つのウィンドウ（サイドバー＋タブを持つ画面をいくつか＋ツールバー）と画面の分割・タブのドラッグ、Git の変更（差分）のウィンドウ |
 | `Macorn/Browser` | 1つの画面（ファイル一覧・パスバー・絞り込み・ステータスバー）と、その操作 |
 | `Macorn/Operations` | コピー・移動・ゴミ箱・名前変更などの実行と取り消し、進み具合の表示、クリップボード |
 | `Macorn/Preview` | ファイルのプレビュー（Markdown → HTML の変換、CSV → 表の変換、Word の書類を幅に合わせて折り返す HTML への変換と、Markdown・HTML・CSV・画像・PDF・動画・書類の表示。Markdown・テキスト（.txt）はプレビューのまま編集でき、`MarkdownEditor.swift` が編集と保存を受け持つ） |

@@ -58,7 +58,7 @@ enum DebugAutomation {
         case "expand": browser.debugExpandFirstFolder()
         case "select": browser.debugSelect(name: argument)
         case "open": browser.openSelection()
-        case "newtab": controller.newWindowForTab(nil)
+        case "newtab": controller.newTab(nil)
         case "wait": try? await Task.sleep(for: .seconds(Double(argument) ?? 1))
         case "snap": snapshot(controller.window, to: outDir.appendingPathComponent("\(argument).png"))
         case "sidebar":
@@ -122,14 +122,11 @@ enum DebugAutomation {
             // ウィンドウの番号（screencapture -l で、ほかのアプリの裏にあっても撮るため）
             print("[debug] winid=\(controller.window?.windowNumber ?? 0)")
         case "tabinfo":
-            // タブの並びと、各タブの「×」が画面に載っているか
-            let group = controller.window?.tabGroup?.windows ?? []
-            for (index, window) in group.enumerated() {
-                let button = window.tab.accessoryView
-                let frame = button.flatMap { $0.window == nil ? nil : $0.convert($0.bounds, to: nil) }
-                print("[debug] tab \(index) title=\(window.title) selected=\(window == window.tabGroup?.selectedWindow) closeButton=\(button is TabCloseButton) onScreen=\(frame.map { NSStringFromRect($0) } ?? "no")")
+            // 画面ごとのタブの並び（* は選んでいるタブ、! は操作対象の画面）
+            for (index, group) in controller.panes.tabGroups.enumerated() {
+                let names = group.tabs.enumerated().map { ($0.offset == group.selectedIndex ? "*" : "") + TagLocation.displayName(for: $0.element.state.currentURL) }
+                print("[debug] group \(index)\(group.isActiveGroup ? "!" : "") tabs=\(names) frame=\(NSStringFromRect(group.view.convert(group.view.bounds, to: nil)))")
             }
-            print("[debug] tabbar visible=\(controller.window?.tabGroup?.isTabBarVisible == true) count=\(group.count)")
         case "tooltips":
             // ウィンドウ中のボタン（ツールバー・タブ・パスバーなど）と、カーソルを乗せたときの説明
             func walk(_ view: NSView, depth: Int) {
@@ -154,10 +151,15 @@ enum DebugAutomation {
                 print("[debug] toolbarclick \(argument) not found")
             }
         case "tabclose":
-            // 指定した番号のタブの「×」を押す
-            let group = controller.window?.tabGroup?.windows ?? []
-            if let index = Int(argument), group.indices.contains(index) {
-                (group[index].tab.accessoryView as? TabCloseButton)?.closeTab()
+            // 操作対象の画面の、指定した番号のタブの「×」を押したのと同じ
+            if let group = controller.panes.tabGroup(of: browser), let index = Int(argument), group.tabs.indices.contains(index) {
+                group.onCloseTab?(group.tabs[index])
+            }
+        case "tabselect":
+            // 操作対象の画面の、指定した番号のタブを押したのと同じ
+            if let group = controller.panes.tabGroup(of: browser), let index = Int(argument), group.tabs.indices.contains(index) {
+                group.select(index)
+                group.onSelectTab?(group.tabs[index])
             }
         case "state":
             let s = browser.state
@@ -248,6 +250,15 @@ enum DebugAutomation {
             if let split = controller.contentViewController as? NSSplitViewController,
                let sidebar = split.splitViewItems.first?.viewController as? SidebarViewController {
                 print("[debug] sbhover " + sidebar.debugHover(row: Int(argument) ?? 0))
+            }
+        case "movetab", "droppreview":
+            // movetab:<画面の番号>,<タブの番号>,<置き先の画面の番号>,<left|right|top|bottom|center|タブの列の位置>（タブをドラッグして置いたのと同じ）
+            // droppreview:<置き先の画面の番号>,<置き場所>（ドラッグ中の色付けだけを出す。番号が - なら消す）
+            let parts = argument.split(separator: ",").map(String.init)
+            if command == "movetab", parts.count == 4, let group = Int(parts[0]), let tab = Int(parts[1]), let target = Int(parts[2]) {
+                print("[debug] movetab \(controller.panes.debugMoveTab(group: group, tab: tab, to: target, place: parts[3]))")
+            } else if command == "droppreview" {
+                controller.panes.debugShowDropHighlight(group: parts.first.flatMap { Int($0) }, place: parts.last ?? "center")
             }
         case "closepanebutton":
             // N 番目の画面のパスバーの「×」を押したのと同じ

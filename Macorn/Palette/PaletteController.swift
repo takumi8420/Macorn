@@ -130,7 +130,7 @@ final class PaletteController: NSObject {
         let url = TagLocation.url(for: id)
         let flags = modifiers.intersection([.command, .option, .shift])
         if flags == .option {
-            controller.appDelegate?.windowControllerRequestsNewTab(controller, url: url)
+            controller.panes.openTab(at: url)
         } else if flags == .command {
             let panes = controller.panes
             if !panes.isSplit { panes.openSplit(at: controller.browser.state.currentURL) }
@@ -152,7 +152,7 @@ final class PaletteController: NSObject {
         if flags == [.command, .shift] {
             TerminalLauncher.open(folder)
         } else if flags == .option {
-            controller.appDelegate?.windowControllerRequestsNewTab(controller, url: folder)
+            controller.panes.openTab(at: folder)
         } else if flags == .command {
             let panes = controller.panes
             if !panes.isSplit { panes.openSplit(at: folder) }

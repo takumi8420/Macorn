@@ -52,11 +52,13 @@ struct PathBarView: View {
             // 右端: この画面への追加（新規フォルダ・新規ファイル・お気に入り）、Git のリポジトリのページを開くボタン、
             // 分けているときはこの画面を閉じる「×」。ウィンドウ全体に関わるもの（分割・ターミナル）は上のツールバーに置く
             if !state.isEditingPath {
-                if state.currentURL.isFileURL {
-                    let isFavorite = SidebarStore.shared.containsFavorite(state.currentURL)
-                    HStack(spacing: 2) {
+                HStack(spacing: 2) {
+                    if state.currentURL.isFileURL {
                         PathBarIconButton(symbol: "folder.badge.plus", help: "このフォルダに、新しいフォルダを作る（⇧⌘N）", action: actions.newFolder)
                         PathBarIconButton(symbol: "doc.badge.plus", help: "このフォルダに、新しいファイルを作る（⌥⌘N）", action: actions.newFile)
+                    }
+                    if state.currentURL.isFileURL {
+                        let isFavorite = SidebarStore.shared.containsFavorite(state.currentURL)
                         PathBarIconButton(
                             symbol: isFavorite ? "star.fill" : "star",
                             help: isFavorite ? "このフォルダをお気に入りから外す" : "このフォルダをお気に入りに追加",
@@ -509,3 +511,4 @@ private final class AutoFocusTextField: NSTextField {
         super.removeFromSuperview()
     }
 }
+

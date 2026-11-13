@@ -56,7 +56,9 @@ enum CommandCatalog {
     /// 英語でも探せるようにする名前。セレクタ名で引く。
     private static let englishNames: [String: String] = [
         "newWindow:": "New Window",
-        "newWindowForTab:": "New Tab",
+        "newTab:": "New Tab",
+        "selectNextTab:": "Next Tab",
+        "selectPreviousTab:": "Previous Tab",
         "reopenClosedTab:": "Reopen Closed Tab",
         "newFolder:": "New Folder",
         "newFile:": "New File",
@@ -69,7 +71,7 @@ enum CommandCatalog {
         "copyToOtherPane:": "Copy to Other Pane",
         "moveToOtherPane:": "Move to Other Pane",
         "addToSidebar:": "Add to Favorites Sidebar Bookmark Star",
-        "performClose:": "Close",
+        "performClose:": "Close Tab Window",
         "undo:": "Undo",
         "redo:": "Redo",
         "cut:": "Cut",
@@ -83,6 +85,7 @@ enum CommandCatalog {
         "splitRight:": "Split Right Pane",
         "splitDown:": "Split Down Pane",
         "closePane:": "Close Pane",
+        "rotatePanes:": "Rotate Panes Vertical Horizontal Layout",
         "switchPane:": "Switch Pane",
         "syncOtherPane:": "Sync Other Pane Same Folder",
         "swapPanes:": "Swap Panes",

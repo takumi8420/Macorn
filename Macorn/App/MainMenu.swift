@@ -69,8 +69,10 @@ enum MainMenu {
     private static func fileMenu() -> NSMenu {
         let menu = NSMenu(title: "ファイル")
         menu.addItem(item("新規ウィンドウ", #selector(AppDelegate.newWindow(_:)), "n"))
-        menu.addItem(item("新規タブ", #selector(NSResponder.newWindowForTab(_:)), "t"))
+        menu.addItem(item("新規タブ", #selector(BrowserWindowController.newTab(_:)), "t"))
         menu.addItem(item("閉じたタブを開く", #selector(AppDelegate.reopenClosedTab(_:)), "t", [.command, .shift]))
+        menu.addItem(item("次のタブ", #selector(BrowserWindowController.selectNextTab(_:)), "]", [.command, .shift]))
+        menu.addItem(item("前のタブ", #selector(BrowserWindowController.selectPreviousTab(_:)), "[", [.command, .shift]))
         menu.addItem(.separator())
         menu.addItem(item("新規フォルダ", #selector(FileBrowserViewController.newFolder(_:)), "n", [.command, .shift]))
         menu.addItem(item("新規ファイル", #selector(FileBrowserViewController.newFile(_:)), "n", [.command, .option]))
@@ -102,6 +104,7 @@ enum MainMenu {
         menu.addItem(item("お気に入りに追加", #selector(BrowserWindowController.addToSidebar(_:)), "t", [.command, .control]))
         menu.addItem(item("タグを編集…", #selector(FileBrowserViewController.editTags(_:)), "g", [.command, .option]))
         menu.addItem(.separator())
+        // Macorn のウィンドウでは、操作対象のタブを閉じる（最後のタブならウィンドウを閉じる）
         menu.addItem(item("閉じる", #selector(NSWindow.performClose(_:)), "w"))
         return menu
     }
@@ -150,6 +153,7 @@ enum MainMenu {
         menu.addItem(item("右に分ける", #selector(BrowserWindowController.splitRight(_:)), "\\", [.command, .option]))
         menu.addItem(item("下に分ける", #selector(BrowserWindowController.splitDown(_:)), "\\", [.command, .option, .shift]))
         menu.addItem(item("この画面を閉じる", #selector(BrowserWindowController.closePane(_:)), "w", [.command, .option]))
+        menu.addItem(item("画面の並びを縦・横に切り替える", #selector(BrowserWindowController.rotatePanes(_:))))
         menu.addItem(item("ターミナル", #selector(BrowserWindowController.toggleTerminal(_:)), "`", [.control]))
         let terminalPosition = NSMenu(title: "ターミナルの位置")
         terminalPosition.addItem(item("ターミナルを下に置く", #selector(BrowserWindowController.placeTerminalAtBottom(_:))))
