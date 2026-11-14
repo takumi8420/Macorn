@@ -26,6 +26,11 @@ enum GitOperations {
         for name in branches.local {
             let item = ClosureMenuItem.make(title: name) { switchBranch(name, root: root) }
             item.image = NSImage(systemSymbolName: "arrow.triangle.branch", accessibilityDescription: nil)
+            if let tree = branches.worktrees[name] {
+                // ほかのワークツリーで使っているブランチは切り替えられない。選ぶと、そのフォルダを開くか片付けるかを尋ねる
+                item.subtitle = tree.isMissing ? "消えたワークツリーの記録に残っています" : "別のワークツリーで使用中"
+                item.image = NSImage(systemSymbolName: "folder", accessibilityDescription: nil)
+            }
             if name == branches.current {
                 item.state = .on
                 item.isEnabled = false
@@ -54,7 +59,13 @@ enum GitOperations {
 
     static func switchBranch(_ branch: String, root: URL) {
         Task {
-            let changes = await Task.detached { GitRepository.changes(root: root) ?? [] }.value
+            let (changes, worktree) = await Task.detached {
+                (GitRepository.changes(root: root) ?? [], GitActions.branches(root: root).worktrees[branch])
+            }.value
+            if let worktree {
+                handleBranchInWorktree(branch, worktree: worktree, root: root)
+                return
+            }
             var pending = GitActions.PendingChanges.bring
             if !changes.isEmpty {
                 let alert = NSAlert()
@@ -73,6 +84,32 @@ enum GitOperations {
             await perform(root: root, failure: "「\(branch)」に切り替えられませんでした") {
                 GitActions.switchBranch(branch, root: root, changes: mode)
             }
+        }
+    }
+
+    /// ほかのワークツリーで使っているブランチを選んだとき。git は同じブランチを2か所で使わせないので、
+    /// フォルダがあればそれを Macorn で開き、フォルダが消えていれば記録を片付けてから切り替える
+    static func handleBranchInWorktree(_ branch: String, worktree: GitWorktree, root: URL) {
+        let alert = NSAlert()
+        if worktree.isMissing {
+            alert.messageText = "「\(branch)」は、消えたワークツリーの記録に残っています"
+            alert.informativeText = "このブランチを使っていたフォルダはもうありませんが、git に記録が残っているため切り替えられません。\n記録を片付けて（git worktree prune）から切り替えますか。\n\nフォルダ：\(worktree.path)"
+            alert.addButton(withTitle: "片付けて切り替える")
+            alert.addButton(withTitle: "やめる")
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+            Task {
+                let pruned = await perform(root: root, failure: "ワークツリーの記録を片付けられませんでした") {
+                    GitActions.pruneWorktrees(root: root)
+                }
+                if pruned { switchBranch(branch, root: root) }
+            }
+        } else {
+            alert.messageText = "「\(branch)」は別のワークツリーで使われています"
+            alert.informativeText = "git は同じブランチを2つのフォルダで同時に使えないため、ここでは切り替えられません。そのワークツリーのフォルダを開きますか。\n\nフォルダ：\(worktree.path)"
+            alert.addButton(withTitle: "そのフォルダを開く")
+            alert.addButton(withTitle: "やめる")
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+            NSApp.delegate?.application?(NSApp, open: [URL(fileURLWithPath: worktree.path, isDirectory: true)])
         }
     }
 

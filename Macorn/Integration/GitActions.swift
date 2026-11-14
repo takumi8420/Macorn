@@ -35,6 +35,15 @@ nonisolated struct GitBranches: Sendable, Equatable {
     var behind = 0
     /// プッシュ先にするリモート（origin、なければ最初のもの。リモートがなければ nil）
     var defaultRemote: String?
+    /// ほかのワークツリーで使っているローカルのブランチ（git は同じブランチを2か所で使わせないので、切り替えられない）
+    var worktrees: [String: GitWorktree] = [:]
+}
+
+/// ほかのワークツリー（git worktree で作った、同じリポジトリの別のフォルダ）
+nonisolated struct GitWorktree: Sendable, Equatable {
+    var path: String
+    /// フォルダがもう消えている（git の記録だけが残っている。git worktree prune で片付けられる）
+    var isMissing: Bool
 }
 
 /// GitHub Desktop の基本の操作（ブランチの作成・切り替え、コミット、プッシュ・プル・フェッチ）。
@@ -103,6 +112,8 @@ nonisolated enum GitActions {
                 let branch = String(name[name.index(after: slash)...])
                 return branch != "HEAD" && !localSet.contains(branch)
             }
+        result.worktrees = worktrees(fromPorcelain: run(["worktree", "list", "--porcelain"], in: root).output,
+                                     excluding: result.current)
         let upstream = run(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"], in: root)
         if upstream.succeeded {
             result.upstream = upstream.output.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -114,6 +125,30 @@ nonisolated enum GitActions {
             }
         }
         return result
+    }
+
+    /// git worktree list --porcelain の出力から、ブランチ → ワークツリー を作る。current（今のワークツリーのブランチ）は除く
+    static func worktrees(fromPorcelain text: String, excluding current: String?) -> [String: GitWorktree] {
+        var result: [String: GitWorktree] = [:]
+        for block in text.components(separatedBy: "\n\n") {
+            var path: String?
+            var branch: String?
+            var prunable = false
+            for line in block.split(separator: "\n") {
+                if line.hasPrefix("worktree ") { path = String(line.dropFirst("worktree ".count)) }
+                if line.hasPrefix("branch refs/heads/") { branch = String(line.dropFirst("branch refs/heads/".count)) }
+                if line == "prunable" || line.hasPrefix("prunable ") { prunable = true }
+            }
+            guard let path, let branch, branch != current else { continue }
+            let missing = prunable || !FileManager.default.fileExists(atPath: path)
+            result[branch] = GitWorktree(path: path, isMissing: missing)
+        }
+        return result
+    }
+
+    /// 消えたワークツリーの記録を片付ける（そのブランチを、また切り替え先に使えるようにする）
+    static func pruneWorktrees(root: URL) -> GitCommandResult {
+        run(["worktree", "prune"], in: root)
     }
 
     /// ブランチの名前として使えるか（git の決まりに沿っているか）

@@ -102,6 +102,55 @@ struct GitActionsTests {
         #expect(branches.upstream == "origin/feature/login")
     }
 
+    /// ほかのワークツリーで使っているブランチを見分ける。フォルダが消えたものは、記録を片付けると切り替えられる
+    @Test func detectsBranchesUsedByOtherWorktrees() throws {
+        let repo = try Repo("wt")
+        let tree = FileManager.default.temporaryDirectory.appendingPathComponent("macorn-wt-other-\(UUID().uuidString)")
+        defer {
+            repo.remove()
+            try? FileManager.default.removeItem(at: tree)
+        }
+        try repo.write("a\n", to: "a.txt")
+        #expect(GitActions.commit(paths: ["a.txt"], summary: "init", description: "", root: repo.url).succeeded)
+        repo.git(["branch", "feature"])
+        #expect(repo.git(["worktree", "add", "-q", tree.path, "feature"]).succeeded)
+
+        var branches = GitActions.branches(root: repo.url)
+        let worktree = try #require(branches.worktrees["feature"])
+        #expect(!worktree.isMissing)
+        #expect(branches.worktrees["main"] == nil)
+        #expect(!GitActions.switchBranch("feature", root: repo.url, changes: .bring).succeeded)
+
+        // フォルダを消すと「消えた記録」になり、片付ければ切り替えられる
+        try FileManager.default.removeItem(at: tree)
+        branches = GitActions.branches(root: repo.url)
+        #expect(branches.worktrees["feature"]?.isMissing == true)
+        #expect(GitActions.pruneWorktrees(root: repo.url).succeeded)
+        #expect(GitActions.branches(root: repo.url).worktrees.isEmpty)
+        #expect(GitActions.switchBranch("feature", root: repo.url, changes: .bring).succeeded)
+    }
+
+    @Test func parsesWorktreeList() {
+        let text = """
+        worktree /repo
+        HEAD 1111
+        branch refs/heads/main
+
+        worktree /nowhere/macorn-missing
+        HEAD 2222
+        branch refs/heads/docs/x
+        prunable gitdir file points to non-existent location
+
+        worktree /detached
+        HEAD 3333
+        detached
+
+        """
+        let trees = GitActions.worktrees(fromPorcelain: text, excluding: "main")
+        #expect(trees.keys.sorted() == ["docs/x"])
+        #expect(trees["docs/x"] == GitWorktree(path: "/nowhere/macorn-missing", isMissing: true))
+    }
+
     /// ほかの人がプッシュしたコミットを、フェッチして遅れを数え、プルで取り込む
     @Test func fetchesAndPulls() throws {
         let remote = try Repo("remote", bare: true)
