@@ -78,6 +78,8 @@ enum MainMenu {
         menu.addItem(item("新規ファイル", #selector(FileBrowserViewController.newFile(_:)), "n", [.command, .option]))
         menu.addItem(.separator())
         menu.addItem(item("開く", #selector(BrowserWindowController.openSelection(_:)), "o"))
+        // 選んだ項目の右クリックのメニューを、キーボードで出す。キーは設定のショートカットで変えられる
+        menu.addItem(item("右クリックのメニューを出す", #selector(FileBrowserViewController.showContextMenu(_:)), "\r", [.option]))
         // Return は入力欄でも使うキーなので、メニューには割り当てない（一覧で Return を押すと名前の変更になる）
         menu.addItem(item("名前を変更", #selector(FileBrowserViewController.renameSelection(_:))))
         menu.addItem(item("一括で名前を変更…", #selector(FileBrowserViewController.bulkRename(_:))))

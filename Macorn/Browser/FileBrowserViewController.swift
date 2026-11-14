@@ -43,6 +43,8 @@ final class FileBrowserViewController: NSViewController {
     var onPreviewMaximizeChanged: ((Bool) -> Void)?
     let filePreview = FilePreviewController()
     private let rowMenu = NSMenu()
+    /// キーボードで右クリックのメニューを出したときの、対象の行（マウスで出したときは nil）
+    private var keyboardMenuRow: Int?
 
     private var watcher: DirectoryWatcher?
     private var rootLoadToken = UUID()
@@ -287,6 +289,7 @@ final class FileBrowserViewController: NSViewController {
         outlineView.draggingDestinationFeedbackStyle = .regular
 
         outlineView.onReturn = { [weak self] in self?.renameSelection(nil) }
+        outlineView.onOpen = { [weak self] in self?.openSelection() }
         outlineView.onSpace = { [weak self] in self?.toggleQuickLook(nil) }
         outlineView.onFocus = { [weak self] in self?.onActivate?() }
         outlineView.onTab = { [weak self] in self?.onSwitchPane?() }
@@ -903,9 +906,39 @@ extension FileBrowserViewController: NSMenuDelegate {
         fitNameColumn()
     }
 
+    /// 右クリックした行（キーボードで出したときは選んでいる行）
+    private var menuRow: Int { keyboardMenuRow ?? outlineView.clickedRow }
+
+    /// ファイル › 右クリックのメニューを出す（既定は ⌥Return。設定のショートカットで変えられる）
+    @objc func showContextMenu(_ sender: Any?) {
+        showRowMenuFromKeyboard()
+    }
+
+    /// 選んだ項目の右クリックのメニューを、その行のすぐ下に出す。
+    /// 何も選んでいなければ、フォルダの空いた所のメニューを一覧の左上に出す
+    /// present はテスト用（既定ではメニューをその場に出す）
+    func showRowMenuFromKeyboard(present: ((NSMenu, NSPoint, NSView) -> Void)? = nil) {
+        let row = outlineView.selectedRowIndexes.contains(outlineView.selectedRow) ? outlineView.selectedRow : -1
+        keyboardMenuRow = row
+        defer { keyboardMenuRow = nil }
+        let point: NSPoint
+        if row >= 0 {
+            outlineView.scrollRowToVisible(row)
+            let cell = outlineView.frameOfCell(atColumn: 0, row: row)
+            point = NSPoint(x: cell.minX + 20, y: outlineView.rect(ofRow: row).maxY)
+        } else {
+            point = NSPoint(x: outlineView.visibleRect.minX + 20, y: outlineView.visibleRect.minY + 8)
+        }
+        if let present {
+            present(rowMenu, point, outlineView)
+        } else {
+            rowMenu.popUp(positioning: nil, at: point, in: outlineView)
+        }
+    }
+
     /// 右クリックした行が選択に含まれていれば選択全体、そうでなければその行だけが対象。
     private var contextNodes: [FileNode] {
-        let row = outlineView.clickedRow
+        let row = menuRow
         guard row >= 0, let clicked = outlineView.item(atRow: row) as? FileNode else { return [] }
         return outlineView.selectedRowIndexes.contains(row) ? selectedNodes : [clicked]
     }
@@ -917,7 +950,7 @@ extension FileBrowserViewController: NSMenuDelegate {
             return
         }
         // 右クリックした行が選択に含まれていなければ、その行を選択し直す（以降の操作の対象をはっきりさせる）
-        let clickedRow = outlineView.clickedRow
+        let clickedRow = menuRow
         if !outlineView.selectedRowIndexes.contains(clickedRow) {
             outlineView.selectRowIndexes([clickedRow], byExtendingSelection: false)
         }
@@ -1102,6 +1135,10 @@ extension FileBrowserViewController: NSMenuItemValidation {
         if menuItem.action == #selector(togglePreviewMaximized(_:)) {
             menuItem.title = isPreviewMaximized || isListCollapsed ? "プレビューの最大化をやめる" : "プレビューを最大化"
             return isFilePreviewVisible
+        }
+        if menuItem.action == #selector(showContextMenu(_:)) {
+            // 一覧にフォーカスがあるときだけ（入力欄では ⌥Return を文字の入力に使う）
+            return view.window?.firstResponder === outlineView
         }
         if menuItem.action == #selector(toggleFilePreview(_:)) {
             menuItem.state = Preferences.filePreview ? .on : .off

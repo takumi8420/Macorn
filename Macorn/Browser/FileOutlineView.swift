@@ -1,8 +1,10 @@
 import AppKit
 
-/// ファイル一覧。Finder と同じく、Return で名前の変更、スペースでクイックルックを行う。
+/// ファイル一覧。Finder と同じく、Return で名前の変更、スペースでクイックルックを行う。⌘Return で開く。
 final class FileOutlineView: NSOutlineView {
     var onReturn: (() -> Void)?
+    /// ⌘Return（⌘↓・⌘O と同じく、フォルダなら中へ、ファイルなら開く）
+    var onOpen: (() -> Void)?
     var onSpace: (() -> Void)?
     var onFocus: (() -> Void)?
     var onTab: (() -> Void)?
@@ -14,6 +16,11 @@ final class FileOutlineView: NSOutlineView {
         let modifiers = event.modifierFlags
             .intersection(.deviceIndependentFlagsMask)
             .subtracting([.numericPad, .function, .capsLock])
+        let isReturn = event.keyCode == 36 || event.keyCode == 76
+        if modifiers == .command, isReturn, let onOpen {
+            onOpen()
+            return
+        }
         if modifiers.isEmpty {
             switch event.keyCode {
             case 36, 76: // Return / テンキーの Enter

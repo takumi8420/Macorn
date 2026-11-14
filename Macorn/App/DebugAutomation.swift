@@ -58,6 +58,13 @@ enum DebugAutomation {
         case "expand": browser.debugExpandFirstFolder()
         case "select": browser.debugSelect(name: argument)
         case "open": browser.openSelection()
+        case "keymenu":
+            // キーボードで出す右クリックのメニューの中身を、出さずにログへ書く（ファイル › 右クリックのメニューを出す の確認用）
+            browser.showRowMenuFromKeyboard { menu, point, _ in
+                menu.delegate?.menuNeedsUpdate?(menu)
+                let titles = menu.items.filter { !$0.isSeparatorItem }.map(\.title)
+                print("[debug] keymenu at=\(Int(point.x)),\(Int(point.y)) items=\(titles.joined(separator: "|"))")
+            }
         case "newtab": controller.newTab(nil)
         case "wait": try? await Task.sleep(for: .seconds(Double(argument) ?? 1))
         case "snap": snapshot(controller.window, to: outDir.appendingPathComponent("\(argument).png"))
@@ -776,7 +783,9 @@ enum DebugAutomation {
             // メニューから同じショートカットの項目を探して、その操作をこのウインドウに送る
             guard let item = findMenuItem(in: NSApp.mainMenu, key: characters.lowercased(), modifiers: flags),
                   let action = item.action else {
-                print("[debug] key \(spec): no menu item")
+                // メニューにないショートカット（一覧の ⌘Return など）は、フォーカスのある部品へそのまま送る
+                print("[debug] key \(spec): no menu item, sending to first responder")
+                window.firstResponder?.keyDown(with: event)
                 return
             }
             print("[debug] key \(spec) -> \(item.title)")
