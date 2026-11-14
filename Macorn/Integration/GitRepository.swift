@@ -30,6 +30,9 @@ nonisolated struct GitSnapshot: Sendable, Equatable {
     var changedFolders: Set<String> = []
     /// リモート（origin）を Web で開く URL。GitHub なら https://github.com/持ち主/リポジトリ
     var remoteWebURL: URL?
+    /// 追いかけているリモートのブランチより進んでいる・遅れているコミットの数（最後にフェッチした時点）
+    var ahead = 0
+    var behind = 0
 
     /// 「持ち主/リポジトリ」（リモートがあればその名前、なければフォルダ名）
     var repositoryName: String {
@@ -65,7 +68,9 @@ nonisolated struct GitSnapshot: Sendable, Equatable {
         var records = output.split(separator: "\0", omittingEmptySubsequences: true).map(String.init)[...]
         while let record = records.popFirst() {
             if record.hasPrefix("## ") {
-                snapshot.branch = branchName(fromHeader: String(record.dropFirst(3)))
+                let header = String(record.dropFirst(3))
+                snapshot.branch = branchName(fromHeader: header)
+                (snapshot.ahead, snapshot.behind) = aheadBehind(fromHeader: header)
                 continue
             }
             guard record.count > 3 else { continue }
@@ -100,6 +105,20 @@ nonisolated struct GitSnapshot: Sendable, Equatable {
             }
         }
         return snapshot
+    }
+
+    /// 「main...origin/main [ahead 1, behind 2]」→ (1, 2)
+    static func aheadBehind(fromHeader header: String) -> (ahead: Int, behind: Int) {
+        guard let open = header.lastIndex(of: "["), let close = header.lastIndex(of: "]"), open < close else { return (0, 0) }
+        var ahead = 0
+        var behind = 0
+        for part in header[header.index(after: open)..<close].split(separator: ",") {
+            let words = part.split(separator: " ")
+            guard words.count == 2, let count = Int(words[1]) else { continue }
+            if words[0] == "ahead" { ahead = count }
+            if words[0] == "behind" { behind = count }
+        }
+        return (ahead, behind)
     }
 
     /// 「main...origin/main [ahead 1]」→「main」、「No commits yet on main」→「main」

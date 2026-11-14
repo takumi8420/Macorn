@@ -4,6 +4,8 @@ struct StatusBarView: View {
     var state: PaneState
     /// 「n 件の変更」を押したとき（変更のウィンドウを開く）
     var onShowChanges: () -> Void = {}
+    /// ブランチ名を押したとき（ブランチの切り替え・作成・同期のメニュー）
+    var onShowBranches: () -> Void = {}
 
     var body: some View {
         HStack(spacing: 6) {
@@ -29,8 +31,17 @@ struct StatusBarView: View {
                         }
                         Text("・")
                     }
-                    Image(systemName: "arrow.triangle.branch")
-                    Text(branch)
+                    // 押すとブランチの切り替え・作成・同期のメニュー
+                    Button(action: onShowBranches) {
+                        HStack(spacing: 3) {
+                            Image(systemName: "arrow.triangle.branch")
+                            Text(branch)
+                            if state.gitAhead > 0 { Text("↑\(state.gitAhead)") }
+                            if state.gitBehind > 0 { Text("↓\(state.gitBehind)") }
+                        }
+                    }
+                    .buttonStyle(.link)
+                    .help("ブランチを切り替える・作る、プッシュ・プル（⇧⌘B）")
                     if state.gitChangeCount > 0 {
                         Text("・")
                         Button("\(state.gitChangeCount) 件の変更", action: onShowChanges)

@@ -98,6 +98,7 @@ enum MainMenu {
         menu.addItem(item("リポジトリのルートをエディタで開く", #selector(FileBrowserViewController.openRepositoryInEditor(_:))))
         menu.addItem(item("リポジトリを Web で開く（GitHub など）", #selector(FileBrowserViewController.openRepositoryOnWeb(_:))))
         menu.addItem(item("変更を見る（差分）…", #selector(FileBrowserViewController.showChanges(_:))))
+        menu.addItem(item("ブランチを切り替える…", #selector(FileBrowserViewController.showBranches(_:)), "b", [.command, .shift]))
         menu.addItem(item("選んだ項目の差分を見る", #selector(FileBrowserViewController.showSelectionDiff(_:))))
         menu.addItem(.separator())
         menu.addItem(item("反対側の画面へコピー", #selector(BrowserWindowController.copyToOtherPane(_:)), key(NSF5FunctionKey), []))

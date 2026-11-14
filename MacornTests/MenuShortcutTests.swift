@@ -24,3 +24,24 @@ import Testing
         #expect(ShortcutStore.conflict(for: combo, excluding: id, in: menu) == nil)
     }
 }
+
+/// ほかのアプリのファイルを選ぶ画面を、Macorn のフォルダへ移すキー
+struct FilePanelJumpKeyTests {
+    /// 既定は ⌘G。修飾キーが過不足なく同じときだけ当たる（⇧⌘G の「フォルダへ移動」は通す）
+    @Test func defaultKeyMatchesOnlyExactModifiers() {
+        let key = GlobalHotKey.defaultKey
+        #expect(key.display == "⌘G")
+        #expect(key.matches(keyCode: 5, flags: [.command]))
+        #expect(key.matches(keyCode: 5, flags: [.command, .capsLock, .numericPad]))
+        #expect(!key.matches(keyCode: 5, flags: [.command, .shift]))
+        #expect(!key.matches(keyCode: 5, flags: []))
+        #expect(!key.matches(keyCode: 0, flags: [.command]))
+    }
+
+    @Test func roundTripsThroughJSON() throws {
+        let key = GlobalHotKey(keyCode: 46, flags: [.control, .option, .function], display: "⌃⌥M")
+        let decoded = try JSONDecoder().decode(GlobalHotKey.self, from: JSONEncoder().encode(key))
+        #expect(decoded == key)
+        #expect(decoded.flags == [.control, .option])
+    }
+}

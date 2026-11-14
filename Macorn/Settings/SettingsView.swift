@@ -204,6 +204,7 @@ private struct IntegrationSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            FilePanelJumpSection()
             Section("ファイルを Macorn で開く") {
                 ForEach(PreviewFileKind.allCases) { kind in
                     Toggle(kind.title, isOn: Binding(get: { opensKinds.contains(kind) }, set: { setOpens($0, kind: kind) }))
@@ -269,6 +270,97 @@ private struct IntegrationSettingsView: View {
               let id = Bundle(url: url)?.bundleIdentifier else { return }
         customEditors = [ExternalApp(name: FileManager.default.displayName(atPath: url.path), bundleIdentifier: id)]
         editor = id
+    }
+}
+
+/// ほかのアプリの「開く」「保存」の画面を、キーで Macorn のフォルダへ移す（要件 I-08）
+private struct FilePanelJumpSection: View {
+    @State private var isEnabled = FilePanelJump.isEnabled
+    @State private var hotKey = FilePanelJump.hotKey
+    @State private var isTrusted = FilePanelJump.isTrusted
+    @State private var isRecording = false
+    @State private var monitor: Any?
+    @State private var message = ""
+    /// 許可はシステム設定で付くので、この画面を出している間はときどき確かめ直す
+    private let timer = Timer.publish(every: 1.5, on: .main, in: .common).autoconnect()
+
+    var body: some View {
+        Section("ファイルを選ぶ画面") {
+            Toggle("ほかのアプリの「開く」「保存」の画面を、キーで Macorn のフォルダへ移す", isOn: Binding(
+                get: { isEnabled },
+                set: { value in
+                    isEnabled = value
+                    FilePanelJump.isEnabled = value
+                    if value && !FilePanelJump.isTrusted { FilePanelJump.requestTrust() }
+                }
+            ))
+            LabeledContent("キー") {
+                HStack {
+                    Button(isRecording ? "キーを押してください…" : hotKey.display) {
+                        isRecording ? stopRecording() : startRecording()
+                    }
+                    .frame(minWidth: 90)
+                    if hotKey != .defaultKey {
+                        Button("初期設定に戻す") {
+                            hotKey = .defaultKey
+                            FilePanelJump.hotKey = .defaultKey
+                        }
+                    }
+                }
+            }
+            .disabled(!isEnabled)
+            if !message.isEmpty {
+                Text(message).font(.caption).foregroundStyle(.secondary)
+            }
+            if isEnabled && !isTrusted {
+                HStack {
+                    Text("アクセシビリティの許可が必要です。システム設定で Macorn をオンにしてください。")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                    Spacer()
+                    Button("許可する…") { FilePanelJump.requestTrust() }
+                }
+            }
+            Text("ほかのアプリでファイルを選ぶ画面は macOS のもので、Finder 以外に置き換えられません。代わりに、その画面が前面にあるときにこのキーを押すと、Macorn の手前のウィンドウの、操作対象の画面で開いているフォルダへ移ります。ほかの場面ではキーをそのまま通します。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .onReceive(timer) { _ in
+            let trusted = FilePanelJump.isTrusted
+            if trusted != isTrusted {
+                isTrusted = trusted
+                FilePanelJump.update()
+            }
+        }
+        .onDisappear(perform: stopRecording)
+    }
+
+    private func startRecording() {
+        stopRecording()
+        isRecording = true
+        message = ""
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            MainActor.assumeIsolated {
+                if event.keyCode == 53 { // Esc
+                    stopRecording()
+                    return
+                }
+                guard let key = GlobalHotKey.from(event: event) else {
+                    message = "⌘・⌥・⌃ のどれかと一緒に押してください。"
+                    return
+                }
+                stopRecording()
+                hotKey = key
+                FilePanelJump.hotKey = key
+            }
+            return nil
+        }
+    }
+
+    private func stopRecording() {
+        if let monitor { NSEvent.removeMonitor(monitor) }
+        monitor = nil
+        isRecording = false
     }
 }
 

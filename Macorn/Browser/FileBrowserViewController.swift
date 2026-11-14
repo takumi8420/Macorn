@@ -105,7 +105,8 @@ final class FileBrowserViewController: NSViewController {
         pathBarHost = pathBar
         let statusBar = NSHostingView(rootView: StatusBarView(
             state: state,
-            onShowChanges: { [weak self] in self?.showChanges(nil) }
+            onShowChanges: { [weak self] in self?.showChanges(nil) },
+            onShowBranches: { [weak self] in self?.showBranches(nil) }
         ))
         statusBar.sizingOptions = []
         let messageHost = NSHostingView(rootView: PaneMessageView(state: state, onOpenSettings: Self.openPrivacySettings))
@@ -220,6 +221,12 @@ final class FileBrowserViewController: NSViewController {
             self,
             selector: #selector(tagsDidChange(_:)),
             name: .macornTagsChanged,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(gitRepositoryDidChange(_:)),
+            name: .macornGitRepositoryChanged,
             object: nil
         )
         navigate(to: state.currentURL, recordHistory: false)

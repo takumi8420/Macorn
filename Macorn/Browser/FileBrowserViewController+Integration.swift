@@ -41,6 +41,26 @@ extension FileBrowserViewController {
         ChangesWindowController.show(root: root)
     }
 
+    /// ブランチの切り替え・作成と、リモートとの同期のメニューを出す（ファイル › ブランチを切り替える…）
+    @objc func showBranches(_ sender: Any?) {
+        guard let root = gitSnapshot?.root ?? GitRepository.root(containing: state.currentURL) else {
+            NSSound.beep()
+            return
+        }
+        // マウスで押したときはその場所に、キーで出したときは一覧の左下（ステータスバーの上）に出す
+        if NSApp.currentEvent?.type == .leftMouseUp || NSApp.currentEvent?.type == .leftMouseDown {
+            GitOperations.showBranchMenu(root: root)
+        } else {
+            GitOperations.showBranchMenu(root: root, in: view, at: NSPoint(x: 16, y: view.isFlipped ? view.bounds.maxY - 28 : 28))
+        }
+    }
+
+    /// Macorn の中でブランチの切り替え・コミットなどをしたら、Git の状態を読み直す
+    @objc func gitRepositoryDidChange(_ notification: Notification) {
+        guard state.currentURL.isFileURL else { return }
+        refreshGitStatus()
+    }
+
     /// 選んでいる項目の差分を、変更のウィンドウで見る（変更のあるファイル、または変更を含むフォルダ）
     @objc func showSelectionDiff(_ sender: Any?) {
         guard selectedNodes.count == 1 else { return }
@@ -100,7 +120,7 @@ extension FileBrowserViewController {
             return Self.diffPath(of: selectedNodes[0], in: snapshot) != nil
         case #selector(openRepositoryOnWeb(_:)):
             return gitSnapshot?.remoteWebURL != nil
-        case #selector(openRepositoryInEditor(_:)), #selector(copyRelativePath(_:)), #selector(showChanges(_:)):
+        case #selector(openRepositoryInEditor(_:)), #selector(copyRelativePath(_:)), #selector(showChanges(_:)), #selector(showBranches(_:)):
             return gitSnapshot != nil
         case #selector(copyPath(_:)), #selector(copyTildePath(_:)), #selector(copyShellQuotedPath(_:)):
             // 入力欄では普通のコピーを優先するため、パスのコピーは一覧のときだけ
@@ -134,6 +154,8 @@ extension FileBrowserViewController {
                 state.gitRemoteWebURL = snapshot?.remoteWebURL
                 state.gitRemoteServiceName = snapshot?.remoteServiceName
                 state.gitChangeCount = snapshot?.changeCount ?? 0
+                state.gitAhead = snapshot?.ahead ?? 0
+                state.gitBehind = snapshot?.behind ?? 0
                 reloadVisibleRows()
             }
             if gitRefreshPending {

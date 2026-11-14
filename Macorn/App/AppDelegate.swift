@@ -30,6 +30,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.activate()
             UpdateChecker.checkOnLaunch()
         }
+        // ほかのアプリのファイルを選ぶ画面を、キーで Macorn のフォルダへ移す（設定でオンのときだけ。自動操作の保存先では初めオフ）
+        FilePanelJump.start()
         #if DEBUG
         DebugAutomation.runIfRequested { [weak self] in self?.controllers ?? [] }
         #endif

@@ -31,6 +31,9 @@ final class PaneState {
     /// ウィンドウの下に内蔵ターミナルを出しているか（ステータスバーのボタンの見た目用）
     var isTerminalVisible = false
     var gitChangeCount = 0
+    /// リモートより進んでいる・遅れているコミットの数
+    var gitAhead = 0
+    var gitBehind = 0
     /// 絞り込み（要件 S-04）
     var isFiltering = false
     /// 絞り込みの欄をいつも出している（設定）

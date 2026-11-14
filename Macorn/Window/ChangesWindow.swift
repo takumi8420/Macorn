@@ -1,8 +1,9 @@
 import AppKit
 import SwiftUI
 
-/// Git の変更を見るウィンドウ（GitHub Desktop の「Changes」のように、左に変更のあるファイル、右に差分）。
-/// 見るだけで、ステージ・コミット・取り消しはしない。リポジトリごとに1つ。
+/// Git の変更のウィンドウ（GitHub Desktop の「Changes」のように、左に変更のあるファイル、右に差分）。
+/// 左上でブランチの切り替え・作成とリモートとの同期、左下で選んだファイルのコミットができる。
+/// 変更の取り消し・履歴は扱わない。リポジトリごとに1つ。
 final class ChangesWindowController: NSWindowController, NSWindowDelegate {
     private static var controllers: [String: ChangesWindowController] = [:]
 
@@ -45,6 +46,14 @@ final class ChangesWindowController: NSWindowController, NSWindowDelegate {
         window.setFrameAutosaveName("macorn.ChangesWindow")
         if window.frame.origin == .zero { window.center() }
         window.delegate = self
+        // Macorn の中でブランチを切り替えたり、コミットしたりしたら読み直す
+        NotificationCenter.default.addObserver(forName: .macornGitRepositoryChanged, object: nil, queue: .main) { [weak self] note in
+            let changed = (note.object as? URL)?.standardizedFileURL.path
+            MainActor.assumeIsolated {
+                guard let self, changed == nil || changed == self.model.root.standardizedFileURL.path else { return }
+                self.model.reload()
+            }
+        }
     }
 
     @available(*, unavailable)
@@ -66,7 +75,14 @@ final class ChangesWindowController: NSWindowController, NSWindowDelegate {
 final class ChangesModel {
     let root: URL
     var branch: String?
+    /// ブランチの一覧とリモートとの差（左上のブランチの欄と、同期のボタンに使う）
+    var branches = GitBranches()
     var changes: [GitChange] = []
+    /// コミットに含めないファイル（初めはすべて含める。新しく出てきたファイルも含める）
+    var excludedPaths: Set<String> = []
+    /// コミットの要約（1行目）と説明
+    var summary = ""
+    var commitDescription = ""
     var selectedPath: String?
     var diff: FileDiff?
     var isLoading = false
@@ -92,13 +108,15 @@ final class ChangesModel {
         let root = root
         Task {
             let result = await Task.detached(priority: .userInitiated) {
-                (GitRepository.changes(root: root), GitRepository.snapshot(root: root)?.branch)
+                (GitRepository.changes(root: root), GitRepository.snapshot(root: root)?.branch, GitActions.branches(root: root))
             }.value
             guard token == reloadToken else { return }
             isLoading = false
             failed = result.0 == nil
             changes = result.0 ?? []
             branch = result.1
+            branches = result.2
+            excludedPaths.formIntersection(changes.map(\.path))
             // 一覧から開いたファイルがあればそれを選ぶ
             if let preferred,
                let match = changes.first(where: { $0.path == preferred || $0.path.hasPrefix(preferred + "/") }) {
@@ -109,6 +127,45 @@ final class ChangesModel {
                 selectedPath = changes.first?.path
             }
             loadDiff()
+        }
+    }
+
+    // MARK: コミット
+
+    var includedChanges: [GitChange] { changes.filter { !excludedPaths.contains($0.path) } }
+
+    func isIncluded(_ change: GitChange) -> Bool { !excludedPaths.contains(change.path) }
+
+    func setIncluded(_ included: Bool, _ change: GitChange) {
+        if included { excludedPaths.remove(change.path) } else { excludedPaths.insert(change.path) }
+    }
+
+    /// すべて含める・すべて外す（一覧の上のチェックボックス）
+    var allIncluded: Bool {
+        get { !changes.isEmpty && excludedPaths.isEmpty }
+        set { excludedPaths = newValue ? [] : Set(changes.map(\.path)) }
+    }
+
+    var canCommit: Bool {
+        !summary.trimmingCharacters(in: .whitespaces).isEmpty && !includedChanges.isEmpty
+            && !includedChanges.contains { $0.status == .conflicted } && !GitOperations.isBusy(root)
+    }
+
+    /// 選んだファイルだけをコミットする。うまくいったら要約と説明を空にする
+    func commit() {
+        guard canCommit else { return }
+        let paths = includedChanges.flatMap { [$0.originalPath, $0.path].compactMap { $0 } }
+        let summary = summary.trimmingCharacters(in: .whitespaces)
+        let description = commitDescription
+        let root = root
+        Task {
+            let succeeded = await GitOperations.perform(root: root, failure: "コミットできませんでした") {
+                GitActions.commit(paths: paths, summary: summary, description: description, root: root)
+            }
+            if succeeded {
+                self.summary = ""
+                commitDescription = ""
+            }
         }
     }
 
@@ -156,12 +213,21 @@ struct ChangesView: View {
     private var fileList: some View {
         VStack(spacing: 0) {
             HStack(spacing: 6) {
-                if let branch = model.branch {
-                    Image(systemName: "arrow.triangle.branch")
-                    Text(branch).lineLimit(1)
+                // 押すとブランチの切り替え・作成・同期のメニュー（GitHub Desktop の上の「Current Branch」）
+                Button {
+                    GitOperations.showBranchMenu(root: model.root)
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.triangle.branch")
+                        Text(model.branch ?? "ブランチ").lineLimit(1)
+                        Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold))
+                    }
                 }
+                .buttonStyle(.borderless)
+                .help("ブランチを切り替える・作る（⇧⌘B）")
                 Spacer()
-                if model.isLoading { ProgressView().controlSize(.small) }
+                if model.isLoading || GitOperations.isBusy(model.root) { ProgressView().controlSize(.small) }
+                SyncButton(model: model)
                 Button {
                     model.reload()
                 } label: {
@@ -177,21 +243,39 @@ struct ChangesView: View {
             .padding(.top, 10)
             .padding(.bottom, 8)
 
-            Text(model.changes.isEmpty ? "変更はありません" : "\(model.changes.count) 件の変更")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 12)
-                .padding(.bottom, 4)
+            HStack(spacing: 6) {
+                if !model.changes.isEmpty {
+                    Toggle("", isOn: $model.allIncluded)
+                        .toggleStyle(.checkbox)
+                        .labelsHidden()
+                        .help("すべてコミットに含める・外す")
+                }
+                Text(model.changes.isEmpty ? "変更はありません" : "\(model.changes.count) 件の変更")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.bottom, 4)
             Divider()
 
             List(selection: Binding(get: { model.selectedPath }, set: { model.select($0) })) {
                 ForEach(model.changes) { change in
-                    ChangeRow(change: change)
-                        .tag(change.path)
+                    HStack(spacing: 6) {
+                        Toggle("", isOn: Binding(get: { model.isIncluded(change) }, set: { model.setIncluded($0, change) }))
+                            .toggleStyle(.checkbox)
+                            .labelsHidden()
+                            .help("コミットに含める")
+                        ChangeRow(change: change)
+                    }
+                    .tag(change.path)
                 }
             }
             .listStyle(.sidebar)
+            if !model.changes.isEmpty {
+                Divider()
+                CommitBox(model: model)
+            }
         }
     }
 
@@ -225,6 +309,87 @@ struct ChangesView: View {
         .foregroundStyle(.secondary)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .textBackgroundColor))
+    }
+}
+
+/// コミットの要約・説明と、コミットのボタン（GitHub Desktop の左下）
+private struct CommitBox: View {
+    @Bindable var model: ChangesModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            TextField("要約（必須）", text: $model.summary)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit { model.commit() }
+            TextEditor(text: $model.commitDescription)
+                .font(.system(size: 12))
+                .frame(height: 54)
+                .scrollContentBackground(.hidden)
+                .padding(4)
+                .background(RoundedRectangle(cornerRadius: 5).fill(Color(nsColor: .textBackgroundColor)))
+                .overlay(alignment: .topLeading) {
+                    if model.commitDescription.isEmpty {
+                        Text("説明").foregroundStyle(.tertiary).padding(.horizontal, 9).padding(.vertical, 4).allowsHitTesting(false)
+                    }
+                }
+                .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.primary.opacity(0.12)))
+            Button {
+                model.commit()
+            } label: {
+                Text(commitTitle)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .disabled(!model.canCommit)
+            .keyboardShortcut(.return, modifiers: .command)
+            .help(model.includedChanges.contains { $0.status == .conflicted } ? "競合しているファイルは、解決してからコミットしてください" : "選んだファイルをコミットする（⌘Return）")
+        }
+        .padding(10)
+    }
+
+    private var commitTitle: String {
+        let count = model.includedChanges.count
+        let target = model.branch.map { "「\($0)」に" } ?? ""
+        return count == model.changes.count ? "\(target)コミット" : "\(count) 件を\(target)コミット"
+    }
+}
+
+/// リモートとの同期のボタン（GitHub Desktop の右上の「Fetch origin / Pull / Push」）
+private struct SyncButton: View {
+    var model: ChangesModel
+
+    var body: some View {
+        if let action = GitOperations.SyncAction.available(for: model.branches).first {
+            Button {
+                GitOperations.sync(action, root: model.root)
+            } label: {
+                HStack(spacing: 3) {
+                    Image(systemName: symbol(action))
+                    Text(label(action))
+                }
+            }
+            .buttonStyle(.borderless)
+            .disabled(GitOperations.isBusy(model.root))
+            .help(action.title(for: model.branches))
+        }
+    }
+
+    private func symbol(_ action: GitOperations.SyncAction) -> String {
+        switch action {
+        case .fetch: "arrow.triangle.2.circlepath"
+        case .pull: "arrow.down"
+        case .push: "arrow.up"
+        }
+    }
+
+    private func label(_ action: GitOperations.SyncAction) -> String {
+        switch action {
+        case .fetch: "フェッチ"
+        case .pull: "プル \(model.branches.behind)"
+        case .push: model.branches.upstream == nil ? "公開" : "プッシュ \(model.branches.ahead)"
+        }
     }
 }
 
