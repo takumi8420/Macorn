@@ -41,18 +41,14 @@ extension FileBrowserViewController {
         ChangesWindowController.show(root: root)
     }
 
-    /// ブランチの切り替え・作成と、リモートとの同期のメニューを出す（ファイル › ブランチを切り替える…）
+    /// ブランチを選ぶポップオーバーを、パスバーのブランチのボタンから出す（ファイル › ブランチを切り替える…・ステータスバーのブランチ名）
     @objc func showBranches(_ sender: Any?) {
-        guard let root = gitSnapshot?.root ?? GitRepository.root(containing: state.currentURL) else {
+        guard state.gitRepositoryRoot != nil else {
             NSSound.beep()
             return
         }
-        // マウスで押したときはその場所に、キーで出したときは一覧の左下（ステータスバーの上）に出す
-        if NSApp.currentEvent?.type == .leftMouseUp || NSApp.currentEvent?.type == .leftMouseDown {
-            GitOperations.showBranchMenu(root: root)
-        } else {
-            GitOperations.showBranchMenu(root: root, in: view, at: NSPoint(x: 16, y: view.isFlipped ? view.bounds.maxY - 28 : 28))
-        }
+        if state.isEditingPath { state.isEditingPath = false }
+        state.isShowingBranchPicker = true
     }
 
     /// Macorn の中でブランチの切り替え・コミットなどをしたら、Git の状態を読み直す

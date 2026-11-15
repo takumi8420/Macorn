@@ -34,6 +34,8 @@ final class PaneState {
     /// リモートより進んでいる・遅れているコミットの数
     var gitAhead = 0
     var gitBehind = 0
+    /// パスバーのブランチのボタンから、ブランチを選ぶポップオーバーを出している（⇧⌘B・ステータスバーからも出す）
+    var isShowingBranchPicker = false
     /// 絞り込み（要件 S-04）
     var isFiltering = false
     /// 絞り込みの欄をいつも出している（設定）

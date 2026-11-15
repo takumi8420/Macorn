@@ -52,6 +52,18 @@ struct PathBarView: View {
             // 右端: この画面への追加（新規フォルダ・新規ファイル・お気に入り）、Git のリポジトリのページを開くボタン、
             // 分けているときはこの画面を閉じる「×」。ウィンドウ全体に関わるもの（分割・ターミナル）は上のツールバーに置く
             if !state.isEditingPath {
+                // Git リポジトリの中なら、今のブランチのボタン（押すとブランチを選ぶ。GitHub Desktop の「Current Branch」）
+                if let root = state.gitRepositoryRoot {
+                    BranchPickerButton(
+                        root: root,
+                        branch: state.gitBranch,
+                        ahead: state.gitAhead,
+                        behind: state.gitBehind,
+                        isPresented: Binding(get: { state.isShowingBranchPicker },
+                                             set: { state.isShowingBranchPicker = $0 })
+                    )
+                    .glassCapsule()
+                }
                 HStack(spacing: 0) {
                     if state.currentURL.isFileURL {
                         PathBarIconButton(symbol: "folder.badge.plus", help: "このフォルダに、新しいフォルダを作る（⇧⌘N）", action: actions.newFolder)
@@ -155,7 +167,6 @@ struct PathBarView: View {
                     BreadcrumbButton(
                         url: url,
                         isCurrent: index == components.count - 1,
-                        branch: state.gitRepositoryRoot?.standardizedFileURL.path == url.path ? state.gitBranch : nil,
                         navigate: actions.navigate,
                         beginEditing: startEditing
                     )
@@ -302,8 +313,6 @@ private struct ClosePaneButton: View {
 private struct BreadcrumbButton: View {
     let url: URL
     let isCurrent: Bool
-    /// この階層が Git リポジトリのルートなら、そのブランチ名
-    var branch: String? = nil
     let navigate: (URL) -> Void
     /// 今いるフォルダ（いちばん右）をクリックしたら、移動の代わりにパスの入力にする
     let beginEditing: () -> Void
@@ -321,19 +330,6 @@ private struct BreadcrumbButton: View {
                 Text(Self.name(for: url))
                     .fontWeight(isCurrent ? .semibold : .regular)
                     .lineLimit(1)
-                if let branch {
-                    // リポジトリのルートに、ブランチ名の小さな札を付ける
-                    HStack(spacing: 2) {
-                        Image(systemName: "arrow.triangle.branch")
-                        Text(branch).lineLimit(1)
-                    }
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(Color.accentColor)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 1)
-                    .background(Capsule().fill(Color.accentColor.opacity(0.14)))
-                    .help("Git リポジトリ「\(Self.name(for: url))」・ブランチ \(branch)")
-                }
             }
             .padding(.horizontal, 5)
             .padding(.vertical, 2)

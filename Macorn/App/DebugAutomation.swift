@@ -128,6 +128,11 @@ enum DebugAutomation {
         case "winid":
             // ウィンドウの番号（screencapture -l で、ほかのアプリの裏にあっても撮るため）
             print("[debug] winid=\(controller.window?.windowNumber ?? 0)")
+        case "popoverids":
+            // 出ているポップオーバーのウィンドウの番号（screencapture -l で撮るため）
+            for window in NSApp.windows where window.isVisible && String(describing: type(of: window)).contains("Popover") {
+                print("[debug] popover=\(window.windowNumber)")
+            }
         case "tabinfo":
             // 画面ごとのタブの並び（* は選んでいるタブ、! は操作対象の画面）
             for (index, group) in controller.panes.tabGroups.enumerated() {

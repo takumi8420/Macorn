@@ -199,6 +199,7 @@ final class ChangesModel {
 
 struct ChangesView: View {
     @Bindable var model: ChangesModel
+    @State private var isShowingBranchPicker = false
 
     var body: some View {
         HSplitView {
@@ -213,18 +214,11 @@ struct ChangesView: View {
     private var fileList: some View {
         VStack(spacing: 0) {
             HStack(spacing: 6) {
-                // 押すとブランチの切り替え・作成・同期のメニュー（GitHub Desktop の上の「Current Branch」）
-                Button {
-                    GitOperations.showBranchMenu(root: model.root)
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.triangle.branch")
-                        Text(model.branch ?? "ブランチ").lineLimit(1)
-                        Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold))
-                    }
-                }
-                .buttonStyle(.borderless)
-                .help("ブランチを切り替える・作る（⇧⌘B）")
+                // 押すとブランチを選ぶポップオーバー（GitHub Desktop の上の「Current Branch」）
+                BranchPickerButton(root: model.root, branch: model.branch,
+                                   ahead: model.branches.ahead, behind: model.branches.behind,
+                                   isPresented: $isShowingBranchPicker)
+                    .foregroundStyle(.primary)
                 Spacer()
                 if model.isLoading || GitOperations.isBusy(model.root) { ProgressView().controlSize(.small) }
                 SyncButton(model: model)
