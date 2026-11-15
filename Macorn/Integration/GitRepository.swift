@@ -255,6 +255,14 @@ nonisolated enum GitRepository {
             return nil
         }
         var snapshot = GitSnapshot.parse(output, root: root)
+        // ブランチから切り離しているときは、どのブランチから切り離したか（なければコミットの先頭 7 文字）を添える
+        if snapshot.branch == "(detached)" {
+            snapshot.branch = detachedLabel(
+                reflog: run(["-C", root.path, "reflog", "-1", "--format=%gs", "HEAD"]) ?? "",
+                branches: run(["-C", root.path, "branch", "--points-at", "HEAD", "--format=%(refname:short)"]) ?? "",
+                commit: run(["-C", root.path, "rev-parse", "--short=7", "HEAD"]) ?? ""
+            )
+        }
         // origin がなければ、最初に登録されたリモートを使う
         var remote = run(["-C", root.path, "remote", "get-url", "origin"])
         if remote == nil, let first = run(["-C", root.path, "remote"])?.split(separator: "\n").first {
@@ -262,6 +270,22 @@ nonisolated enum GitRepository {
         }
         snapshot.remoteWebURL = remote.flatMap { webURL(fromRemote: $0) }
         return snapshot
+    }
+
+    /// 切り離しているときのブランチ名の欄の表示。「切り離し・docs/x」か「切り離し・1a2b3c4」。
+    /// 名前は、直前の切り替えの記録（reflog の「checkout: moving from main to docs/x」）の行き先が今のコミットを指すブランチならそれ、
+    /// でなければ今のコミットを指すブランチの1つ目。どれもなければコミットの先頭 7 文字
+    static func detachedLabel(reflog: String, branches: String, commit: String) -> String {
+        let names = branches.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty && !$0.hasPrefix("(") }
+        var target: String?
+        let line = reflog.trimmingCharacters(in: .whitespacesAndNewlines)
+        if line.hasPrefix("checkout: moving from "), let range = line.range(of: " to ", options: .backwards) {
+            let name = String(line[range.upperBound...])
+            if names.contains(name) { target = name }
+        }
+        let text = target ?? names.first ?? commit.trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? "切り離し中" : "切り離し・\(text)"
     }
 
     /// git を実行して標準出力を返す。終了コードが allowedStatuses にないときは nil。

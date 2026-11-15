@@ -187,11 +187,16 @@ nonisolated enum GitActions {
     }
 
     /// ブランチを切り替える。branch は「feature」（ローカル）か「origin/feature」（リモート。同じ名前のローカルのブランチを作って追いかける）
-    static func switchBranch(_ branch: String, root: URL, changes: PendingChanges) -> GitCommandResult {
+    /// detach のときは、ブランチではなくブランチが指すコミットへ切り離して切り替える（git switch --detach）。
+    /// ほかのワークツリーで使っているブランチでもでき、そのワークツリーにもブランチにも触れない（中身を見るため）
+    static func switchBranch(_ branch: String, root: URL, changes: PendingChanges, detach: Bool = false) -> GitCommandResult {
         if case .stash = changes {
             let from = branches(root: root).current ?? "HEAD"
             let stash = run(["stash", "push", "--include-untracked", "-m", "Macorn: \(from) から切り替える前の変更"], in: root)
             guard stash.succeeded else { return stash }
+        }
+        if detach {
+            return run(["switch", "--detach", branch], in: root)
         }
         let local = Set(lines(run(["for-each-ref", "--format=%(refname:short)", "refs/heads"], in: root).output))
         if local.contains(branch) {

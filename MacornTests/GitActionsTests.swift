@@ -162,6 +162,47 @@ struct GitActionsTests {
         #expect(GitActions.switchBranch("feature", root: repo.url, changes: .bring).succeeded)
     }
 
+    /// ほかのワークツリーで使っているブランチも、切り離してなら今のフォルダで見られる。ワークツリーとブランチはそのまま
+    @Test func viewsBranchUsedByOtherWorktreeDetached() throws {
+        let repo = try Repo("wtview")
+        let tree = FileManager.default.temporaryDirectory.appendingPathComponent("macorn-wtview-other-\(UUID().uuidString)")
+        defer {
+            repo.remove()
+            try? FileManager.default.removeItem(at: tree)
+        }
+        try repo.write("a\n", to: "a.txt")
+        #expect(GitActions.commit(paths: ["a.txt"], summary: "init", description: "", root: repo.url).succeeded)
+        repo.git(["branch", "zeta"])
+        #expect(repo.git(["worktree", "add", "-q", tree.path, "zeta"]).succeeded)
+        try Data("z\n".utf8).write(to: tree.appendingPathComponent("z.txt"))
+        repo.git(["-C", tree.path, "add", "z.txt"])
+        repo.git(["-C", tree.path, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "-m", "z"])
+        // ワークツリーには書きかけのファイルも置いておく（ここには出ない）
+        try Data("wip\n".utf8).write(to: tree.appendingPathComponent("wip.txt"))
+
+        #expect(GitActions.switchBranch("zeta", root: repo.url, changes: .bring, detach: true).succeeded)
+        #expect(FileManager.default.fileExists(atPath: repo.url.appendingPathComponent("z.txt").path))
+        #expect(!FileManager.default.fileExists(atPath: repo.url.appendingPathComponent("wip.txt").path))
+        #expect(GitActions.branches(root: repo.url).current == nil)
+        #expect(GitRepository.snapshot(root: repo.url)?.branch == "切り離し・zeta")
+        // ワークツリーはそのまま、そのブランチを使っている
+        #expect(GitActions.branches(root: repo.url).worktrees["zeta"]?.changeCount == 1)
+        #expect(FileManager.default.fileExists(atPath: tree.appendingPathComponent("wip.txt").path))
+
+        // 見終わったら、ふつうに戻れる
+        #expect(GitActions.switchBranch("main", root: repo.url, changes: .bring).succeeded)
+        #expect(GitActions.branches(root: repo.url).current == "main")
+    }
+
+    @Test func labelsDetachedHead() {
+        let moved = "checkout: moving from main to docs/x"
+        #expect(GitRepository.detachedLabel(reflog: moved, branches: "docs/x\nmain\n", commit: "1a2b3c4\n") == "切り離し・docs/x")
+        // 記録の行き先が今のコミットを指していなければ、指しているブランチの1つ目
+        #expect(GitRepository.detachedLabel(reflog: moved, branches: "main\n", commit: "1a2b3c4") == "切り離し・main")
+        #expect(GitRepository.detachedLabel(reflog: "commit: x", branches: "", commit: "1a2b3c4\n") == "切り離し・1a2b3c4")
+        #expect(GitRepository.detachedLabel(reflog: "", branches: "", commit: "") == "切り離し中")
+    }
+
     @Test func parsesWorktreeList() {
         let text = """
         worktree /repo

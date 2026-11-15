@@ -7,12 +7,13 @@ import AppKit
 enum GitOperations {
     // MARK: ブランチ
 
-    static func switchBranch(_ branch: String, root: URL) {
+    /// detach のときは、ブランチから切り離してそのコミットを見る（ほかのワークツリーで使っているブランチを見るため）
+    static func switchBranch(_ branch: String, root: URL, detach: Bool = false) {
         Task {
             let (changes, worktree) = await Task.detached {
                 (GitRepository.changes(root: root) ?? [], GitActions.branches(root: root).worktrees[branch])
             }.value
-            if let worktree {
+            if let worktree, !detach {
                 handleBranchInWorktree(branch, worktree: worktree, root: root)
                 return
             }
@@ -32,7 +33,7 @@ enum GitOperations {
             }
             let mode = pending
             await perform(root: root, failure: "「\(branch)」に切り替えられませんでした") {
-                GitActions.switchBranch(branch, root: root, changes: mode)
+                GitActions.switchBranch(branch, root: root, changes: mode, detach: detach)
             }
         }
     }
@@ -56,7 +57,9 @@ enum GitOperations {
         } else if worktree.isRemovable {
             alert.messageText = "「\(branch)」は別のワークツリーで使われています"
             alert.informativeText = "git は同じブランチを2つのフォルダで同時に使えないため、このままでは切り替えられません。\nそのワークツリーにはコミットしていない変更がないので、外して（git worktree remove）からここで切り替えられます。コミットはブランチに残ります。git で無視しているファイル（ビルドの出力など）はフォルダと一緒に消えます。\n\nフォルダ：\(worktree.path)"
+            alert.informativeText += "\n\n\(viewHereNote)"
             alert.addButton(withTitle: "外して切り替える")
+            alert.addButton(withTitle: "ここで見る")
             alert.addButton(withTitle: "そのフォルダを開く")
             alert.addButton(withTitle: "やめる")
             switch alert.runModal() {
@@ -68,6 +71,8 @@ enum GitOperations {
                     if removed { switchBranch(branch, root: root) }
                 }
             case .alertSecondButtonReturn:
+                switchBranch(branch, root: root, detach: true)
+            case .alertThirdButtonReturn:
                 openWorktree(worktree)
             default:
                 return
@@ -75,13 +80,20 @@ enum GitOperations {
         } else {
             alert.messageText = "「\(branch)」は別のワークツリーで使われています"
             let changes = worktree.changeCount.map { "そのワークツリーにはコミットしていない変更が \($0) 件あるため、外さずに残しています。" } ?? ""
-            alert.informativeText = "git は同じブランチを2つのフォルダで同時に使えないため、ここでは切り替えられません。\(changes)そのワークツリーのフォルダを開きますか。\n\nフォルダ：\(worktree.path)"
+            alert.informativeText = "git は同じブランチを2つのフォルダで同時に使えないため、ここでは切り替えられません。\(changes)\n\nフォルダ：\(worktree.path)\n\n\(viewHereNote)"
+            alert.addButton(withTitle: "ここで見る")
             alert.addButton(withTitle: "そのフォルダを開く")
             alert.addButton(withTitle: "やめる")
-            guard alert.runModal() == .alertFirstButtonReturn else { return }
-            openWorktree(worktree)
+            switch alert.runModal() {
+            case .alertFirstButtonReturn: switchBranch(branch, root: root, detach: true)
+            case .alertSecondButtonReturn: openWorktree(worktree)
+            default: return
+            }
         }
     }
+
+    /// 「ここで見る」の説明（確認の画面に添える）
+    private static let viewHereNote = "ここで見る：このフォルダを、そのブランチの最新のコミットへ切り離して切り替えます（git switch --detach）。ワークツリーにもブランチにも触れないので、そちらの作業には影響しません。見えるのはコミットされた中身だけで、あとからのコミットは選び直すまで出ません。見終わったら、ほかのブランチを選べば戻れます。"
 
     private static func openWorktree(_ worktree: GitWorktree) {
         NSApp.delegate?.application?(NSApp, open: [URL(fileURLWithPath: worktree.path, isDirectory: true)])
