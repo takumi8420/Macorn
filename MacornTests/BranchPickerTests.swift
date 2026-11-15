@@ -30,4 +30,18 @@ import Testing
         let exact = BranchPickerView.entries(for: branches, query: "feature/login")
         #expect(exact.map(\.kind) == [.local])
     }
+
+    /// ワークツリーの確認の画面：「ここで見る」が既定。変更がないときだけ「外して切り替える」を出す
+    @Test func worktreeChoicesPutViewHereFirst() {
+        let clean = GitWorktree(path: "/tmp/scratchpad/wt44", isMissing: false, changeCount: 0)
+        let text = GitOperations.worktreeChoices(branch: "docs/x", worktree: clean)
+        #expect(text.message == "「docs/x」は別のワークツリー（wt44）で使われています")
+        #expect(text.choices == [.viewHere, .removeAndSwitch, .openFolder, .cancel])
+        #expect(!text.detail.contains("/tmp/"))
+
+        let dirty = GitWorktree(path: "/tmp/wt", isMissing: false, changeCount: 2)
+        let other = GitOperations.worktreeChoices(branch: "docs/x", worktree: dirty)
+        #expect(other.choices == [.viewHere, .openFolder, .cancel])
+        #expect(other.detail.contains("変更が 2 件"))
+    }
 }
