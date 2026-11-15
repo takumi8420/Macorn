@@ -13,6 +13,7 @@
 - 変更 `Macorn/Integration/GitActions.swift` — `switchBranch` に切り離して切り替える `detach` を足す
 - 変更 `Macorn/Integration/GitRepository.swift` — 切り離しているときのブランチ名の表示（`detachedLabel`）
 - 変更 `Macorn/Window/GitBranchMenu.swift` — ほかのワークツリーで使っているブランチの確認の画面に「ここで見る」を足し、既定にする。文言とボタンは `worktreeChoices` で組み立てる
+- 変更 `Macorn/App/DebugAutomation.swift` — 確認の画面を出さずに描いて保存する `wtalert:<ブランチ>` と、「ここで見る」と同じ操作の `viewhere:<ブランチ>` を足す（実際の画面で、切り離したあとに「切り離し・ブランチ名」が出ることを確かめた）
 - 変更 `MacornTests/GitActionsTests.swift`・`MacornTests/BranchPickerTests.swift` — 切り離して見られること・ワークツリーの書きかけは出ないこと・戻れること・表示の名前・確認の画面のボタンの順を確かめる
 - 変更 `AGENTS.md`・`docs/REQUIREMENTS.md` — Git の前提と T-24 の経緯、テストの数（222 件）
 

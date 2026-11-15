@@ -41,8 +41,8 @@ enum GitOperations {
     /// ほかのワークツリーで使っているブランチを選んだとき。git は同じブランチを2か所で使わせないので、
     /// 切り離してここで見る・（変更がなければ）外して切り替える・そのフォルダを開く、から選ぶ。フォルダが消えていれば記録を片付けてから切り替える
     static func handleBranchInWorktree(_ branch: String, worktree: GitWorktree, root: URL) {
-        let alert = NSAlert()
         if worktree.isMissing {
+            let alert = NSAlert()
             alert.messageText = "「\(branch)」は、消えたワークツリーの記録に残っています"
             alert.informativeText = "このブランチを使っていたフォルダはもうありませんが、git に記録が残っているため切り替えられません。\n記録を片付けて（git worktree prune）から切り替えますか。\n\nフォルダ：\(worktree.path)"
             alert.addButton(withTitle: "片付けて切り替える")
@@ -55,13 +55,10 @@ enum GitOperations {
                 if pruned { switchBranch(branch, root: root) }
             }
         } else {
-            let text = worktreeChoices(branch: branch, worktree: worktree)
-            alert.messageText = text.message
-            alert.informativeText = text.detail
-            for choice in text.choices { alert.addButton(withTitle: choice.title) }
+            let (alert, choices) = makeWorktreeAlert(branch: branch, worktree: worktree)
             let index = alert.runModal().rawValue - NSApplication.ModalResponse.alertFirstButtonReturn.rawValue
-            guard text.choices.indices.contains(index) else { return }
-            switch text.choices[index] {
+            guard choices.indices.contains(index) else { return }
+            switch choices[index] {
             case .viewHere:
                 switchBranch(branch, root: root, detach: true)
             case .removeAndSwitch:
@@ -77,6 +74,16 @@ enum GitOperations {
                 return
             }
         }
+    }
+
+    /// ほかのワークツリーで使っているブランチの確認の画面（自動操作でも見た目を確かめるため、出すのとは分けて作る）
+    static func makeWorktreeAlert(branch: String, worktree: GitWorktree) -> (NSAlert, [WorktreeChoice]) {
+        let text = worktreeChoices(branch: branch, worktree: worktree)
+        let alert = NSAlert()
+        alert.messageText = text.message
+        alert.informativeText = text.detail
+        for choice in text.choices { alert.addButton(withTitle: choice.title) }
+        return (alert, text.choices)
     }
 
     /// ほかのワークツリーで使っているブランチの確認の画面の選び方

@@ -173,6 +173,21 @@ enum DebugAutomation {
                 group.select(index)
                 group.onSelectTab?(group.tabs[index])
             }
+        case "wtalert":
+            // ほかのワークツリーで使っているブランチの確認の画面を、出さずに描いて保存する（引数はブランチ名）
+            guard let root = browser.state.gitRepositoryRoot,
+                  let worktree = GitActions.branches(root: root).worktrees[argument] else {
+                print("[debug] wtalert: no worktree for \(argument)")
+                return
+            }
+            let (alert, _) = GitOperations.makeWorktreeAlert(branch: argument, worktree: worktree)
+            alert.layout()
+            if let view = alert.window.contentView {
+                snapshotOpaque(view, to: outDir.appendingPathComponent("wtalert.png"))
+            }
+        case "viewhere":
+            // 確認の画面の「ここで見る」と同じ操作（引数はブランチ名）
+            if let root = browser.state.gitRepositoryRoot { GitOperations.switchBranch(argument, root: root, detach: true) }
         case "state":
             let s = browser.state
             print("[debug] state path=\(s.currentURL.path) items=\(s.itemCount) selected=\(s.selectedCount) back=\(s.history.canGoBack) forward=\(s.history.canGoForward) editing=\(s.isEditingPath) error=\(s.error?.message ?? "-") key=\(controller.window?.isKeyWindow == true) active=\(NSApp.isActive) windows=\(controllers().count) title=\(controller.window?.title ?? "")")
