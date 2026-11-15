@@ -38,7 +38,7 @@ enum GitOperations {
     }
 
     /// ほかのワークツリーで使っているブランチを選んだとき。git は同じブランチを2か所で使わせないので、
-    /// フォルダがあればそれを Macorn で開き、フォルダが消えていれば記録を片付けてから切り替える
+    /// 変更のないワークツリーは外してから切り替え、変更があればそのフォルダを Macorn で開く。フォルダが消えていれば記録を片付けてから切り替える
     static func handleBranchInWorktree(_ branch: String, worktree: GitWorktree, root: URL) {
         let alert = NSAlert()
         if worktree.isMissing {
@@ -53,14 +53,38 @@ enum GitOperations {
                 }
                 if pruned { switchBranch(branch, root: root) }
             }
+        } else if worktree.isRemovable {
+            alert.messageText = "「\(branch)」は別のワークツリーで使われています"
+            alert.informativeText = "git は同じブランチを2つのフォルダで同時に使えないため、このままでは切り替えられません。\nそのワークツリーにはコミットしていない変更がないので、外して（git worktree remove）からここで切り替えられます。コミットはブランチに残ります。git で無視しているファイル（ビルドの出力など）はフォルダと一緒に消えます。\n\nフォルダ：\(worktree.path)"
+            alert.addButton(withTitle: "外して切り替える")
+            alert.addButton(withTitle: "そのフォルダを開く")
+            alert.addButton(withTitle: "やめる")
+            switch alert.runModal() {
+            case .alertFirstButtonReturn:
+                Task {
+                    let removed = await perform(root: root, failure: "ワークツリーを外せませんでした") {
+                        GitActions.removeWorktree(path: worktree.path, root: root)
+                    }
+                    if removed { switchBranch(branch, root: root) }
+                }
+            case .alertSecondButtonReturn:
+                openWorktree(worktree)
+            default:
+                return
+            }
         } else {
             alert.messageText = "「\(branch)」は別のワークツリーで使われています"
-            alert.informativeText = "git は同じブランチを2つのフォルダで同時に使えないため、ここでは切り替えられません。そのワークツリーのフォルダを開きますか。\n\nフォルダ：\(worktree.path)"
+            let changes = worktree.changeCount.map { "そのワークツリーにはコミットしていない変更が \($0) 件あるため、外さずに残しています。" } ?? ""
+            alert.informativeText = "git は同じブランチを2つのフォルダで同時に使えないため、ここでは切り替えられません。\(changes)そのワークツリーのフォルダを開きますか。\n\nフォルダ：\(worktree.path)"
             alert.addButton(withTitle: "そのフォルダを開く")
             alert.addButton(withTitle: "やめる")
             guard alert.runModal() == .alertFirstButtonReturn else { return }
-            NSApp.delegate?.application?(NSApp, open: [URL(fileURLWithPath: worktree.path, isDirectory: true)])
+            openWorktree(worktree)
         }
+    }
+
+    private static func openWorktree(_ worktree: GitWorktree) {
+        NSApp.delegate?.application?(NSApp, open: [URL(fileURLWithPath: worktree.path, isDirectory: true)])
     }
 
     static func createBranch(root: URL) {

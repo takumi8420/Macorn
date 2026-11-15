@@ -130,6 +130,38 @@ struct GitActionsTests {
         #expect(GitActions.switchBranch("feature", root: repo.url, changes: .bring).succeeded)
     }
 
+    /// 変更のないワークツリーは外して切り替えられる。変更があれば git が外すのを断るので、作業は消えない
+    @Test func removesCleanWorktreeOnly() throws {
+        let repo = try Repo("wtrm")
+        let tree = FileManager.default.temporaryDirectory.appendingPathComponent("macorn-wtrm-other-\(UUID().uuidString)")
+        defer {
+            repo.remove()
+            try? FileManager.default.removeItem(at: tree)
+        }
+        try repo.write("a\n", to: "a.txt")
+        #expect(GitActions.commit(paths: ["a.txt"], summary: "init", description: "", root: repo.url).succeeded)
+        repo.git(["branch", "feature"])
+        #expect(repo.git(["worktree", "add", "-q", tree.path, "feature"]).succeeded)
+
+        // 追跡していないファイルがあるうちは「変更あり」で、外せない
+        try Data("x\n".utf8).write(to: tree.appendingPathComponent("new.txt"))
+        var worktree = try #require(GitActions.branches(root: repo.url).worktrees["feature"])
+        #expect(worktree.changeCount == 1)
+        #expect(!worktree.isRemovable)
+        #expect(!GitActions.removeWorktree(path: worktree.path, root: repo.url).succeeded)
+        #expect(FileManager.default.fileExists(atPath: tree.appendingPathComponent("new.txt").path))
+
+        // 変更がなくなれば外せて、ここで切り替えられる
+        try FileManager.default.removeItem(at: tree.appendingPathComponent("new.txt"))
+        worktree = try #require(GitActions.branches(root: repo.url).worktrees["feature"])
+        #expect(worktree.changeCount == 0)
+        #expect(worktree.isRemovable)
+        #expect(GitActions.removeWorktree(path: worktree.path, root: repo.url).succeeded)
+        #expect(!FileManager.default.fileExists(atPath: tree.path))
+        #expect(GitActions.branches(root: repo.url).worktrees.isEmpty)
+        #expect(GitActions.switchBranch("feature", root: repo.url, changes: .bring).succeeded)
+    }
+
     @Test func parsesWorktreeList() {
         let text = """
         worktree /repo

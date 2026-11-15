@@ -44,6 +44,11 @@ nonisolated struct GitWorktree: Sendable, Equatable {
     var path: String
     /// フォルダがもう消えている（git の記録だけが残っている。git worktree prune で片付けられる）
     var isMissing: Bool
+    /// そのフォルダのコミットしていない変更の数（まだ見ていない・読めなかったときは nil）。まだ追跡していないファイルも数える
+    var changeCount: Int? = nil
+
+    /// 外しても失う作業がない（フォルダがあり、コミットしていない変更がない）。コミットはブランチに残るので、外しても消えない
+    var isRemovable: Bool { !isMissing && changeCount == 0 }
 }
 
 /// GitHub Desktop の基本の操作（ブランチの作成・切り替え、コミット、プッシュ・プル・フェッチ）。
@@ -114,6 +119,9 @@ nonisolated enum GitActions {
             }
         result.worktrees = worktrees(fromPorcelain: run(["worktree", "list", "--porcelain"], in: root).output,
                                      excluding: result.current)
+        for (branch, tree) in result.worktrees where !tree.isMissing {
+            result.worktrees[branch]?.changeCount = changeCount(inWorktree: tree.path)
+        }
         let upstream = run(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"], in: root)
         if upstream.succeeded {
             result.upstream = upstream.output.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -144,6 +152,18 @@ nonisolated enum GitActions {
             result[branch] = GitWorktree(path: path, isMissing: missing)
         }
         return result
+    }
+
+    /// ワークツリーのフォルダの、コミットしていない変更の数（読めなければ nil）
+    static func changeCount(inWorktree path: String) -> Int? {
+        let status = run(["status", "--porcelain"], in: URL(fileURLWithPath: path, isDirectory: true))
+        guard status.succeeded else { return nil }
+        return status.output.split(separator: "\n").filter { !$0.isEmpty }.count
+    }
+
+    /// ワークツリーを外す（フォルダを消し、git の記録も消す）。コミットしていない変更があれば、git が断る（--force は付けない）
+    static func removeWorktree(path: String, root: URL) -> GitCommandResult {
+        run(["worktree", "remove", path], in: root)
     }
 
     /// 消えたワークツリーの記録を片付ける（そのブランチを、また切り替え先に使えるようにする）

@@ -291,7 +291,10 @@ private struct BranchRow: View {
 
     private var note: String? {
         if let worktree = entry.worktree {
-            return worktree.isMissing ? "消えたワークツリーの記録に残っています" : "別のワークツリーで使用中"
+            if worktree.isMissing { return "消えたワークツリーの記録に残っています" }
+            if worktree.isRemovable { return "別のワークツリーで使用中・変更なし（外して切り替えられます）" }
+            if let count = worktree.changeCount { return "別のワークツリーで使用中・コミットしていない変更 \(count) 件" }
+            return "別のワークツリーで使用中"
         }
         switch entry.kind {
         case .remote: return "選ぶと、同じ名前のブランチを作って追いかけます"
